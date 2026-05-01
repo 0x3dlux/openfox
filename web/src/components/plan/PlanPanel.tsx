@@ -683,18 +683,18 @@ export function PlanPanel({ criteriaSidebarOpen: externalCriteriaSidebarOpen, on
             style={{ minHeight: '24px', maxHeight: '200px' }}
             spellCheck={false}
           />
+          <div className="flex items-center self-center gap-1.5">
           {isRunning && (
             <button
               type="button"
               onClick={() => stopGeneration()}
               data-testid="chat-stop-button"
-              className="flex items-center gap-1 px-4 py-1.5 rounded bg-accent-error/20 text-sm text-accent-error font-medium hover:bg-accent-error/30 transition-colors"
+              className="flex items-center gap-1 px-4 py-1.5 rounded bg-accent-error/20 text-sm text-accent-error font-medium hover:bg-accent-error/30 transition-colors whitespace-nowrap"
             >
               <StopIcon />
               Abort
             </button>
           )}
-          <div className="flex items-center self-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Modal } from '../shared/SelfContainedModal'
-import { Button } from '../shared/Button'
 import { KvCacheWarning } from '../shared/KvCacheWarning'
+import { ModalSaveCancelFooter } from '../shared/ModalSaveCancelFooter'
 
 interface InstructionsModalInfoRow {
   label: string
@@ -92,14 +92,12 @@ export function InstructionsModal({
 
         {isDirty && <KvCacheWarning />}
 
-        <div className="flex justify-end gap-2 pt-2 border-t border-border flex-shrink-0">
-          <Button variant="secondary" onClick={handleCancel}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleSave} disabled={!isDirty || isBusy}>
-            {saving ? 'Saving...' : 'Save'}
-          </Button>
-        </div>
+        <ModalSaveCancelFooter
+          onCancel={handleCancel}
+          onSave={handleSave}
+          saving={saving}
+          disabled={!isDirty || isBusy}
+        />
       </div>
     </Modal>
   )

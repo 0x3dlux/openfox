@@ -7,7 +7,9 @@ import { existsSync } from 'fs'
 
 const baseConfig = defineConfig({
   plugins: [
-    react(),
+    react({
+      babel: { presets: [], plugins: [] },
+    }),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['assets/openfox-192.png', 'assets/openfox-512.png'],
@@ -42,7 +44,7 @@ const baseConfig = defineConfig({
       '@shared': path.resolve(__dirname, '../src/shared'),
     },
   },
-  root: path.resolve(__dirname),  // Use web/ directory as root
+  root: path.resolve(__dirname), // Use web/ directory as root
   build: {
     outDir: '../dist/web',
   },
@@ -50,10 +52,7 @@ const baseConfig = defineConfig({
     port: 5173,
     strictPort: true,
     fs: {
-      allow: [
-        path.resolve(__dirname),
-        path.resolve(__dirname, '../node_modules'),
-      ],
+      allow: [path.resolve(__dirname), path.resolve(__dirname, '../node_modules')],
     },
     watch: createViteWatchOptions(),
     // In dev mode, users access Vite directly (for HMR to work)

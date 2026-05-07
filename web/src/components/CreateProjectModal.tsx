@@ -54,39 +54,8 @@ export function CreateProjectModal({ isOpen, onClose }: CreateProjectModalProps)
         return
       }
 
-      setLoading(true)
-      setError(null)
-
       const fullPath = `${workdir}/${projectName}`
-
-      try {
-        // Create project via REST API
-        const response = await authFetch('/api/projects', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: projectName, workdir: fullPath }),
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          if (errorData.code === 'EACCES') {
-            setPermissionDeniedPath(fullPath)
-            return
-          }
-          throw new Error(errorData.error || 'Failed to create project')
-        }
-
-        const data = await response.json()
-        const project = data.project
-
-        // Navigate to the new project
-        // Close modal first, then navigate to avoid race conditions
-        onClose()
-        navigate(`/p/${project.id}`)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to create project')
-        setLoading(false)
-      }
+      await createProjectWithPermissionHandling(fullPath)
     },
     [projectName, navigate, onClose, workdir],
   )
@@ -96,11 +65,14 @@ export function CreateProjectModal({ isOpen, onClose }: CreateProjectModalProps)
   }, [])
 
   const handleRetry = useCallback(async () => {
+    const fullPath = `${workdir}/${projectName}`
+    await createProjectWithPermissionHandling(fullPath)
+  }, [workdir, projectName, navigate, onClose, setPermissionDeniedPath, setError, setLoading])
+
+  async function createProjectWithPermissionHandling(fullPath: string) {
     setLoading(true)
     setError(null)
     setPermissionDeniedPath(null)
-
-    const fullPath = `${workdir}/${projectName}`
 
     try {
       const response = await authFetch('/api/projects', {
@@ -128,7 +100,7 @@ export function CreateProjectModal({ isOpen, onClose }: CreateProjectModalProps)
       setError(err instanceof Error ? err.message : 'Failed to create project')
       setLoading(false)
     }
-  }, [projectName, workdir, navigate, onClose])
+  }
 
   const handleCancel = useCallback(() => {
     setProjectName('')

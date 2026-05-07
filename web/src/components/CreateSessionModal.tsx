@@ -79,19 +79,23 @@ export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
     const result = await createProject(basename, path)
     listProjects()
     setCreatingPath(path)
-    if (
-      result &&
-      typeof result === 'object' &&
-      'error' in result &&
-      result.error &&
-      typeof result.error === 'object' &&
-      'code' in result.error &&
-      result.error.code === 'EACCES'
-    ) {
+    if (isPermissionDenied(result)) {
       setPermissionDeniedPath((result.error as { path?: string }).path || path)
       return false
     }
     return true
+  }
+
+  function isPermissionDenied(result: unknown): result is { error: { code: string; path?: string } } {
+    return (
+      result != null &&
+      typeof result === 'object' &&
+      'error' in result &&
+      result.error != null &&
+      typeof result.error === 'object' &&
+      'code' in result.error &&
+      result.error.code === 'EACCES'
+    )
   }
 
   const handlePermissionDeniedClose = useCallback(() => {
@@ -105,19 +109,11 @@ export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
       const result = await createProject(basename, creatingPath)
       listProjects()
       setCreatingPath(creatingPath)
-      if (
-        result &&
-        typeof result === 'object' &&
-        'error' in result &&
-        result.error &&
-        typeof result.error === 'object' &&
-        'code' in result.error &&
-        result.error.code === 'EACCES'
-      ) {
+      if (isPermissionDenied(result)) {
         setPermissionDeniedPath((result.error as { path?: string }).path || creatingPath)
       }
     }
-  }, [creatingPath, createProject, listProjects])
+  }, [creatingPath, createProject, listProjects, setPermissionDeniedPath])
 
   useEffect(() => {
     if (creatingPath) {

@@ -3,6 +3,13 @@ import { resolve } from 'node:path'
 import { access, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 
+function sanitizeShellArg(arg: string): string {
+  if (!/^[a-zA-Z0-9._-]+$/.test(arg)) {
+    throw new Error(`Invalid argument: ${arg}`)
+  }
+  return arg
+}
+
 interface DirInfo {
   resolvedPath: string
   groupGid: number
@@ -24,7 +31,7 @@ async function getDirInfo(targetPath: string): Promise<DirInfo> {
   }
 
   // Check if passwordless sudo is available
-  let sudoAvailable = false
+  let sudoAvailable: boolean
   try {
     execSync('sudo -n true', { stdio: 'pipe' })
     sudoAvailable = true
@@ -37,14 +44,15 @@ async function getDirInfo(targetPath: string): Promise<DirInfo> {
   const groupGid = dirStat.gid
 
   // Get current user's groups
-  const currentUser = execSync('id -un', { encoding: 'utf-8' }).trim()
+  const currentUser = sanitizeShellArg(execSync('id -un', { encoding: 'utf-8' }).trim())
   const groupsOutput = execSync(`id -Gn ${currentUser}`, { encoding: 'utf-8' }).trim()
   const userGroups = groupsOutput.split(/\s+/)
 
   // Get the group name for the directory's gid
   let groupName: string | null = null
   try {
-    groupName = execSync(`getent group ${groupGid}`, { encoding: 'utf-8' }).split(':')[0]?.trim() || null
+    const rawGroupName = execSync(`getent group ${groupGid}`, { encoding: 'utf-8' }).split(':')[0]?.trim()
+    groupName = rawGroupName ? sanitizeShellArg(rawGroupName) : null
   } catch {
     // ignore
   }
@@ -99,7 +107,9 @@ export async function fixPermissions(targetPath: string, action: string) {
         return { success: false, sudoAvailable: info.sudoAvailable, error: 'Could not determine group name' }
       }
       const currentUser = execSync('id -un', { encoding: 'utf-8' }).trim()
-      execSync(`sudo usermod -aG ${info.groupName} ${currentUser}`, { stdio: 'pipe' })
+      execSync(`sudo usermod -aG ${sanitizeShellArg(info.groupName)} ${sanitizeShellArg(currentUser)}`, {
+        stdio: 'pipe',
+      })
       return { success: true, sudoAvailable: info.sudoAvailable, method: 'join_group' }
     }
 
@@ -111,13 +121,15 @@ export async function fixPermissions(targetPath: string, action: string) {
       execSync(`sudo chmod g+w "${info.resolvedPath}"`, { stdio: 'pipe' })
       // Then add user to group for future sessions
       const currentUser = execSync('id -un', { encoding: 'utf-8' }).trim()
-      execSync(`sudo usermod -aG ${info.groupName} ${currentUser}`, { stdio: 'pipe' })
+      execSync(`sudo usermod -aG ${sanitizeShellArg(info.groupName)} ${sanitizeShellArg(currentUser)}`, {
+        stdio: 'pipe',
+      })
       return { success: true, sudoAvailable: info.sudoAvailable, method: 'join_group_and_group' }
     }
 
     // ownership action
     const ownerUser = execSync('id -un', { encoding: 'utf-8' }).trim()
-    execSync(`sudo chown -R ${ownerUser} "${info.resolvedPath}"`, { stdio: 'pipe' })
+    execSync(`sudo chown -R ${sanitizeShellArg(ownerUser)} "${info.resolvedPath}"`, { stdio: 'pipe' })
     return { success: true, sudoAvailable: info.sudoAvailable, method: 'ownership' }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'

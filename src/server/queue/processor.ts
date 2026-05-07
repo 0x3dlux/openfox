@@ -229,20 +229,24 @@ export class QueueProcessor {
       .finally(() => {
         this.activeAgents.delete(sessionId)
 
-        const session = this.deps.sessionManager.getSession(sessionId)
-        if (!session) {
-          this.deps.sessionManager.setRunning(sessionId, false)
-          this.deps.broadcastForSession(sessionId, createSessionRunningMessage(false))
-          return
-        }
+        try {
+          const session = this.deps.sessionManager.getSession(sessionId)
+          if (!session) {
+            this.deps.sessionManager.setRunning(sessionId, false)
+            this.deps.broadcastForSession(sessionId, createSessionRunningMessage(false))
+            return
+          }
 
-        const hasMore = sessionManager.hasQueuedMessages(sessionId)
-        if (!hasMore) {
-          finalizeTurnCompletion(sessionId, sessionManager, broadcastForSession)
-          return
-        }
+          const hasMore = sessionManager.hasQueuedMessages(sessionId)
+          if (!hasMore) {
+            finalizeTurnCompletion(sessionId, sessionManager, broadcastForSession)
+            return
+          }
 
-        this.startTurn(sessionId)
+          this.startTurn(sessionId)
+        } catch (error) {
+          logger.error('Error in turn completion cleanup', { sessionId, error: error instanceof Error ? error.message : String(error) })
+        }
       })
   }
 

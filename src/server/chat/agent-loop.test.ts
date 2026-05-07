@@ -163,4 +163,60 @@ describe('executeToolBatch', () => {
     expect(result.toolMessages[0]?.content).toBe('File read successfully\nLine 1: content')
     expect(result.toolMessages[0]?.content).not.toContain('Error:')
   })
+
+  it('executes multiple tool calls in parallel and maintains order', async () => {
+    const executionOrder: number[] = []
+    const completionOrder: number[] = []
+
+    mockToolRegistry.execute = vi.fn().mockImplementation(async (_name: string, args: any, _context: any) => {
+      const index = (args.index as number) ?? 0
+      const delay = (args.delay as number) ?? 0
+      executionOrder.push(index)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+      completionOrder.push(index)
+      return {
+        success: true,
+        output: `Tool ${index} output`,
+        durationMs: delay,
+        truncated: false,
+      }
+    })
+
+    const toolCalls: ToolCall[] = [
+      {
+        id: 'call-1',
+        name: 'run_command',
+        arguments: { index: 0, delay: 100 },
+      },
+      {
+        id: 'call-2',
+        name: 'run_command',
+        arguments: { index: 1, delay: 10 },
+      },
+      {
+        id: 'call-3',
+        name: 'run_command',
+        arguments: { index: 2, delay: 50 },
+      },
+    ]
+
+    const result = await executeToolBatch('assistant-msg-4', toolCalls, {
+      toolRegistry: mockToolRegistry,
+      sessionManager: mockSessionManager,
+      sessionId: 'test-session',
+      workdir: '/test',
+      turnMetrics: {
+        addToolTime: vi.fn(),
+        addLLMCall: vi.fn(),
+        buildStats: vi.fn(),
+      } as unknown as TurnMetrics,
+      signal: undefined,
+      onMessage: mockOnMessage,
+    })
+
+    expect(result.toolMessages).toHaveLength(3)
+    expect(result.toolMessages[0]?.content).toBe('Tool 0 output')
+    expect(result.toolMessages[1]?.content).toBe('Tool 1 output')
+    expect(result.toolMessages[2]?.content).toBe('Tool 2 output')
+  })
 })

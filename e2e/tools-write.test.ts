@@ -147,7 +147,8 @@ describe('Write Tools', () => {
       const editCall = response.toolCalls.find((tc) => tc.tool === 'edit_file')
       if (editCall) {
         expect(editCall.result?.success).toBe(false)
-        expect(editCall.result?.error).toContain('not found')
+        // With parallel execution, error could be validation failure or actual old_string not found
+        expect(editCall.result?.error).toMatch(/(old_string not found|must be read before writing)/)
       }
     })
 

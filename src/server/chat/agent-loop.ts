@@ -135,14 +135,28 @@ export async function executeToolBatch(
   let criteriaChanged = false
   let returnValueContent: string | undefined
   let returnValueResult: string | undefined
-  let session = ctx.sessionManager.requireSession(ctx.sessionId)
+  const session = ctx.sessionManager.requireSession(ctx.sessionId)
+
+  if (ctx.signal?.aborted) {
+    throw new Error('Aborted')
+  }
 
   for (const toolCall of toolCalls) {
+    eventStore.append(ctx.sessionId, createToolCallEvent(assistantMsgId, toolCall))
+  }
+
+  const executeTool = async (
+    toolCall: ToolCall,
+    index: number,
+  ): Promise<{
+    toolCall: ToolCall
+    toolResult: ToolResult
+    content: string
+    index: number
+  }> => {
     if (ctx.signal?.aborted) {
       throw new Error('Aborted')
     }
-
-    eventStore.append(ctx.sessionId, createToolCallEvent(assistantMsgId, toolCall))
 
     if (toolCall.parseError) {
       const toolResult: ToolResult = {
@@ -153,13 +167,12 @@ export async function executeToolBatch(
       }
       ctx.turnMetrics.addToolTime(toolResult.durationMs)
       eventStore.append(ctx.sessionId, createToolResultEvent(assistantMsgId, toolCall.id, toolResult))
-      toolMessages.push({
-        role: 'tool',
+      return {
+        toolCall,
+        toolResult,
         content: `Error: ${toolResult.error}`,
-        source: 'history',
-        toolCallId: toolCall.id,
-      })
-      continue
+        index,
+      }
     }
 
     const onProgress = ctx.onMessage ? createToolProgressHandler(assistantMsgId, toolCall.id, ctx.onMessage) : undefined
@@ -226,25 +239,38 @@ export async function executeToolBatch(
       returnValueResult = (toolCall.arguments as Record<string, unknown>)['result'] as string | undefined
     }
 
+    const content = stripAnsi(
+      toolResult.success
+        ? (toolResult.output ?? 'Success')
+        : toolResult.output
+          ? `${toolResult.output}\n\nError: ${toolResult.error}`
+          : `Error: ${toolResult.error}`,
+    )
+
+    return {
+      toolCall,
+      toolResult,
+      content,
+      index,
+    }
+  }
+
+  const executionPromises = toolCalls.map((toolCall, index) => executeTool(toolCall, index))
+  const results = await Promise.all(executionPromises)
+
+  for (const result of results) {
     toolMessages.push({
       role: 'tool',
-      content: stripAnsi(
-        toolResult.success
-          ? (toolResult.output ?? 'Success')
-          : toolResult.output
-            ? `${toolResult.output}\n\nError: ${toolResult.error}`
-            : `Error: ${toolResult.error}`,
-      ),
+      content: result.content,
       source: 'history',
-      toolCallId: toolCall.id,
+      toolCallId: result.toolCall.id,
     })
+  }
 
-    const updatedSession = ctx.sessionManager.requireSession(ctx.sessionId)
-    if (JSON.stringify(updatedSession.criteria) !== JSON.stringify(session.criteria)) {
-      eventStore.append(ctx.sessionId, { type: 'criteria.set', data: { criteria: updatedSession.criteria } })
-      session = updatedSession
-      criteriaChanged = true
-    }
+  const updatedSession = ctx.sessionManager.requireSession(ctx.sessionId)
+  if (JSON.stringify(updatedSession.criteria) !== JSON.stringify(session.criteria)) {
+    eventStore.append(ctx.sessionId, { type: 'criteria.set', data: { criteria: updatedSession.criteria } })
+    criteriaChanged = true
   }
 
   return { toolMessages, criteriaChanged, returnValueContent, returnValueResult }

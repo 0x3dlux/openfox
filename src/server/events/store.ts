@@ -641,6 +641,13 @@ export class EventStore {
       return transaction()
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error))
+      // FK errors mean the session was deleted - nothing to consolidate
+      const errnoError = error as NodeJS.ErrnoException
+      const isFkError = errnoError.code === 'SQLITE_CONSTRAINT_FOREIGNKEY'
+      if (isFkError || err.message.includes('FOREIGN KEY constraint failed')) {
+        logger.debug('Session no longer exists during consolidation', { sessionId })
+        return null
+      }
       logger.error('Failed to consolidate session', { sessionId, error: err.message, stack: err.stack })
       return null
     }

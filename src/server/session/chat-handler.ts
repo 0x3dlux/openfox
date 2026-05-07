@@ -127,8 +127,12 @@ export async function startChatSession(
     if (activeAgents.get(sessionId) === controller) {
       activeAgents.delete(sessionId)
     }
-    sessionManager.setRunning(sessionId, false)
-    broadcastForSession(sessionId, createSessionRunningMessage(false))
+    try {
+      sessionManager.setRunning(sessionId, false)
+      broadcastForSession(sessionId, createSessionRunningMessage(false))
+    } catch {
+      // Session may have been deleted or invalidated
+    }
     finalizeTurnCompletion(sessionId, sessionManager, broadcastForSession)
     throw error
   }

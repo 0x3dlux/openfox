@@ -4,7 +4,6 @@ import {
   detectBackend,
   detectModel,
   clearModelCache,
-  setLlmStatus,
   getModelProfile,
   type LLMClientWithModel,
 } from './llm/index.js'
@@ -287,7 +286,10 @@ export function createProviderManager(config: Config): ProviderManager {
 
   return {
     getProviders() {
-      return [...providers]
+      return providers.map((p) => ({
+        ...p,
+        status: providerStatus.get(p.id) ?? 'unknown',
+      }))
     },
 
     getActiveProvider() {
@@ -657,7 +659,7 @@ export function createProviderManager(config: Config): ProviderManager {
       })
 
       if (modelsWithContext.length === 0) {
-        setLlmStatus('disconnected')
+        providerStatus.set(providerId, 'disconnected')
         // Keep existing user models when backend is unavailable
         if (userModels.length > 0) {
           logger.debug('Backend unavailable, preserving user models', {
@@ -670,7 +672,7 @@ export function createProviderManager(config: Config): ProviderManager {
         return { success: false, error: 'No models returned from backend' }
       }
 
-      setLlmStatus('connected')
+      providerStatus.set(providerId, 'connected')
 
       const updatedModels = mergeModelsWithUserOverrides(modelsWithContext, userModels)
       providers = providers.map((p) => (p.id === providerId ? { ...p, models: updatedModels } : p))

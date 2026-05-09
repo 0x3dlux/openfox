@@ -963,6 +963,14 @@ export const useSessionStore = create<SessionState>((set, get) => {
           messages: data.messages ?? [],
           contextState: data.contextState,
         })
+        // Sync config store with session's provider/model for header display
+        if (data.session?.providerId) {
+          const configStore = useConfigStore.getState()
+          const sessionProvider = configStore.providers.find((p) => p.id === data.session.providerId)
+          if (sessionProvider) {
+            configStore.syncFromSession(data.session.providerId, data.session.providerModel ?? '')
+          }
+        }
         return data.session
       } catch {
         return null
@@ -1136,11 +1144,11 @@ export const useSessionStore = create<SessionState>((set, get) => {
           })
 
           // Sync config store with session's provider/model for header display
-          if (payload.session.providerId && payload.session.providerModel) {
+          if (payload.session.providerId) {
             const configStore = useConfigStore.getState()
             const sessionProvider = configStore.providers.find((p) => p.id === payload.session.providerId)
             if (sessionProvider) {
-              configStore.syncFromSession(payload.session.providerId, payload.session.providerModel)
+              configStore.syncFromSession(payload.session.providerId, payload.session.providerModel ?? '')
             }
           }
           break

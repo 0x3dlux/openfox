@@ -30,9 +30,8 @@ export function ProviderSelector() {
 
   const providers = useConfigStore((state) => state.providers)
   const activeProviderId = useConfigStore((state) => state.activeProviderId)
-  const model = useConfigStore((state) => state.model)
+  const defaultModelSelection = useConfigStore((state) => state.defaultModelSelection)
   const backend = useConfigStore((state) => state.backend)
-  const llmStatus = useConfigStore((state) => state.llmStatus)
   const activating = useConfigStore((state) => state.activating)
   const activateProvider = useConfigStore((state) => state.activateProvider)
   const refreshModel = useConfigStore((state) => state.refreshModel)
@@ -68,11 +67,19 @@ export function ProviderSelector() {
   }, [isOpen, providers])
 
   const activeProvider = providers.find((p) => p.id === activeProviderId)
-  void activeProvider
-  const isLlmOffline = llmStatus === 'disconnected'
+  const isLlmOffline = activeProvider?.status === 'disconnected'
 
-  // Short model name for display
-  const shortModelName = model ? (model.split('/').pop()?.replace(/-/g, ' ') ?? model) : 'detecting...'
+  // Parse defaultModelSelection for display and matching
+  const selectedModel = defaultModelSelection ? (defaultModelSelection.split('/').pop() ?? null) : null
+  const shortModelName = selectedModel
+    ? (selectedModel.split('/').pop()?.replace(/-/g, ' ') ?? selectedModel)
+    : 'detecting...'
+
+  // Check if a given provider/model pair is the currently selected one
+  const isSelected = (providerId: string, modelId: string): boolean => {
+    if (!defaultModelSelection) return false
+    return defaultModelSelection === `${providerId}/${modelId}`
+  }
 
   const backendName = getBackendDisplayName(backend)
   void isLlmOffline
@@ -142,10 +149,8 @@ export function ProviderSelector() {
   }
 
   const handleModelClick = async (providerId: string, newModel: string) => {
-    console.log('[ProviderSelector.handleModelClick] providerId:', providerId, 'model:', newModel)
     if (currentSession) {
       // Session-scoped: persist model choice to session
-      console.log('[ProviderSelector.handleModelClick] Calling setSessionProvider')
       setSessionProvider(providerId, newModel)
       // Optimistically update UI
       useConfigStore.getState().syncFromSession(providerId, newModel)
@@ -156,16 +161,19 @@ export function ProviderSelector() {
 
     setLoadingModels('activating')
     try {
+      // Optimistically update UI
+      useConfigStore.getState().syncFromSession(providerId, newModel)
+      setExpandedProviderIds([])
+      setIsOpen(false)
+
       const response = await authFetch(`/api/providers/${providerId}/activate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: newModel }),
       })
       if (response.ok) {
-        const store = useConfigStore.getState()
-        await store.fetchConfig()
-        setExpandedProviderIds([])
-        setIsOpen(false)
+        const data = (await response.json()) as { activeProviderId: string; model: string; backend: string }
+        useConfigStore.getState().syncFromSession(data.activeProviderId, data.model)
       }
     } catch {
       // Silently fail
@@ -181,7 +189,7 @@ export function ProviderSelector() {
         type="button"
         onClick={() => refreshModel()}
         className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-bg-tertiary transition-colors group"
-        title={isLlmOffline ? 'LLM server is offline. Click to retry.' : (model ?? 'Click to refresh model')}
+        title={isLlmOffline ? 'LLM server is offline. Click to retry.' : (selectedModel ?? 'Click to refresh model')}
       >
         {isLlmOffline ? (
           <span className="text-sm text-accent-error animate-pulse">LLM offline</span>
@@ -290,7 +298,7 @@ export function ProviderSelector() {
                           disabled={loadingModels === 'activating'}
                           className={`w-full px-4 py-1.5 text-left hover:bg-bg-tertiary transition-colors text-sm flex items-center justify-between group ${
                             loadingModels === 'activating' ? 'opacity-50 cursor-wait' : ''
-                          } ${model === modelConfig.id ? 'text-accent-primary' : 'text-text-secondary'}`}
+                          } ${isSelected(provider.id, modelConfig.id) ? 'text-accent-primary' : 'text-text-secondary'}`}
                         >
                           <span className="truncate flex-1">
                             {modelConfig.id.split('/').pop()?.replace(/-/g, ' ') ?? modelConfig.id}
@@ -311,7 +319,7 @@ export function ProviderSelector() {
                               <EditSmallIcon className="w-3 h-3 text-text-muted" />
                             </button>
                           </div>
-                          {model === modelConfig.id && (
+                          {isSelected(provider.id, modelConfig.id) && (
                             <span className="text-accent-success flex-shrink-0 ml-1">
                               <CheckIcon className="w-3.5 h-3.5" />
                             </span>

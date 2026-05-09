@@ -192,7 +192,13 @@ function App() {
   useEffect(() => {
     if (configFetched && activeProviderId) {
       refreshProviderModels(activeProviderId).then(() => {
-        fetchConfig()
+        // Only refresh config if we don't already have a valid defaultModelSelection
+        // for this provider (avoids overwriting optimistic updates)
+        const currentSelection = useConfigStore.getState().defaultModelSelection
+        const selectionProvider = currentSelection ? currentSelection.split('/')[0] : null
+        if (selectionProvider !== activeProviderId) {
+          fetchConfig()
+        }
       })
     }
   }, [configFetched, activeProviderId, refreshProviderModels, fetchConfig])

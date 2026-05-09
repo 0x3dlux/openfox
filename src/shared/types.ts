@@ -517,6 +517,7 @@ export interface Provider {
   models: ModelConfig[] // Available models with their context windows
   isActive: boolean // Currently selected provider
   createdAt: string // ISO timestamp
+  status?: 'connected' | 'disconnected' | 'unknown' // Connection status
 }
 
 export interface Config {

@@ -1014,6 +1014,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       success: true,
       providerId: id,
       models: updatedProvider?.models ?? [],
+      status: updatedProvider?.status ?? 'unknown',
     })
   })
 

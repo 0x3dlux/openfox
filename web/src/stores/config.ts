@@ -268,11 +268,26 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   },
 
   syncFromSession: (providerId: string, model: string) => {
-    const { providers } = get()
+    const { providers, defaultModelSelection } = get()
+    // When model is empty (provider-only switch), try to preserve the model from
+    // the current defaultModelSelection if it belongs to the target provider,
+    // or use the first available model from the target provider
+    let resolvedModel = model
+    if (!resolvedModel) {
+      const currentSelection = defaultModelSelection ? defaultModelSelection.split('/') : []
+      const currentProvider = currentSelection[0]
+      const currentModel = currentSelection.slice(1).join('/') ?? ''
+      if (currentProvider === providerId && currentModel) {
+        resolvedModel = currentModel
+      } else {
+        const targetProvider = providers.find((p) => p.id === providerId)
+        resolvedModel = targetProvider?.models[0]?.id ?? ''
+      }
+    }
     set({
       activeProviderId: providerId,
-      model,
-      defaultModelSelection: `${providerId}/${model}`,
+      model: resolvedModel,
+      defaultModelSelection: `${providerId}/${resolvedModel}`,
       providers: providers.map((p) => ({
         ...p,
         isActive: p.id === providerId,
@@ -337,11 +352,14 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         const errorData = (await response.json()) as { error?: string }
         throw new Error(errorData.error ?? 'Failed to refresh models')
       }
-      const data = (await response.json()) as { models: ModelConfig[] }
+      const data = (await response.json()) as {
+        models: ModelConfig[]
+        status: 'connected' | 'disconnected' | 'unknown'
+      }
 
       const { providers } = get()
       set({
-        providers: providers.map((p) => (p.id === providerId ? { ...p, models: data.models } : p)),
+        providers: providers.map((p) => (p.id === providerId ? { ...p, models: data.models, status: data.status } : p)),
         activating: false,
       })
       return true

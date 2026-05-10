@@ -1273,6 +1273,110 @@ describe('useSessionStore session isolation', () => {
   })
 })
 
+describe('chat.tool_output streaming after message_updated', () => {
+  beforeEach(() => {
+    wsSendMock.mockClear()
+    wsSubscribeMock.mockClear()
+    wsConnectMock.mockClear()
+    wsDisconnectMock.mockClear()
+    wsStatusMock.mockClear()
+    fetchMock.mockClear()
+  })
+
+  it('accumulates all tool_output chunks even after message_updated folds streamingMessage into messages', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const useSessionStore = await loadSessionStore()
+
+    useSessionStore.setState({
+      currentSession: {
+        id: 'session-1',
+        projectId: 'project-1',
+        workdir: '/tmp/project-1',
+        mode: 'builder',
+        phase: 'build',
+        isRunning: true,
+        criteria: [],
+        summary: null,
+      } as any,
+    })
+
+    // 1. Start the streaming assistant message
+    useSessionStore.getState().handleServerMessage({
+      type: 'chat.message',
+      sessionId: 'session-1',
+      payload: {
+        message: {
+          id: 'msg-1',
+          role: 'assistant',
+          content: '',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          tokenCount: 0,
+          isStreaming: true,
+        },
+      },
+    })
+
+    // 2. Add a tool call
+    useSessionStore.getState().handleServerMessage({
+      type: 'chat.tool_call',
+      sessionId: 'session-1',
+      payload: {
+        messageId: 'msg-1',
+        callId: 'call-1',
+        tool: 'run_command',
+        args: { command: 'echo hello' },
+      },
+    })
+
+    // 3. Fold streamingMessage into messages[] (as happens when message.done arrives before tool execution)
+    useSessionStore.getState().handleServerMessage({
+      type: 'chat.message_updated',
+      sessionId: 'session-1',
+      payload: {
+        messageId: 'msg-1',
+        updates: { isStreaming: false },
+      },
+    })
+
+    // Verify the message is now in messages with the tool call
+    const msg = useSessionStore.getState().messages.find((m) => m.id === 'msg-1')
+    expect(msg?.toolCalls).toHaveLength(1)
+    expect(msg?.toolCalls?.[0]?.streamingOutput).toBeUndefined()
+    expect(useSessionStore.getState().streamingMessage).toBeNull()
+
+    // 4. Send first tool_output chunk and flush rAF to populate streamingOutput
+    useSessionStore.getState().handleServerMessage({
+      type: 'chat.tool_output',
+      sessionId: 'session-1',
+      payload: { messageId: 'msg-1', callId: 'call-1', stream: 'stdout', output: 'first\n' },
+    })
+    vi.runAllTimers()
+
+    // Verify first chunk made it
+    const afterFirst = useSessionStore.getState().messages.find((m) => m.id === 'msg-1')
+    expect(afterFirst?.toolCalls?.[0]?.streamingOutput?.map((c) => c.content).join('')).toBe('first\n')
+
+    // 5. Send more chunks AFTER streamingOutput is already populated
+    //    (this is where the stale guard used to drop them)
+    useSessionStore.getState().handleServerMessage({
+      type: 'chat.tool_output',
+      sessionId: 'session-1',
+      payload: { messageId: 'msg-1', callId: 'call-1', stream: 'stdout', output: 'second\n' },
+    })
+    useSessionStore.getState().handleServerMessage({
+      type: 'chat.tool_output',
+      sessionId: 'session-1',
+      payload: { messageId: 'msg-1', callId: 'call-1', stream: 'stdout', output: 'third\n' },
+    })
+    vi.runAllTimers()
+
+    // 6. Verify ALL chunks are accumulated (previously only 'first\n' would survive)
+    const updatedMsg = useSessionStore.getState().messages.find((m) => m.id === 'msg-1')
+    const output = updatedMsg?.toolCalls?.[0]?.streamingOutput?.map((c) => c.content).join('') ?? ''
+    expect(output).toBe('first\nsecond\nthird\n')
+  })
+})
+
 describe('reconnect refreshes current session content', () => {
   beforeEach(() => {
     wsSendMock.mockClear()

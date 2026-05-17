@@ -7,27 +7,20 @@ import { type TurnStats } from '../../lib/types'
 import type { Message, ToolCall, Attachment } from '@shared/types.js'
 import { SessionLayout } from '../layout/SessionLayout'
 import { SessionHeader } from './SessionHeader'
-import { ChatMessage } from './ChatMessage'
-import { AssistantMessage } from './AssistantMessage'
 import { TurnStatsModal } from './TurnStatsModal'
-import { SubAgentContainer } from './SubAgentContainer'
+import { MessageList } from './MessageList'
 import { AgentSelector } from './AgentSelector'
 import { DangerLevelSelector } from './DangerLevelSelector'
 import { AskUserDialog } from '../shared/AskUserDialog'
 import { ConnectionStatusBar } from '../shared/ConnectionStatusBar'
-import { RunningIndicator } from '../shared/RunningIndicator'
-import { CriteriaGroupDisplay } from '../shared/CriteriaGroupDisplay'
 import { AttachmentPreview } from '../shared/AttachmentPreview.js'
 import { PromptHistoryList } from '../shared/PromptHistory.js'
 import { Markdown } from '../shared/Markdown.js'
 import { CloseButton } from '../shared/CloseButton'
 import { SearchIcon, ChevronDownIcon, StopIcon } from '../shared/icons'
-import { useWorkflowsStore } from '../../stores/workflows'
 import { useAgentsStore } from '../../stores/agents'
 import { useCommandsStore } from '../../stores/commands'
-import { useDisplaySettings } from '../../stores/settings'
 import { processImageFile } from '../../lib/image-processing.js'
-import { buildPromptContextByUserMessageId } from './prompt-context-linking.js'
 import { CHAT_TEXTAREA_ID, focusChatTextarea } from '../../lib/focusChatTextarea'
 import { ProviderSelector } from '../settings/ProviderSelector'
 import { MoreMenu } from './MoreMenu'
@@ -69,31 +62,18 @@ export function PlanPanel({
   const rawMessages = useSessionStore((state) => state.messages)
   const streamingMessage = useSessionStore((state) => state.streamingMessage)
   const sessions = useSessionStore((state) => state.sessions)
-  const error = useSessionStore((state) => state.error)
   const pendingQuestion = useSessionStore((state) => state.pendingQuestion)
   const isRunning = useIsRunning()
-
   const sendMessage = useSessionStore((state) => state.sendMessage)
-  const clearError = useSessionStore((state) => state.clearError)
   const acceptAndBuild = useSessionStore((state) => state.acceptAndBuild)
   const stopGeneration = useSessionStore((state) => state.stopGeneration)
   const launchRunner = useSessionStore((state) => state.launchRunner)
   const cancelQueued = useSessionStore((state) => state.cancelQueued)
   const queuedMessages = useQueuedMessages()
-  const { showThinking, showVerboseToolOutput, showStats, showAgentDefinitions, showWorkflowBars } =
-    useDisplaySettings()
-
-  const workflowDefaults = useWorkflowsStore((state) => state.defaults)
-  const workflowUserItems = useWorkflowsStore((state) => state.userItems)
-  const workflows = [...workflowDefaults, ...workflowUserItems]
-  const fetchWorkflows = useWorkflowsStore((state) => state.fetchWorkflows)
 
   const agentDefaults = useAgentsStore((state) => state.defaults)
   const agentUserItems = useAgentsStore((state) => state.userItems)
   const topLevelAgents = [...agentDefaults, ...agentUserItems].filter((a) => !a.subagent)
-  useEffect(() => {
-    fetchWorkflows()
-  }, [fetchWorkflows])
 
   // Prompt history navigation
   const { history, selectedIndex, showHistory, openHistory, closeHistory, navigateUp, navigateDown, selectCurrent } =
@@ -136,9 +116,6 @@ export function PlanPanel({
     previousDisplayItemsRef.current = items
     return items
   }, [messages])
-
-  // Use rawMessages (stable during streaming) since prompt context only depends on user messages
-  const promptContextByUserMessageId = useMemo(() => buildPromptContextByUserMessageId(rawMessages), [rawMessages])
 
   // TEMP: Auto-start test messages on page load
   /*  useEffect(() => {
@@ -202,7 +179,8 @@ export function PlanPanel({
   // Escape key to stop generation
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      const popupOpen = showQuickAction || showCommandsModal || showWorkflowsModal || showMessageSearch || turnStatsModal
+      const popupOpen =
+        showQuickAction || showCommandsModal || showWorkflowsModal || showMessageSearch || turnStatsModal
       if (e.key === 'Escape' && isRunning && !popupOpen) {
         stopGeneration()
       }
@@ -212,7 +190,16 @@ export function PlanPanel({
     }
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
-  }, [isRunning, stopGeneration, isAutoScrollActive, showQuickAction, showCommandsModal, showWorkflowsModal, showMessageSearch, turnStatsModal])
+  }, [
+    isRunning,
+    stopGeneration,
+    isAutoScrollActive,
+    showQuickAction,
+    showCommandsModal,
+    showWorkflowsModal,
+    showMessageSearch,
+    turnStatsModal,
+  ])
 
   // Double Shift opens quick action modal
   const lastShiftRef = useRef<number>(0)
@@ -393,13 +380,6 @@ export function PlanPanel({
 
   const isPlanning = session?.mode === 'planner'
   const isBuilding = session?.mode === 'builder'
-  const hasCriteria = (session?.criteria.length ?? 0) > 0
-  const isDone = session?.phase === 'done'
-
-  // Show "Start Building" when in planner with criteria and assistant has responded
-  // Don't show if already done (all criteria verified)
-  const hasAssistantResponse = displayItems.some((item) => item.type === 'message' && item.message.role === 'assistant')
-  const showStartBuilding = isPlanning && hasCriteria && !isRunning && hasAssistantResponse && !isDone
 
   const handleSelectWorkflow = (workflowId: string) => {
     const content = input.trim() ? input : undefined
@@ -426,133 +406,11 @@ export function PlanPanel({
         {turnStatsModal && <TurnStatsModal stats={turnStatsModal} onClose={() => setTurnStatsModal(null)} />}
         <ConnectionStatusBar />
 
-        <div
-          ref={scrollContainerRef}
-          data-testid="chat-scroll-container"
-          className="flex-1 min-w-0 overflow-y-auto relative bg-primary"
-        >
-          <div className="pt-4">
-            {displayItems.map((item, index) => {
-              if (item.type === 'context-divider') {
-                return (
-                  <div key={index} className="flex items-center gap-2 feed-item px-2 md:px-4">
-                    <div className="flex-1 border-t border-border" />
-                    <span className="text-[10px] text-text-muted font-medium px-2">Earlier context summarized</span>
-                    <div className="flex-1 border-t border-border" />
-                  </div>
-                )
-              }
-
-              if (item.type === 'subagent') {
-                const groupIsStreaming = item.messages.some((m) => m.isStreaming)
-                return (
-                  <div key={index} className="px-2 md:px-4">
-                    <SubAgentContainer
-                      messages={item.messages}
-                      subAgentType={item.subAgentType}
-                      subAgentId={item.subAgentId}
-                      isStreaming={groupIsStreaming}
-                    />
-                  </div>
-                )
-              }
-
-              if (item.type === 'criteria-batch') {
-                return (
-                  <div key={index} className="feed-item px-2 md:px-4">
-                    <CriteriaGroupDisplay toolCalls={item.toolCalls} criteria={session?.criteria} />
-                  </div>
-                )
-              }
-
-              const message = item.message
-              if (message.role === 'assistant') {
-                return (
-                  <div key={index} className="px-2 md:px-4">
-                    <AssistantMessage
-                      message={message}
-                      showStats={showStats}
-                      showThinking={showThinking}
-                      showVerboseToolOutput={showVerboseToolOutput}
-                    />
-                  </div>
-                )
-              }
-
-              // Filter based on display settings
-              const skipAutoPrompt = !showAgentDefinitions && message.messageKind === 'auto-prompt'
-              const skipWorkflow =
-                !showWorkflowBars &&
-                (message.messageKind === 'workflow-started' || message.messageKind === 'task-completed')
-              if (skipAutoPrompt || skipWorkflow) {
-                return null
-              }
-
-              return (
-                <div key={index} className="px-2 md:px-4">
-                  <div
-                    data-message-id={message.id}
-                    className={highlightedMessageId === message.id ? 'rounded animate-highlight-fade' : undefined}
-                  >
-                    <ChatMessage
-                      message={message}
-                      messageIndex={index}
-                      sessionId={session?.id}
-                      isLastAssistantMessage={false}
-                      promptContext={message.role === 'user' ? promptContextByUserMessageId[message.id] : undefined}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-          <div className="px-2 md:px-4 pb-4">
-            {error && (
-              <div className="feed-item bg-red-500/10 border border-red-500/50 rounded p-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-red-400 text-sm font-medium">{error.code}</div>
-                    <div className="text-red-300 text-xs mt-0.5">{error.message}</div>
-                  </div>
-                  <CloseButton onClick={clearError} className="text-red-400 hover:text-red-300 p-0.5" size="sm" />
-                </div>
-              </div>
-            )}
-
-            {showStartBuilding && (
-              <div className="flex justify-center gap-2 feed-item flex-wrap">
-                {workflows.map((w) => {
-                  const c = w.color ?? '#3b82f6'
-                  const r = parseInt(c.slice(1, 3), 16),
-                    g = parseInt(c.slice(3, 5), 16),
-                    b = parseInt(c.slice(5, 7), 16)
-                  const bg = `rgba(${r},${g},${b},0.12)`
-                  const bgHover = `rgba(${r},${g},${b},0.22)`
-                  const border = `rgba(${r},${g},${b},0.25)`
-                  return (
-                    <button
-                      key={w.id}
-                      onClick={() => acceptAndBuild(w.id)}
-                      data-testid="workflow-run-button"
-                      className="px-4 py-1.5 rounded text-sm font-medium transition-colors"
-                      style={{ backgroundColor: bg, color: c, border: `1px solid ${border}` }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = bgHover
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = bg
-                      }}
-                    >
-                      ▶ {w.name}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-
-            {isRunning && <RunningIndicator />}
-          </div>
-        </div>
+        <MessageList
+          displayItems={displayItems}
+          scrollContainerRef={scrollContainerRef}
+          highlightedMessageId={highlightedMessageId}
+        />
 
         <form onSubmit={handleSubmit} className="relative p-2 md:p-4 bg-secondary">
           <button

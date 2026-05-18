@@ -167,7 +167,7 @@ export function PlanPanel({
 
   const updateActiveIndex = useCallback((container: HTMLElement) => {
     const containerTop = container.scrollTop
-    const offsetPosition = containerTop + 80
+    const offsetPosition = containerTop + 10
 
     let closestIndex = -1
     let closestDistance = Infinity

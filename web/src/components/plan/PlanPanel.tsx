@@ -134,6 +134,95 @@ export function PlanPanel({
 
   const { force_scroll_to_bottom, isAutoScrollActive, setAutoScroll } = useAutoScroll(scrollContainerRef, session)
 
+  // Track topmost visible display item for conversation index highlighting
+  const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined)
+  const displayItemsRef = useRef(displayItems)
+  displayItemsRef.current = displayItems
+
+  // Scroll the main chat to a specific display item index
+  const scrollToIndex = useCallback(
+    (index: number) => {
+      if (index < 0 || index >= displayItems.length) return
+
+      const element = document.querySelector(`[data-item-index="${index}"]`)
+      if (!element) return
+
+      const container = scrollContainerRef.current
+      if (!container) return
+
+      setAutoScroll(false)
+
+      const elementTop = element.getBoundingClientRect().top + container.scrollTop
+      const targetPosition = elementTop - 80
+
+      container.scrollTo({
+        top: targetPosition,
+        behavior: 'smooth',
+      })
+
+      setActiveIndex(index)
+    },
+    [displayItems.length, scrollContainerRef, setAutoScroll],
+  )
+
+  const updateActiveIndex = useCallback((container: HTMLElement) => {
+    const containerTop = container.scrollTop
+    const offsetPosition = containerTop + 80
+
+    let closestIndex = -1
+    let closestDistance = Infinity
+    let lastRenderedIndex = -1
+
+    displayItemsRef.current.forEach((_, index) => {
+      const item = displayItemsRef.current[index]
+      if (!item) return
+
+      if (item.type === 'message' && item.message.role === 'assistant') {
+        if (!item.message.content?.trim() && !item.message.thinkingContent?.trim()) {
+          return
+        }
+      }
+
+      lastRenderedIndex = index
+
+      const element = document.querySelector(`[data-item-index="${index}"]`)
+      if (element) {
+        const rect = element.getBoundingClientRect()
+        const elementTop = rect.top + container.scrollTop
+        const distance = Math.abs(elementTop - offsetPosition)
+        if (distance < closestDistance) {
+          closestDistance = distance
+          closestIndex = index
+        }
+      }
+    })
+
+    const maxScroll = container.scrollHeight - container.clientHeight
+    const isAtBottom = containerTop >= maxScroll - 10
+
+    if (isAtBottom && lastRenderedIndex !== -1) {
+      setActiveIndex(lastRenderedIndex)
+    } else if (closestIndex !== -1) {
+      setActiveIndex(closestIndex)
+    }
+  }, [])
+
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container || displayItems.length === 0) return
+
+    const handleScroll = () => {
+      updateActiveIndex(container)
+    }
+
+    container.addEventListener('scroll', handleScroll, { passive: true })
+    handleScroll()
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll)
+    }
+  }, [displayItems.length, updateActiveIndex])
+
   const prevLenRef = useRef(0)
 
   const resizeTextarea = useCallback(() => {
@@ -407,6 +496,9 @@ export function PlanPanel({
         criteriaSidebarOpen={criteriaSidebarOpen}
         onCriteriaSidebarToggle={onCriteriaSidebarToggle}
         messages={messages}
+        displayItems={displayItems}
+        activeIndex={activeIndex}
+        onNavigate={scrollToIndex}
       >
         {pendingQuestion && <AskUserDialog question={pendingQuestion} />}
         <SessionHeader />

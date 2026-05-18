@@ -149,17 +149,18 @@ export function ConversationIndex({ displayItems, activeIndex, onNavigate }: Con
       }
 
       if (msg.role === 'user') {
-        return cleanContent.slice(0, 50) || '(attachment)'
+        const preview = cleanContent.slice(0, 200)
+        return preview.length < cleanContent.length ? `${preview}...` : preview
       }
       if (msg.role === 'assistant') {
         // Show thinking content if available, otherwise show regular content
         if (msg.thinkingContent?.trim()) {
-          const preview = msg.thinkingContent.slice(0, 50)
-          return `${preview}${msg.thinkingContent.length > 50 ? '...' : ''}`
+          const preview = msg.thinkingContent.slice(0, 200)
+          return preview.length < msg.thinkingContent.length ? `${preview}...` : preview
         }
         if (cleanContent) {
-          const text = cleanContent.slice(0, 50)
-          return `${text}${text.length > 50 ? '...' : ''}`
+          const text = cleanContent.slice(0, 200)
+          return text.length < cleanContent.length ? `${text}...` : text
         }
         return ''
       }

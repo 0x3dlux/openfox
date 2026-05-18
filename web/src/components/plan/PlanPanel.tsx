@@ -188,7 +188,7 @@ export function PlanPanel({
       const element = document.querySelector(`[data-item-index="${index}"]`)
       if (element) {
         const rect = element.getBoundingClientRect()
-        const elementTop = rect.top + container.scrollTop
+        const elementTop = rect.top + container.scrollTop - container.getBoundingClientRect().top
         const distance = Math.abs(elementTop - offsetPosition)
         if (distance < closestDistance) {
           closestDistance = distance
@@ -198,7 +198,7 @@ export function PlanPanel({
     })
 
     const maxScroll = container.scrollHeight - container.clientHeight
-    const isAtBottom = containerTop >= maxScroll - 10
+    const isAtBottom = container.scrollTop >= maxScroll - 10
 
     if (isAtBottom && lastRenderedIndex !== -1) {
       setActiveIndex(lastRenderedIndex)

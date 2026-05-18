@@ -178,7 +178,7 @@ export function ConversationIndex({ displayItems, activeIndex, onNavigate }: Con
   }
 
   return (
-    <div ref={containerRef} className="overflow-y-auto space-y-1" style={{ height: '36vh' }}>
+    <div ref={containerRef} className="overflow-y-auto" style={{ height: '36vh' }}>
       {displayItems.map((item, index) => {
         const isActive = isItemActive(index)
         const isCriteria = item.type === 'criteria-batch'
@@ -244,7 +244,7 @@ export function ConversationIndex({ displayItems, activeIndex, onNavigate }: Con
             data-item-index={index}
             onClick={() => handleScrollToIndex(index)}
             className={`
-              px-4 py-1.5 rounded cursor-pointer text-xs transition-colors hover:bg-bg-tertiary
+              px-4 py-1.5 rounded cursor-pointer text-xs transition-colors hover:bg-bg-tertiary mb-0.5
               ${isActive ? 'bg-accent-primary/25' : ''}
               ${isCompaction ? 'text-gray-400' : textColorClass}
             `}

@@ -42,7 +42,7 @@ export function SessionLayout({
 
         {/* Summary Sidebar - mobile: fixed overlay, desktop: flex item */}
         {criteriaSidebarOpen ? (
-          <aside className="hidden md:block w-[320px] shrink-0 border-l border-border bg-secondary flex flex-col h-screen overflow-y-auto">
+          <aside className="hidden md:block w-[320px] shrink-0 border-l border-border bg-secondary flex flex-col h-screen">
             {/* Summary and Progress */}
             <div className="flex-shrink-0 px-4 py-4">
               <SummaryDisplay summary={session?.summary ?? null} messages={messages} />
@@ -50,7 +50,7 @@ export function SessionLayout({
 
             {/* Conversation Index - scrollable section */}
             {displayItems && (
-              <div className="flex-1 min-h-0">
+              <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="px-4 flex items-center justify-between mb-2 flex-shrink-0">
                   <h3 className="text-sm font-semibold text-text-primary">History</h3>
                 </div>
@@ -91,16 +91,16 @@ export function SessionLayout({
             md:hidden
             bg-secondary
             transition-all duration-300 ease-in-out
-            fixed right-0 top-[32px] h-screen w-[320px] z-50 overflow-y-auto
+            fixed right-0 top-[32px] h-screen w-[320px] z-50
             ${criteriaSidebarOpen ? 'translate-x-0 border-l border-border' : 'translate-x-full'}
           `}
         >
-          <div className="flex flex-col">
+          <div className="flex flex-col h-full">
             <div className="flex-shrink-0 px-4 py-4">
               <SummaryDisplay summary={session?.summary ?? null} messages={messages} />
             </div>
             {displayItems && (
-              <div className="py-2 flex-1 min-h-0">
+              <div className="py-2 flex-1 min-h-0 overflow-y-auto">
                 <div className="px-4 flex items-center justify-between mb-2 flex-shrink-0">
                   <h3 className="text-sm font-semibold text-text-primary">History</h3>
                 </div>

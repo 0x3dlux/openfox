@@ -302,6 +302,21 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
     )
   }
 
+  function EditableSkillItems({ items }: { items: { id: string; name: string; description: string }[] }) {
+    return items.map((skill) => (
+      <SkillListItem
+        key={skill.id}
+        skill={skill}
+        isBuiltIn={false}
+        isConfirmingDelete={false}
+        onView={() => handleView(skill.id)}
+        onEdit={() => handleEdit(skill.id)}
+        onDuplicate={() => handleDuplicate(skill.id)}
+        onDelete={() => handleDelete(skill.id)}
+      />
+    ))
+  }
+
   return (
     <div>
       <CRUDListHeader
@@ -335,18 +350,7 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
 
         {userItems.length > 0 && (
           <ItemsHeader>
-            {userItems.map((skill) => (
-              <SkillListItem
-                key={skill.id}
-                skill={skill}
-                isBuiltIn={false}
-                isConfirmingDelete={false}
-                onView={() => handleView(skill.id)}
-                onEdit={() => handleEdit(skill.id)}
-                onDuplicate={() => handleDuplicate(skill.id)}
-                onDelete={() => handleDelete(skill.id)}
-              />
-            ))}
+            <EditableSkillItems items={userItems} />
           </ItemsHeader>
         )}
 
@@ -354,18 +358,7 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
           <div className="mt-4">
             <h3 className="text-xs font-medium text-text-secondary mb-2 uppercase tracking-wide">Project</h3>
             <div className="space-y-2">
-              {projectItems.map((skill) => (
-                <SkillListItem
-                  key={skill.id}
-                  skill={skill}
-                  isBuiltIn={false}
-                  isConfirmingDelete={false}
-                  onView={() => handleView(skill.id)}
-                  onEdit={() => handleEdit(skill.id)}
-                  onDuplicate={() => handleDuplicate(skill.id)}
-                  onDelete={() => handleDelete(skill.id)}
-                />
-              ))}
+              <EditableSkillItems items={projectItems} />
             </div>
           </div>
         )}

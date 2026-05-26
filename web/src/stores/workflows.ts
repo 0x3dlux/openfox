@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { authFetch } from '../lib/api'
-import { saveEntity } from './utils'
+import { saveEntity, duplicateEntity } from './utils'
 
 export interface WorkflowInfo {
   id: string
@@ -146,20 +146,6 @@ export const useWorkflowsStore = create<WorkflowsState>((set, get) => ({
   },
 
   duplicateWorkflow: async (id: string, destination?: 'project' | 'user') => {
-    try {
-      const res = await authFetch(`/api/workflows/${id}/duplicate`, {
-        method: 'POST',
-        body: destination ? JSON.stringify({ destination }) : undefined,
-        headers: destination ? { 'Content-Type': 'application/json' } : undefined,
-      })
-      const data = await res.json()
-      if (res.ok) {
-        await get().fetchWorkflows()
-        return { success: true }
-      }
-      return { success: false, error: data.error ?? 'Failed to duplicate' }
-    } catch {
-      return { success: false, error: 'Network error' }
-    }
+    return duplicateEntity(`/api/workflows/${id}/duplicate`, () => get().fetchWorkflows(), destination)
   },
 }))

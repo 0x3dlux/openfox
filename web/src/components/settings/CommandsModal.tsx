@@ -3,7 +3,7 @@ import { Modal } from '../shared/SelfContainedModal'
 import { Button } from '../shared/Button'
 import { EditButton } from '../shared/IconButton'
 import { EyeIcon } from '../shared/icons'
-import { useCommandsStore, type CommandFull } from '../../stores/commands'
+import { useCommandsStore, type CommandInfo, type CommandFull } from '../../stores/commands'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfirmDialog, ConfirmButton, DeleteIcon, DuplicateIcon, ErrorBanner } from './CRUDModal'
 import { ItemsHeader } from '../shared/ItemsHeader'
@@ -412,6 +412,31 @@ export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalP
     )
   }
 
+  const renderCommandItems = (items: CommandInfo[]) =>
+    items.map((command) => (
+      <div
+        key={command.id}
+        className="flex items-center justify-between p-3 rounded border border-border bg-bg-tertiary"
+      >
+        <div className="min-w-0 flex-1 mr-3">
+          <div className="flex items-center gap-2">
+            <span className="text-text-primary text-sm font-medium">{command.name}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <EditButton onClick={() => handleEdit(command.id)} />
+          <DuplicateIcon onClick={() => handleDuplicate(command.id)} />
+
+          {isConfirming(command.id, 'delete') ? (
+            <ConfirmButton onConfirm={() => handleDelete(command.id)} onCancel={clearConfirm} />
+          ) : (
+            <DeleteIcon onClick={() => requestDelete(command.id)} />
+          )}
+        </div>
+      </div>
+    ))
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Commands" size="lg">
       <CRUDListHeader
@@ -448,62 +473,12 @@ export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalP
           </div>
         )}
 
-        {userItems.length > 0 && (
-          <ItemsHeader>
-            {userItems.map((command) => (
-              <div
-                key={command.id}
-                className="flex items-center justify-between p-3 rounded border border-border bg-bg-tertiary"
-              >
-                <div className="min-w-0 flex-1 mr-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-text-primary text-sm font-medium">{command.name}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <EditButton onClick={() => handleEdit(command.id)} />
-                  <DuplicateIcon onClick={() => handleDuplicate(command.id)} />
-
-                  {isConfirming(command.id, 'delete') ? (
-                    <ConfirmButton onConfirm={() => handleDelete(command.id)} onCancel={clearConfirm} />
-                  ) : (
-                    <DeleteIcon onClick={() => requestDelete(command.id)} />
-                  )}
-                </div>
-              </div>
-            ))}
-          </ItemsHeader>
-        )}
+        {userItems.length > 0 && <ItemsHeader>{renderCommandItems(userItems)}</ItemsHeader>}
 
         {projectItems.length > 0 && (
           <div className="mt-4">
             <h3 className="text-xs font-medium text-text-secondary mb-2 uppercase tracking-wide">Project</h3>
-            <div className="space-y-2">
-              {projectItems.map((command) => (
-                <div
-                  key={command.id}
-                  className="flex items-center justify-between p-3 rounded border border-border bg-bg-tertiary"
-                >
-                  <div className="min-w-0 flex-1 mr-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-text-primary text-sm font-medium">{command.name}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <EditButton onClick={() => handleEdit(command.id)} />
-                    <DuplicateIcon onClick={() => handleDuplicate(command.id)} />
-
-                    {isConfirming(command.id, 'delete') ? (
-                      <ConfirmButton onConfirm={() => handleDelete(command.id)} onCancel={clearConfirm} />
-                    ) : (
-                      <DeleteIcon onClick={() => requestDelete(command.id)} />
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <div className="space-y-2">{renderCommandItems(projectItems)}</div>
           </div>
         )}
       </CRUDListView>

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { authFetch } from '../lib/api'
-import { saveEntity } from './utils'
+import { saveEntity, duplicateEntity } from './utils'
 import { fetchItems } from './fetch-items'
 
 export interface SkillInfo {
@@ -106,20 +106,6 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
   },
 
   duplicateSkill: async (skillId: string, destination?: 'project' | 'user') => {
-    try {
-      const res = await authFetch(`/api/skills/${skillId}/duplicate`, {
-        method: 'POST',
-        body: destination ? JSON.stringify({ destination }) : undefined,
-        headers: destination ? { 'Content-Type': 'application/json' } : undefined,
-      })
-      const data = await res.json()
-      if (res.ok) {
-        await get().fetchSkills()
-        return { success: true }
-      }
-      return { success: false, error: data.error ?? 'Failed to duplicate' }
-    } catch {
-      return { success: false, error: 'Network error' }
-    }
+    return duplicateEntity(`/api/skills/${skillId}/duplicate`, () => get().fetchSkills(), destination)
   },
 }))

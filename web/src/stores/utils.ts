@@ -21,6 +21,28 @@ export const saveEntity = async (
   }
 }
 
+export const duplicateEntity = async (
+  url: string,
+  fetchFn: () => Promise<void>,
+  destination?: string,
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const res = await authFetch(url, {
+      method: 'POST',
+      body: destination ? JSON.stringify({ destination }) : undefined,
+      headers: destination ? { 'Content-Type': 'application/json' } : undefined,
+    })
+    const data = await res.json()
+    if (res.ok) {
+      await fetchFn()
+      return { success: true }
+    }
+    return { success: false, error: data.error ?? 'Failed to duplicate' }
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
 export function createLogBuffer(flushFn: () => void) {
   let logRafId: number | null = null
 

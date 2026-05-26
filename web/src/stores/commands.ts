@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { authFetch } from '../lib/api'
-import { saveEntity } from './utils'
+import { saveEntity, duplicateEntity } from './utils'
 import { fetchItems } from './fetch-items'
 
 export interface CommandInfo {
@@ -96,20 +96,6 @@ export const useCommandsStore = create<CommandsState>((set, get) => ({
   },
 
   duplicateCommand: async (commandId: string, destination?: 'project' | 'user') => {
-    try {
-      const res = await authFetch(`/api/commands/${commandId}/duplicate`, {
-        method: 'POST',
-        body: destination ? JSON.stringify({ destination }) : undefined,
-        headers: destination ? { 'Content-Type': 'application/json' } : undefined,
-      })
-      const data = await res.json()
-      if (res.ok) {
-        await get().fetchCommands()
-        return { success: true }
-      }
-      return { success: false, error: data.error ?? 'Failed to duplicate' }
-    } catch {
-      return { success: false, error: 'Network error' }
-    }
+    return duplicateEntity(`/api/commands/${commandId}/duplicate`, () => get().fetchCommands(), destination)
   },
 }))

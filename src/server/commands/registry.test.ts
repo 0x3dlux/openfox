@@ -10,12 +10,15 @@ import {
   loadAllCommands,
   loadDefaultCommands,
   loadUserCommands,
+  loadProjectCommands,
   findCommandById,
   saveCommand,
   deleteCommand,
   commandExists,
   isDefaultCommand,
   getDefaultCommandIds,
+  saveCommandToProject,
+  deleteProjectCommand,
 } from './registry.js'
 import type { CommandDefinition } from './types.js'
 
@@ -247,5 +250,116 @@ describe('getDefaultCommandIds', () => {
     const ids = await getDefaultCommandIds()
     expect(ids.length).toBeGreaterThan(0)
     expect(ids).toContain('init')
+  })
+})
+
+async function createProjectCommandFile(projectDir: string, id: string, name: string, prompt: string): Promise<void> {
+  const commandsDir = join(projectDir, '.openfox', 'commands')
+  await mkdir(commandsDir, { recursive: true })
+  await writeFile(
+    join(commandsDir, `${id}.command.md`),
+    `---
+id: ${id}
+name: ${name}
+---
+
+${prompt}
+`,
+  )
+}
+
+describe('loadProjectCommands', () => {
+  it('should return empty array when project dir does not exist', async () => {
+    const commands = await loadProjectCommands(tempDir)
+    expect(commands).toEqual([])
+  })
+
+  it('should load valid .command.md files from .openfox/commands/', async () => {
+    await createProjectCommandFile(tempDir, 'proj-cmd', 'Project Command', 'Do the project thing.')
+
+    const commands = await loadProjectCommands(tempDir)
+    expect(commands).toHaveLength(1)
+    expect(commands[0]!.metadata.id).toBe('proj-cmd')
+    expect(commands[0]!.metadata.name).toBe('Project Command')
+    expect(commands[0]!.prompt).toBe('Do the project thing.')
+  })
+})
+
+describe('loadAllCommands with project', () => {
+  it('should merge project commands on top of user and defaults', async () => {
+    await createProjectCommandFile(tempDir, 'proj-cmd', 'Project Command', 'Project prompt.')
+
+    const defaults = await loadDefaultCommands()
+    const commands = await loadAllCommands(tempDir, tempDir)
+    expect(commands.some((c) => c.metadata.id === 'proj-cmd')).toBe(true)
+    expect(commands.length).toBeGreaterThanOrEqual(defaults.length + 1)
+  })
+
+  it('should give precedence to project commands over user and defaults', async () => {
+    const commandsDir = join(tempDir, 'commands')
+    await mkdir(commandsDir, { recursive: true })
+    await writeFile(
+      join(commandsDir, 'shared.command.md'),
+      `---
+id: shared
+name: User Command
+---
+
+User version.
+`,
+    )
+    await createProjectCommandFile(tempDir, 'shared', 'Project Command', 'Project version.')
+
+    const commands = await loadAllCommands(tempDir, tempDir)
+    const shared = commands.find((c) => c.metadata.id === 'shared')
+    expect(shared).toBeDefined()
+    expect(shared!.prompt).toBe('Project version.')
+  })
+
+  it('should give precedence to project commands over defaults with same id', async () => {
+    const defaults = await loadDefaultCommands()
+    const defaultId = defaults[0]!.metadata.id
+    await createProjectCommandFile(tempDir, defaultId, 'Override', 'Project override.')
+
+    const commands = await loadAllCommands(tempDir, tempDir)
+    const overridden = commands.find((c) => c.metadata.id === defaultId)
+    expect(overridden).toBeDefined()
+    expect(overridden!.prompt).toBe('Project override.')
+  })
+
+  it('should work without project dir', async () => {
+    const defaults = await loadDefaultCommands()
+    const commands = await loadAllCommands(tempDir)
+    expect(commands.length).toBeGreaterThanOrEqual(defaults.length)
+  })
+})
+
+describe('CRUD project commands', () => {
+  it('should save and load a project command', async () => {
+    const command = {
+      metadata: { id: 'proj_cmd', name: 'Project Command' },
+      prompt: 'Execute project command.',
+    }
+
+    await saveCommandToProject(tempDir, command)
+
+    const loaded = await loadProjectCommands(tempDir)
+    expect(loaded).toHaveLength(1)
+    expect(loaded[0]!.metadata.id).toBe('proj_cmd')
+    expect(loaded[0]!.prompt).toBe('Execute project command.')
+  })
+
+  it('should delete a project command', async () => {
+    const command = {
+      metadata: { id: 'proj_del', name: 'Delete Project' },
+      prompt: 'Temporary.',
+    }
+
+    await saveCommandToProject(tempDir, command)
+    expect(await loadProjectCommands(tempDir)).toHaveLength(1)
+
+    const result = await deleteProjectCommand(tempDir, 'proj_del')
+    expect(result.success).toBe(true)
+    expect(await loadProjectCommands(tempDir)).toHaveLength(0)
   })
 })

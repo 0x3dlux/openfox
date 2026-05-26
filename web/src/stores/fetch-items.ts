@@ -2,7 +2,7 @@ import { authFetch } from '../lib/api'
 
 type SetFn = (partial: unknown) => void
 
-export async function fetchItems(url: string, set: SetFn): Promise<void> {
+export async function fetchItems(url: string, set: SetFn, hasProjectItems?: boolean): Promise<void> {
   set({ loading: true } as Record<string, unknown>)
   try {
     const res = await authFetch(url)
@@ -10,6 +10,7 @@ export async function fetchItems(url: string, set: SetFn): Promise<void> {
     set({
       defaults: data.defaults ?? [],
       userItems: data.userItems ?? [],
+      ...(hasProjectItems ? { projectItems: data.projectItems ?? [] } : {}),
       loading: false,
     } as Record<string, unknown>)
   } catch {

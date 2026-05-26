@@ -51,10 +51,13 @@ export function QuickActionModal({
   const fetchAgents = useAgentsStore((state) => state.fetchAgents)
   const commandDefaults = useCommandsStore((state) => state.defaults)
   const commandUserItems = useCommandsStore((state) => state.userItems)
+  const commandProjectItems = useCommandsStore((state) => state.projectItems)
   const workflowDefaults = useWorkflowsStore((state) => state.defaults)
   const workflowUserItems = useWorkflowsStore((state) => state.userItems)
+  const workflowProjectItems = useWorkflowsStore((state) => state.projectItems)
   const agentDefaults = useAgentsStore((state) => state.defaults)
   const agentUserItems = useAgentsStore((state) => state.userItems)
+  const agentProjectItems = useAgentsStore((state) => state.projectItems)
   const currentMode = useSessionStore((state) => state.currentSession?.mode)
   const currentDangerLevel = useSessionStore((state) => state.currentSession?.dangerLevel ?? 'normal')
   const switchMode = useSessionStore((state) => state.switchMode)
@@ -133,16 +136,16 @@ export function QuickActionModal({
         onToggleAutoScroll?.(!isAutoScrollActive)
       },
     },
-    ...dedupById(agentDefaults, agentUserItems)
+    ...dedupById(dedupById(agentDefaults, agentUserItems), agentProjectItems)
       .filter((a) => !a.subagent && a.id !== currentMode)
       .map((a) => ({ id: a.id, name: a.name, prefix: 'Agent > Switch to', action: () => switchMode(a.id) })),
-    ...dedupById(commandDefaults, commandUserItems).map((c) => ({
+    ...dedupById(dedupById(commandDefaults, commandUserItems), commandProjectItems).map((c) => ({
       id: c.id,
       name: c.name,
       prefix: 'Command > Launch',
       action: () => onSelectCommand(c.id, textareaContent),
     })),
-    ...dedupById(workflowDefaults, workflowUserItems).map((w) => ({
+    ...dedupById(dedupById(workflowDefaults, workflowUserItems), workflowProjectItems).map((w) => ({
       id: w.id,
       name: w.name,
       prefix: 'Workflow > Run',

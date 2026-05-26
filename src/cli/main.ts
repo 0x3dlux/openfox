@@ -134,10 +134,8 @@ export async function runConfig(mode: Mode): Promise<void> {
   }
 
   // Display server host with human-readable description
-  const hostDisplay =
-    config.server.host === '0.0.0.0'
-      ? `${config.server.host} (accessible from local network)`
-      : `${config.server.host} (localhost only)`
+  const host = config.server.host ?? '127.0.0.1'
+  const hostDisplay = host === '0.0.0.0' ? `${host} (accessible from local network)` : `${host} (localhost only)`
   console.log(`  Server: ${hostDisplay}`)
   console.log(`  Port: ${config.server.port}`)
 }

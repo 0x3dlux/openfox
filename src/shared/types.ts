@@ -550,7 +550,7 @@ export interface Config {
   }
   server: {
     port: number
-    host: string
+    host?: string
     openBrowser?: boolean
   }
   database: {

@@ -1039,10 +1039,11 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   })
 
   // CRUD routes (extracted to routes/)
-  app.use('/api/skills', createSkillRoutes(configDir))
-  app.use('/api/commands', createCommandRoutes(configDir))
-  app.use('/api/agents', createAgentRoutes(configDir))
-  app.use('/api/workflows', createWorkflowRoutes(configDir, config))
+  const projectDir = config.workdir
+  app.use('/api/skills', createSkillRoutes(configDir, projectDir))
+  app.use('/api/commands', createCommandRoutes(configDir, projectDir))
+  app.use('/api/agents', createAgentRoutes(configDir, projectDir))
+  app.use('/api/workflows', createWorkflowRoutes(configDir, config, projectDir))
   app.use('/api/dev-server', createDevServerRoutes())
   app.use('/api/terminals', createTerminalRoutes())
   app.use(

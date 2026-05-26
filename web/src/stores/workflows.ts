@@ -42,6 +42,7 @@ export interface TemplateVariable {
 interface WorkflowsState {
   defaults: WorkflowInfo[]
   userItems: WorkflowInfo[]
+  projectItems: WorkflowInfo[]
   activeWorkflowId: string
   loading: boolean
   templateVariables: TemplateVariable[]
@@ -49,15 +50,19 @@ interface WorkflowsState {
   fetchTemplateVariables: () => Promise<void>
   fetchWorkflow: (id: string) => Promise<WorkflowFull | null>
   fetchDefaultContent: (id: string) => Promise<WorkflowFull | null>
-  createWorkflow: (workflow: WorkflowFull) => Promise<{ success: boolean; error?: string }>
+  createWorkflow: (
+    workflow: WorkflowFull,
+    destination?: 'project' | 'user',
+  ) => Promise<{ success: boolean; error?: string }>
   updateWorkflow: (id: string, workflow: Partial<WorkflowFull>) => Promise<{ success: boolean; error?: string }>
   deleteWorkflow: (id: string) => Promise<{ success: boolean; error?: string; reason?: string }>
-  duplicateWorkflow: (id: string) => Promise<{ success: boolean; error?: string }>
+  duplicateWorkflow: (id: string, destination?: 'project' | 'user') => Promise<{ success: boolean; error?: string }>
 }
 
 export const useWorkflowsStore = create<WorkflowsState>((set, get) => ({
   defaults: [],
   userItems: [],
+  projectItems: [],
   activeWorkflowId: 'default',
   loading: false,
   templateVariables: [],
@@ -80,6 +85,7 @@ export const useWorkflowsStore = create<WorkflowsState>((set, get) => ({
       set({
         defaults: data.defaults ?? [],
         userItems: data.userItems ?? [],
+        projectItems: data.projectItems ?? [],
         activeWorkflowId: data.activeWorkflowId ?? 'default',
         loading: false,
       })
@@ -108,8 +114,11 @@ export const useWorkflowsStore = create<WorkflowsState>((set, get) => ({
     }
   },
 
-  createWorkflow: async (workflow: WorkflowFull) => {
-    const result = await saveEntity('POST', '/api/workflows', workflow as unknown as Record<string, unknown>)
+  createWorkflow: async (workflow: WorkflowFull, destination?: 'project' | 'user') => {
+    const result = await saveEntity('POST', '/api/workflows', {
+      ...workflow,
+      destination,
+    } as unknown as Record<string, unknown>)
     if (result.success) await get().fetchWorkflows()
     return result
   },
@@ -136,9 +145,13 @@ export const useWorkflowsStore = create<WorkflowsState>((set, get) => ({
     }
   },
 
-  duplicateWorkflow: async (id: string) => {
+  duplicateWorkflow: async (id: string, destination?: 'project' | 'user') => {
     try {
-      const res = await authFetch(`/api/workflows/${id}/duplicate`, { method: 'POST' })
+      const res = await authFetch(`/api/workflows/${id}/duplicate`, {
+        method: 'POST',
+        body: destination ? JSON.stringify({ destination }) : undefined,
+        headers: destination ? { 'Content-Type': 'application/json' } : undefined,
+      })
       const data = await res.json()
       if (res.ok) {
         await get().fetchWorkflows()

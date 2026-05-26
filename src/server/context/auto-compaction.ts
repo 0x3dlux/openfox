@@ -100,7 +100,7 @@ async function performContextCompaction(
   const subAgentDefs = getSubAgents(allAgents)
   const toolRegistry = getToolRegistryForAgent(plannerDef)
   const configDir = getGlobalConfigDir(config.mode ?? 'production')
-  const skills = await getEnabledSkillMetadata(configDir)
+  const skills = await getEnabledSkillMetadata(configDir, config.workdir)
 
   const assembledRequest = assembleAgentRequest({
     agentDef: plannerDef,

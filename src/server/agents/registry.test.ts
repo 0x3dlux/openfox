@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import {
   loadAllAgents,
   loadDefaultAgents,
+  loadProjectAgents,
   findAgentById,
   getSubAgents,
   getTopLevelAgents,
@@ -16,6 +17,8 @@ import {
   deleteAgent,
   isDefaultAgent,
   getDefaultAgentIds,
+  saveAgentToProject,
+  deleteProjectAgent,
 } from './registry.js'
 import type { AgentDefinition } from './types.js'
 
@@ -193,6 +196,128 @@ describe('CRUD', () => {
   it('should return false when deleting non-existent agent', async () => {
     const result = await deleteAgent(tempDir, 'nonexistent')
     expect(result.success).toBe(false)
+  })
+})
+
+async function createProjectAgentFile(projectDir: string, id: string, name: string): Promise<void> {
+  const agentsDir = join(projectDir, '.openfox', 'agents')
+  await mkdir(agentsDir, { recursive: true })
+  await writeFile(
+    join(agentsDir, `${id}.agent.md`),
+    `---
+id: ${id}
+name: ${name}
+description: Project agent ${id}
+subagent: true
+tools:
+  - read_file
+---
+
+Project agent instructions for ${name}.
+`,
+  )
+}
+
+describe('loadProjectAgents', () => {
+  it('should return empty array when project dir does not exist', async () => {
+    const agents = await loadProjectAgents(tempDir)
+    expect(agents).toEqual([])
+  })
+
+  it('should load valid .agent.md files from .openfox/agents/', async () => {
+    await createProjectAgentFile(tempDir, 'proj-agent', 'Project Agent')
+
+    const agents = await loadProjectAgents(tempDir)
+    expect(agents).toHaveLength(1)
+    expect(agents[0]!.metadata.id).toBe('proj-agent')
+    expect(agents[0]!.metadata.name).toBe('Project Agent')
+    expect(agents[0]!.prompt).toContain('Project agent instructions')
+  })
+})
+
+describe('loadAllAgents with project', () => {
+  it('should merge project agents on top of user and defaults', async () => {
+    await createProjectAgentFile(tempDir, 'proj-agent', 'Project Agent')
+
+    const defaults = await loadDefaultAgents()
+    const agents = await loadAllAgents(tempDir, tempDir)
+    expect(agents.some((a) => a.metadata.id === 'proj-agent')).toBe(true)
+    expect(agents.length).toBeGreaterThanOrEqual(defaults.length + 1)
+  })
+
+  it('should give precedence to project agents over user and defaults', async () => {
+    const agentsDir = join(tempDir, 'agents')
+    await mkdir(agentsDir, { recursive: true })
+    await writeFile(
+      join(agentsDir, 'shared.agent.md'),
+      `---
+id: shared
+name: User Agent
+description: User
+subagent: true
+tools: []
+---
+
+User version.
+`,
+    )
+    await createProjectAgentFile(tempDir, 'shared', 'Project Agent')
+
+    const agents = await loadAllAgents(tempDir, tempDir)
+    const shared = agents.find((a) => a.metadata.id === 'shared')
+    expect(shared).toBeDefined()
+    expect(shared!.metadata.name).toBe('Project Agent')
+  })
+
+  it('should give precedence to project agents over defaults with same id', async () => {
+    await createProjectAgentFile(tempDir, 'verifier', 'Project Verifier')
+
+    const agents = await loadAllAgents(tempDir, tempDir)
+    const overridden = agents.find((a) => a.metadata.id === 'verifier')
+    expect(overridden).toBeDefined()
+    expect(overridden!.metadata.name).toBe('Project Verifier')
+  })
+
+  it('should work without project dir', async () => {
+    const defaults = await loadDefaultAgents()
+    const agents = await loadAllAgents(tempDir)
+    expect(agents.length).toBeGreaterThanOrEqual(defaults.length)
+  })
+})
+
+describe('CRUD project agents', () => {
+  it('should save and load a project agent', async () => {
+    const agent: AgentDefinition = {
+      metadata: {
+        id: 'proj_agent',
+        name: 'Project Agent',
+        description: 'P',
+        subagent: true,
+        allowedTools: ['read_file'],
+      },
+      prompt: 'Project agent instructions.',
+    }
+
+    await saveAgentToProject(tempDir, agent)
+
+    const loaded = await loadProjectAgents(tempDir)
+    expect(loaded).toHaveLength(1)
+    expect(loaded[0]!.metadata.id).toBe('proj_agent')
+    expect(loaded[0]!.prompt).toBe('Project agent instructions.')
+  })
+
+  it('should delete a project agent', async () => {
+    const agent: AgentDefinition = {
+      metadata: { id: 'proj_del', name: 'Delete Project', description: 'Temp', subagent: true, allowedTools: [] },
+      prompt: 'Temporary.',
+    }
+
+    await saveAgentToProject(tempDir, agent)
+    expect(await loadProjectAgents(tempDir)).toHaveLength(1)
+
+    const result = await deleteProjectAgent(tempDir, 'proj_del')
+    expect(result.success).toBe(true)
+    expect(await loadProjectAgents(tempDir)).toHaveLength(0)
   })
 })
 

@@ -13,6 +13,7 @@ import { constants } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { WorkflowDefinition } from './types.js'
 import { logger } from '../utils/logger.js'
+import { saveItemToDir, jsonSerializer, deleteItemFromDir } from '../shared/item-loader.js'
 
 const __bundleDir = dirname(fileURLToPath(import.meta.url))
 const DEFAULTS_DIR = join(__bundleDir, 'defaults')
@@ -21,6 +22,10 @@ const WORKFLOW_EXTENSION = '.workflow.json'
 
 function getWorkflowsDir(configDir: string): string {
   return join(configDir, 'workflows')
+}
+
+function getProjectWorkflowsDir(projectDir: string): string {
+  return join(projectDir, '.openfox', 'workflows')
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -74,7 +79,11 @@ export async function loadUserWorkflows(configDir: string): Promise<WorkflowDefi
   return loadWorkflowsFromDir(getWorkflowsDir(configDir))
 }
 
-export async function loadAllWorkflows(configDir: string): Promise<WorkflowDefinition[]> {
+export async function loadProjectWorkflows(projectDir: string): Promise<WorkflowDefinition[]> {
+  return loadWorkflowsFromDir(getProjectWorkflowsDir(projectDir))
+}
+
+export async function loadAllWorkflows(configDir: string, projectDir?: string): Promise<WorkflowDefinition[]> {
   const [defaultWorkflows, userWorkflows] = await Promise.all([loadDefaultWorkflows(), loadUserWorkflows(configDir)])
 
   const workflowMap = new Map<string, WorkflowDefinition>()
@@ -85,7 +94,25 @@ export async function loadAllWorkflows(configDir: string): Promise<WorkflowDefin
     workflowMap.set(workflow.metadata.id, workflow)
   }
 
+  if (projectDir) {
+    const projectWorkflows = await loadProjectWorkflows(projectDir)
+    for (const workflow of projectWorkflows) {
+      workflowMap.set(workflow.metadata.id, workflow)
+    }
+  }
+
   return Array.from(workflowMap.values())
+}
+
+export async function saveWorkflowToProject(projectDir: string, workflow: WorkflowDefinition): Promise<void> {
+  await saveItemToDir(getProjectWorkflowsDir(projectDir), workflow, WORKFLOW_EXTENSION, jsonSerializer)
+}
+
+export async function deleteProjectWorkflow(
+  projectDir: string,
+  workflowId: string,
+): Promise<{ success: boolean; reason?: string }> {
+  return deleteItemFromDir(getProjectWorkflowsDir(projectDir), workflowId, WORKFLOW_EXTENSION)
 }
 
 export async function getDefaultWorkflowIds(): Promise<string[]> {
@@ -114,9 +141,11 @@ export function findWorkflowById(workflowId: string, workflows: WorkflowDefiniti
   return workflows.find((p) => p.metadata.id === workflowId)
 }
 
-export async function workflowExists(configDir: string, workflowId: string): Promise<boolean> {
-  const filePath = join(getWorkflowsDir(configDir), `${workflowId}${WORKFLOW_EXTENSION}`)
-  return pathExists(filePath)
+export async function workflowExists(configDir: string, workflowId: string, projectDir?: string): Promise<boolean> {
+  if (await pathExists(join(getWorkflowsDir(configDir), `${workflowId}${WORKFLOW_EXTENSION}`))) return true
+  if (projectDir && (await pathExists(join(getProjectWorkflowsDir(projectDir), `${workflowId}${WORKFLOW_EXTENSION}`))))
+    return true
+  return false
 }
 
 export async function saveWorkflow(configDir: string, workflow: WorkflowDefinition): Promise<void> {
@@ -145,7 +174,13 @@ export async function deleteWorkflow(
   }
 }
 
-export async function getOverrideWorkflowIds(configDir: string): Promise<string[]> {
-  const [defaultIds, userWorkflows] = await Promise.all([getDefaultWorkflowIds(), loadUserWorkflows(configDir)])
-  return userWorkflows.map((w) => w.metadata.id).filter((id) => defaultIds.includes(id))
+export async function getOverrideWorkflowIds(configDir: string, projectDir?: string): Promise<string[]> {
+  const [defaultIds, userWorkflows, projectWorkflows] = await Promise.all([
+    getDefaultWorkflowIds(),
+    loadUserWorkflows(configDir),
+    projectDir ? loadProjectWorkflows(projectDir) : [],
+  ])
+  const userOverrides = userWorkflows.map((w) => w.metadata.id).filter((id) => defaultIds.includes(id))
+  const projectOverrides = projectWorkflows.map((w) => w.metadata.id).filter((id) => defaultIds.includes(id))
+  return [...userOverrides, ...projectOverrides]
 }

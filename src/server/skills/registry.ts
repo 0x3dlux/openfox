@@ -11,7 +11,7 @@ import { writeFile, mkdir, unlink } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import matter from 'gray-matter'
-import { pathExists, getDefaultIds, loadItemsFromDir } from '../shared/item-loader.js'
+import { pathExists, getDefaultIds, loadItemsFromDir, saveItemToDir, deleteItemFromDir } from '../shared/item-loader.js'
 import { getSetting, setSetting, deleteSetting } from '../db/settings.js'
 import type { SkillDefinition } from './types.js'
 
@@ -23,6 +23,10 @@ const SKILL_SETTING_PREFIX = 'skill.enabled.'
 
 function getSkillsDir(configDir: string): string {
   return join(configDir, 'skills')
+}
+
+function getProjectSkillsDir(projectDir: string): string {
+  return join(projectDir, '.openfox', 'skills')
 }
 
 export async function loadDefaultSkills(): Promise<SkillDefinition[]> {
@@ -46,7 +50,14 @@ export async function loadUserSkills(configDir: string): Promise<SkillDefinition
   })
 }
 
-export async function loadAllSkills(configDir: string): Promise<SkillDefinition[]> {
+export async function loadProjectSkills(projectDir: string): Promise<SkillDefinition[]> {
+  return loadItemsFromDir<SkillDefinition>(getProjectSkillsDir(projectDir), {
+    extension: SKILL_EXTENSION,
+    logName: 'skill',
+  })
+}
+
+export async function loadAllSkills(configDir: string, projectDir?: string): Promise<SkillDefinition[]> {
   const [defaultSkills, userSkills] = await Promise.all([loadDefaultSkills(), loadUserSkills(configDir)])
 
   const skillMap = new Map<string, SkillDefinition>()
@@ -57,16 +68,23 @@ export async function loadAllSkills(configDir: string): Promise<SkillDefinition[
     skillMap.set(skill.metadata.id, skill)
   }
 
+  if (projectDir) {
+    const projectSkills = await loadProjectSkills(projectDir)
+    for (const skill of projectSkills) {
+      skillMap.set(skill.metadata.id, skill)
+    }
+  }
+
   return Array.from(skillMap.values())
 }
 
-export async function getEnabledSkills(configDir: string): Promise<SkillDefinition[]> {
-  const all = await loadAllSkills(configDir)
+export async function getEnabledSkills(configDir: string, projectDir?: string): Promise<SkillDefinition[]> {
+  const all = await loadAllSkills(configDir, projectDir)
   return all.filter((s) => isSkillEnabled(s.metadata.id))
 }
 
-export async function getEnabledSkillMetadata(configDir: string) {
-  const enabled = await getEnabledSkills(configDir)
+export async function getEnabledSkillMetadata(configDir: string, projectDir?: string) {
+  const enabled = await getEnabledSkills(configDir, projectDir)
   return enabled.map((s) => s.metadata)
 }
 
@@ -100,8 +118,11 @@ export function findSkillById(skillId: string, skills: SkillDefinition[]): Skill
   return skills.find((s) => s.metadata.id === skillId)
 }
 
-export async function skillExists(configDir: string, skillId: string): Promise<boolean> {
-  return pathExists(join(getSkillsDir(configDir), `${skillId}${SKILL_EXTENSION}`))
+export async function skillExists(configDir: string, skillId: string, projectDir?: string): Promise<boolean> {
+  if (await pathExists(join(getSkillsDir(configDir), `${skillId}${SKILL_EXTENSION}`))) return true
+  if (projectDir && (await pathExists(join(getProjectSkillsDir(projectDir), `${skillId}${SKILL_EXTENSION}`))))
+    return true
+  return false
 }
 
 export async function saveSkill(configDir: string, skill: SkillDefinition): Promise<void> {
@@ -112,6 +133,12 @@ export async function saveSkill(configDir: string, skill: SkillDefinition): Prom
   const filePath = join(skillsDir, `${skill.metadata.id}${SKILL_EXTENSION}`)
   const content = matter.stringify(skill.prompt, skill.metadata)
   await writeFile(filePath, content, 'utf-8')
+}
+
+export async function saveSkillToProject(projectDir: string, skill: SkillDefinition): Promise<void> {
+  await saveItemToDir(getProjectSkillsDir(projectDir), skill, SKILL_EXTENSION, (s) =>
+    matter.stringify(s.prompt, s.metadata),
+  )
 }
 
 export async function deleteSkill(configDir: string, skillId: string): Promise<{ success: boolean; reason?: string }> {
@@ -129,7 +156,20 @@ export async function deleteSkill(configDir: string, skillId: string): Promise<{
   }
 }
 
-export async function getOverrideSkillIds(configDir: string): Promise<string[]> {
-  const [defaultIds, userSkills] = await Promise.all([getDefaultSkillIds(), loadUserSkills(configDir)])
-  return userSkills.map((skill) => skill.metadata.id).filter((id) => defaultIds.includes(id))
+export async function deleteProjectSkill(
+  projectDir: string,
+  skillId: string,
+): Promise<{ success: boolean; reason?: string }> {
+  return deleteItemFromDir(getProjectSkillsDir(projectDir), skillId, SKILL_EXTENSION)
+}
+
+export async function getOverrideSkillIds(configDir: string, projectDir?: string): Promise<string[]> {
+  const [defaultIds, userSkills, projectSkills] = await Promise.all([
+    getDefaultSkillIds(),
+    loadUserSkills(configDir),
+    projectDir ? loadProjectSkills(projectDir) : [],
+  ])
+  const userOverrides = userSkills.map((skill) => skill.metadata.id).filter((id) => defaultIds.includes(id))
+  const projectOverrides = projectSkills.map((skill) => skill.metadata.id).filter((id) => defaultIds.includes(id))
+  return [...userOverrides, ...projectOverrides]
 }

@@ -24,6 +24,7 @@ type CommandFormData = {
   prompt: string
   agentMode: string
   isDefault: boolean
+  destination: 'project' | 'user'
   [key: string]: unknown
 }
 
@@ -50,6 +51,7 @@ function ViewButton({ onClick }: { onClick: () => void }) {
 export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalProps) {
   const defaults = useCommandsStore((state) => state.defaults)
   const userItems = useCommandsStore((state) => state.userItems)
+  const projectItems = useCommandsStore((state) => state.projectItems)
   const loading = useCommandsStore((state) => state.loading)
   const fetchCommands = useCommandsStore((state) => state.fetchCommands)
   const fetchCommand = useCommandsStore((state) => state.fetchCommand)
@@ -117,6 +119,7 @@ export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalP
               prompt: content.prompt,
               agentMode: content.metadata.agentMode ?? '',
               isDefault: true,
+              destination: 'user',
             })
           })
         } else {
@@ -128,6 +131,7 @@ export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalP
               prompt: command.prompt,
               agentMode: command.metadata.agentMode ?? '',
               isDefault: false,
+              destination: 'user',
             })
           })
         }
@@ -158,6 +162,7 @@ export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalP
           prompt: content.prompt,
           agentMode: content.metadata.agentMode ?? '',
           isDefault: true,
+          destination: 'user',
         })
         setFormError('')
         setView('edit')
@@ -172,6 +177,7 @@ export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalP
           prompt: command.prompt,
           agentMode: command.metadata.agentMode ?? '',
           isDefault: false,
+          destination: 'user',
         })
         setFormError('')
         setView('edit')
@@ -180,7 +186,7 @@ export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalP
   }
 
   const handleNew = () => {
-    setFormData({ name: '', id: '', prompt: '', agentMode: '', isDefault: false })
+    setFormData({ name: '', id: '', prompt: '', agentMode: '', isDefault: false, destination: 'user' })
     setEditingId(null)
     setView('edit')
   }
@@ -195,6 +201,7 @@ export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalP
       prompt: command.prompt,
       agentMode: command.metadata.agentMode ?? '',
       isDefault: false,
+      destination: 'user',
     })
     setFormError('')
     setView('edit')
@@ -220,7 +227,9 @@ export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalP
       prompt: formData.prompt,
     }
 
-    const result = editingId ? await updateCommand(editingId, command) : await createCommand(command)
+    const result = editingId
+      ? await updateCommand(editingId, command)
+      : await createCommand(command, formData.destination as 'project' | 'user')
 
     setSaving(false)
 
@@ -269,6 +278,7 @@ export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalP
         prompt: content.prompt,
         agentMode: content.metadata.agentMode ?? '',
         isDefault: true,
+        destination: 'user',
       })
     })
   }
@@ -361,6 +371,22 @@ export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalP
                 ))}
               </select>
             </div>
+
+            {!editingId && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-text-secondary">Save to:</label>
+                <select
+                  value={formData.destination as string}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, destination: e.target.value as 'project' | 'user' }))
+                  }
+                  className="px-2 py-1 bg-bg-tertiary border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-accent-primary"
+                >
+                  <option value="user">Global config</option>
+                  <option value="project">Project (.openfox/)</option>
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="flex-1 min-h-[120px] border-t border-border pt-3 flex flex-col">
@@ -395,7 +421,7 @@ export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalP
 
       <CRUDListView
         loading={loading}
-        hasItems={defaults.length > 0 || userItems.length > 0}
+        hasItems={defaults.length > 0 || userItems.length > 0 || projectItems.length > 0}
         loadingLabel="Loading commands..."
         emptyLabel="No commands created yet."
       >
@@ -448,6 +474,37 @@ export function CommandsModal({ isOpen, onClose, initialEditId }: CommandsModalP
               </div>
             ))}
           </ItemsHeader>
+        )}
+
+        {projectItems.length > 0 && (
+          <div className="mt-4">
+            <h3 className="text-xs font-medium text-text-secondary mb-2 uppercase tracking-wide">Project</h3>
+            <div className="space-y-2">
+              {projectItems.map((command) => (
+                <div
+                  key={command.id}
+                  className="flex items-center justify-between p-3 rounded border border-border bg-bg-tertiary"
+                >
+                  <div className="min-w-0 flex-1 mr-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-text-primary text-sm font-medium">{command.name}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <EditButton onClick={() => handleEdit(command.id)} />
+                    <DuplicateIcon onClick={() => handleDuplicate(command.id)} />
+
+                    {isConfirming(command.id, 'delete') ? (
+                      <ConfirmButton onConfirm={() => handleDelete(command.id)} onCancel={clearConfirm} />
+                    ) : (
+                      <DeleteIcon onClick={() => requestDelete(command.id)} />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </CRUDListView>
     </Modal>

@@ -10,12 +10,15 @@ import {
   loadAllWorkflows,
   loadDefaultWorkflows,
   loadUserWorkflows,
+  loadProjectWorkflows,
   findWorkflowById,
   saveWorkflow,
   deleteWorkflow,
   workflowExists,
   isDefaultWorkflow,
   getDefaultWorkflowIds,
+  saveWorkflowToProject,
+  deleteProjectWorkflow,
 } from './registry.js'
 import type { WorkflowDefinition } from './types.js'
 
@@ -268,5 +271,94 @@ describe('getDefaultWorkflowIds', () => {
     const ids = await getDefaultWorkflowIds()
     expect(ids.length).toBeGreaterThan(0)
     expect(ids).toContain('default')
+  })
+})
+
+async function createProjectWorkflowFile(projectDir: string, id: string, name: string): Promise<void> {
+  const workflowsDir = join(projectDir, '.openfox', 'workflows')
+  await mkdir(workflowsDir, { recursive: true })
+  const workflow = makeWorkflow({ metadata: { id, name, description: `Project workflow ${id}`, version: '1.0' } })
+  await writeFile(join(workflowsDir, `${id}.workflow.json`), JSON.stringify(workflow))
+}
+
+describe('loadProjectWorkflows', () => {
+  it('should return empty array when project dir does not exist', async () => {
+    const workflows = await loadProjectWorkflows(tempDir)
+    expect(workflows).toEqual([])
+  })
+
+  it('should load valid .workflow.json files from .openfox/workflows/', async () => {
+    await createProjectWorkflowFile(tempDir, 'proj-wf', 'Project Workflow')
+
+    const workflows = await loadProjectWorkflows(tempDir)
+    expect(workflows).toHaveLength(1)
+    expect(workflows[0]!.metadata.id).toBe('proj-wf')
+    expect(workflows[0]!.metadata.name).toBe('Project Workflow')
+  })
+})
+
+describe('loadAllWorkflows with project', () => {
+  it('should merge project workflows on top of user and defaults', async () => {
+    await createProjectWorkflowFile(tempDir, 'proj-wf', 'Project Workflow')
+
+    const defaults = await loadDefaultWorkflows()
+    const workflows = await loadAllWorkflows(tempDir, tempDir)
+    expect(workflows.some((w) => w.metadata.id === 'proj-wf')).toBe(true)
+    expect(workflows.length).toBeGreaterThanOrEqual(defaults.length + 1)
+  })
+
+  it('should give precedence to project workflows over user and defaults', async () => {
+    const workflowsDir = join(tempDir, 'workflows')
+    await mkdir(workflowsDir, { recursive: true })
+    const userWf = makeWorkflow({ metadata: { id: 'shared', name: 'User WF', description: 'U', version: '1' } })
+    await writeFile(join(workflowsDir, 'shared.workflow.json'), JSON.stringify(userWf))
+    await createProjectWorkflowFile(tempDir, 'shared', 'Project WF')
+
+    const workflows = await loadAllWorkflows(tempDir, tempDir)
+    const shared = workflows.find((w) => w.metadata.id === 'shared')
+    expect(shared).toBeDefined()
+    expect(shared!.metadata.name).toBe('Project WF')
+  })
+
+  it('should give precedence to project workflows over defaults with same id', async () => {
+    await createProjectWorkflowFile(tempDir, 'default', 'Project Override')
+
+    const workflows = await loadAllWorkflows(tempDir, tempDir)
+    const overridden = workflows.find((w) => w.metadata.id === 'default')
+    expect(overridden).toBeDefined()
+    expect(overridden!.metadata.name).toBe('Project Override')
+  })
+
+  it('should work without project dir', async () => {
+    const defaults = await loadDefaultWorkflows()
+    const workflows = await loadAllWorkflows(tempDir)
+    expect(workflows.length).toBeGreaterThanOrEqual(defaults.length)
+  })
+})
+
+describe('CRUD project workflows', () => {
+  it('should save and load a project workflow', async () => {
+    const workflow = makeWorkflow({
+      metadata: { id: 'proj_wf', name: 'Project WF', description: 'P', version: '1.0' },
+    })
+
+    await saveWorkflowToProject(tempDir, workflow)
+
+    const loaded = await loadProjectWorkflows(tempDir)
+    expect(loaded).toHaveLength(1)
+    expect(loaded[0]!.metadata.id).toBe('proj_wf')
+  })
+
+  it('should delete a project workflow', async () => {
+    const workflow = makeWorkflow({
+      metadata: { id: 'proj_del', name: 'Delete Project', description: 'Temp', version: '1' },
+    })
+
+    await saveWorkflowToProject(tempDir, workflow)
+    expect(await loadProjectWorkflows(tempDir)).toHaveLength(1)
+
+    const result = await deleteProjectWorkflow(tempDir, 'proj_del')
+    expect(result.success).toBe(true)
+    expect(await loadProjectWorkflows(tempDir)).toHaveLength(0)
   })
 })

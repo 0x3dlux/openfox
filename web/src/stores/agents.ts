@@ -35,24 +35,26 @@ export function getAgentColor(agents: AgentInfo[], agentId: string): string {
 interface AgentsState {
   defaults: AgentInfo[]
   userItems: AgentInfo[]
+  projectItems: AgentInfo[]
   loading: boolean
   fetchAgents: () => Promise<void>
   fetchAgent: (agentId: string) => Promise<AgentFull | null>
   fetchDefaultContent: (agentId: string) => Promise<AgentFull | null>
-  createAgent: (agent: AgentFull) => Promise<{ success: boolean; error?: string }>
+  createAgent: (agent: AgentFull, destination?: 'project' | 'user') => Promise<{ success: boolean; error?: string }>
   updateAgent: (id: string, agent: Partial<AgentFull>) => Promise<{ success: boolean; error?: string }>
   deleteAgent: (agentId: string) => Promise<{ success: boolean; error?: string; reason?: string }>
-  duplicateAgent: (agentId: string) => Promise<{ success: boolean; error?: string }>
+  duplicateAgent: (agentId: string, destination?: 'project' | 'user') => Promise<{ success: boolean; error?: string }>
 }
 
 export const useAgentsStore = create<AgentsState>((set) => {
   const fetchAgents = async () => {
-    await fetchItems('/api/agents', set as Parameters<typeof fetchItems>[1])
+    await fetchItems('/api/agents', set as Parameters<typeof fetchItems>[1], true)
   }
 
   return {
     defaults: [],
     userItems: [],
+    projectItems: [],
     loading: false,
 
     fetchAgents,
@@ -77,8 +79,11 @@ export const useAgentsStore = create<AgentsState>((set) => {
       }
     },
 
-    createAgent: async (agent: AgentFull) => {
-      const result = await saveEntity('POST', '/api/agents', agent as unknown as Record<string, unknown>)
+    createAgent: async (agent: AgentFull, destination?: 'project' | 'user') => {
+      const result = await saveEntity('POST', '/api/agents', {
+        ...agent,
+        destination,
+      } as unknown as Record<string, unknown>)
       if (result.success) await fetchAgents()
       return result
     },
@@ -105,9 +110,13 @@ export const useAgentsStore = create<AgentsState>((set) => {
       }
     },
 
-    duplicateAgent: async (agentId: string) => {
+    duplicateAgent: async (agentId: string, destination?: 'project' | 'user') => {
       try {
-        const res = await authFetch(`/api/agents/${agentId}/duplicate`, { method: 'POST' })
+        const res = await authFetch(`/api/agents/${agentId}/duplicate`, {
+          method: 'POST',
+          body: destination ? JSON.stringify({ destination }) : undefined,
+          headers: destination ? { 'Content-Type': 'application/json' } : undefined,
+        })
         const data = await res.json()
         if (res.ok) {
           await fetchAgents()

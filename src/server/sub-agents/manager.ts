@@ -197,8 +197,9 @@ export async function executeSubAgent(options: SubAgentExecutionOptions): Promis
   const { content: instructionContent, files } = await getAllInstructions(session.workdir, session.projectId)
   const injectedFiles: InjectedFile[] = toInjectedFiles(files)
 
-  const configDir = getGlobalConfigDir(getRuntimeConfig().mode ?? 'production')
-  const skills = await getEnabledSkillMetadata(configDir)
+  const config = getRuntimeConfig()
+  const configDir = getGlobalConfigDir(config.mode ?? 'production')
+  const skills = await getEnabledSkillMetadata(configDir, config.workdir)
 
   // Build system prompt from the agent definition
   const systemPrompt = buildSubAgentSystemPrompt(

@@ -26,6 +26,7 @@ import {
   loadAllSkills,
   loadDefaultSkills,
   loadUserSkills,
+  loadProjectSkills,
   getEnabledSkills,
   isSkillEnabled,
   setSkillEnabled,
@@ -35,6 +36,8 @@ import {
   skillExists,
   isDefaultSkill,
   getDefaultSkillIds,
+  saveSkillToProject,
+  deleteProjectSkill,
 } from './registry.js'
 import { getSetting } from '../db/settings.js'
 
@@ -60,6 +63,23 @@ async function createSkillFile(dir: string, id: string, name: string, prompt: st
 id: ${id}
 name: ${name}
 description: Test skill ${id}
+version: "1.0"
+---
+
+${prompt}
+`,
+  )
+}
+
+async function createProjectSkillFile(projectDir: string, id: string, name: string, prompt: string): Promise<void> {
+  const skillsDir = join(projectDir, '.openfox', 'skills')
+  await mkdir(skillsDir, { recursive: true })
+  await writeFile(
+    join(skillsDir, `${id}.skill.md`),
+    `---
+id: ${id}
+name: ${name}
+description: Test project skill ${id}
 version: "1.0"
 ---
 
@@ -128,6 +148,23 @@ version: "1.0"
   })
 })
 
+describe('loadProjectSkills', () => {
+  it('should return empty array when project dir does not exist', async () => {
+    const skills = await loadProjectSkills(tempDir)
+    expect(skills).toEqual([])
+  })
+
+  it('should load valid .skill.md files from .openfox/skills/', async () => {
+    await createProjectSkillFile(tempDir, 'proj-skill', 'Project Skill', 'Do the project thing.')
+
+    const skills = await loadProjectSkills(tempDir)
+    expect(skills).toHaveLength(1)
+    expect(skills[0]!.metadata.id).toBe('proj-skill')
+    expect(skills[0]!.metadata.name).toBe('Project Skill')
+    expect(skills[0]!.prompt).toBe('Do the project thing.')
+  })
+})
+
 describe('loadAllSkills', () => {
   it('should merge defaults and user skills', async () => {
     await createSkillFile(tempDir, 'test', 'Test Skill', 'Do the test.')
@@ -158,6 +195,53 @@ Custom prompt.
     const custom = skills.find((s) => s.metadata.id === 'custom')
     expect(custom).toBeDefined()
     expect(custom!.prompt).toBe('Custom prompt.')
+  })
+
+  it('should merge project skills on top of user and defaults', async () => {
+    await createProjectSkillFile(tempDir, 'proj-skill', 'Project Skill', 'Project prompt.')
+
+    const defaults = await loadDefaultSkills()
+    const skills = await loadAllSkills(tempDir, tempDir)
+    expect(skills.some((s) => s.metadata.id === 'proj-skill')).toBe(true)
+    expect(skills.length).toBeGreaterThanOrEqual(defaults.length + 1)
+  })
+
+  it('should give precedence to project skills over user and defaults', async () => {
+    await createSkillFile(tempDir, 'shared', 'User Skill', 'User version.')
+    await createProjectSkillFile(tempDir, 'shared', 'Project Skill', 'Project version.')
+
+    const skills = await loadAllSkills(tempDir, tempDir)
+    const shared = skills.find((s) => s.metadata.id === 'shared')
+    expect(shared).toBeDefined()
+    expect(shared!.prompt).toBe('Project version.')
+  })
+
+  it('should give precedence to project skills over defaults with same id', async () => {
+    // Override a default skill ID with project version
+    const defaults = await loadDefaultSkills()
+    const defaultId = defaults[0]!.metadata.id
+    await createProjectSkillFile(tempDir, defaultId, 'Override', 'Project override.')
+
+    const skills = await loadAllSkills(tempDir, tempDir)
+    const overridden = skills.find((s) => s.metadata.id === defaultId)
+    expect(overridden).toBeDefined()
+    expect(overridden!.prompt).toBe('Project override.')
+  })
+
+  it('should load correctly when only project dir has skills', async () => {
+    await createProjectSkillFile(tempDir, 'only-proj', 'Only Project', 'Only project.')
+
+    const skills = await loadAllSkills(tempDir, tempDir)
+    expect(skills.some((s) => s.metadata.id === 'only-proj')).toBe(true)
+  })
+
+  it('should work without project dir', async () => {
+    await createSkillFile(tempDir, 'user-skill', 'User Skill', 'User.')
+    const defaults = await loadDefaultSkills()
+
+    const skills = await loadAllSkills(tempDir)
+    expect(skills.some((s) => s.metadata.id === 'user-skill')).toBe(true)
+    expect(skills.length).toBeGreaterThanOrEqual(defaults.length + 1)
   })
 })
 
@@ -265,6 +349,43 @@ describe('CRUD', () => {
       prompt: 'Here.',
     })
     expect(await skillExists(tempDir, 'exists')).toBe(true)
+  })
+
+  it('should save and load a project skill', async () => {
+    const skill: SkillDefinition = {
+      metadata: { id: 'proj_skill', name: 'Project Skill', description: 'Project', version: '1.0' },
+      prompt: 'Execute project skill.',
+    }
+
+    await saveSkillToProject(tempDir, skill)
+
+    const loaded = await loadProjectSkills(tempDir)
+    expect(loaded).toHaveLength(1)
+    expect(loaded[0]!.metadata.id).toBe('proj_skill')
+    expect(loaded[0]!.prompt).toBe('Execute project skill.')
+  })
+
+  it('should delete a project skill', async () => {
+    const skill: SkillDefinition = {
+      metadata: { id: 'proj_del', name: 'Delete Project', description: 'Temp', version: '1' },
+      prompt: 'Temporary.',
+    }
+
+    await saveSkillToProject(tempDir, skill)
+    expect(await loadProjectSkills(tempDir)).toHaveLength(1)
+
+    const result = await deleteProjectSkill(tempDir, 'proj_del')
+    expect(result.success).toBe(true)
+    expect(await loadProjectSkills(tempDir)).toHaveLength(0)
+  })
+
+  it('should check project skill existence', async () => {
+    await saveSkillToProject(tempDir, {
+      metadata: { id: 'proj_exists', name: 'Exists', description: 'E', version: '1' },
+      prompt: 'Here.',
+    })
+
+    expect(await skillExists(tempDir, 'proj_exists', tempDir)).toBe(true)
   })
 })
 

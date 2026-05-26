@@ -3,7 +3,7 @@
  * Used by agents, workflows, commands, and skills registries.
  */
 
-import { readdir, readFile, access } from 'node:fs/promises'
+import { readdir, readFile, access, writeFile, mkdir, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { constants } from 'node:fs'
 import matter from 'gray-matter'
@@ -71,4 +71,30 @@ export async function loadItemsFromDir<T extends ItemDefinition>(
     }
   }
   return items
+}
+
+export async function saveItemToDir<T>(
+  dir: string,
+  item: T,
+  ext: string,
+  serialize: (item: T) => string,
+): Promise<void> {
+  if (!(await pathExists(dir))) {
+    await mkdir(dir, { recursive: true })
+  }
+  const meta = (item as { metadata: { id: string } }).metadata
+  const filePath = join(dir, `${meta.id}${ext}`)
+  await writeFile(filePath, serialize(item), 'utf-8')
+}
+
+export const jsonSerializer = <T>(item: T): string => JSON.stringify(item, null, 2) + '\n'
+
+export async function deleteItemFromDir(dir: string, id: string, ext: string): Promise<{ success: boolean }> {
+  const filePath = join(dir, `${id}${ext}`)
+  try {
+    await unlink(filePath)
+    return { success: true }
+  } catch {
+    return { success: false }
+  }
 }

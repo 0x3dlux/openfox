@@ -27,7 +27,7 @@ const handler: ToolHandler<LoadSkillArgs> = async (args, _context, helpers): Pro
 
   const config = getRuntimeConfig()
   const configDir = getGlobalConfigDir(config.mode ?? 'production')
-  const allSkills = await loadAllSkills(configDir)
+  const allSkills = await loadAllSkills(configDir, config.workdir)
   const skill = findSkillById(skillId, allSkills)
 
   if (!skill) {

@@ -19,24 +19,26 @@ export interface SkillFull {
 interface SkillsState {
   defaults: SkillInfo[]
   userItems: SkillInfo[]
+  projectItems: SkillInfo[]
   loading: boolean
   fetchSkills: () => Promise<void>
   toggleSkill: (skillId: string) => Promise<void>
   fetchSkill: (skillId: string) => Promise<SkillFull | null>
   fetchDefaultContent: (skillId: string) => Promise<SkillFull | null>
-  createSkill: (skill: SkillFull) => Promise<{ success: boolean; error?: string }>
+  createSkill: (skill: SkillFull, destination?: 'project' | 'user') => Promise<{ success: boolean; error?: string }>
   updateSkill: (id: string, skill: Partial<SkillFull>) => Promise<{ success: boolean; error?: string }>
   deleteSkill: (skillId: string) => Promise<{ success: boolean; error?: string; reason?: string }>
-  duplicateSkill: (skillId: string) => Promise<{ success: boolean; error?: string }>
+  duplicateSkill: (skillId: string, destination?: 'project' | 'user') => Promise<{ success: boolean; error?: string }>
 }
 
 export const useSkillsStore = create<SkillsState>((set, get) => ({
   defaults: [],
   userItems: [],
+  projectItems: [],
   loading: false,
 
   fetchSkills: async () => {
-    await fetchItems('/api/skills', set as unknown as (partial: unknown) => void)
+    await fetchItems('/api/skills', set as unknown as (partial: unknown) => void, true)
   },
 
   toggleSkill: async (skillId: string) => {
@@ -72,8 +74,11 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
     }
   },
 
-  createSkill: async (skill: SkillFull) => {
-    const result = await saveEntity('POST', '/api/skills', skill as unknown as Record<string, unknown>)
+  createSkill: async (skill: SkillFull, destination?: 'project' | 'user') => {
+    const result = await saveEntity('POST', '/api/skills', {
+      ...skill,
+      destination,
+    } as unknown as Record<string, unknown>)
     if (result.success) await get().fetchSkills()
     return result
   },
@@ -100,9 +105,13 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
     }
   },
 
-  duplicateSkill: async (skillId: string) => {
+  duplicateSkill: async (skillId: string, destination?: 'project' | 'user') => {
     try {
-      const res = await authFetch(`/api/skills/${skillId}/duplicate`, { method: 'POST' })
+      const res = await authFetch(`/api/skills/${skillId}/duplicate`, {
+        method: 'POST',
+        body: destination ? JSON.stringify({ destination }) : undefined,
+        headers: destination ? { 'Content-Type': 'application/json' } : undefined,
+      })
       const data = await res.json()
       if (res.ok) {
         await get().fetchSkills()

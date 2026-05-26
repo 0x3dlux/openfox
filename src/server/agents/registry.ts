@@ -12,6 +12,7 @@ import { constants } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import matter from 'gray-matter'
 import type { AgentDefinition, AgentMetadata } from './types.js'
+import { saveItemToDir } from '../shared/item-loader.js'
 import { logger } from '../utils/logger.js'
 import { getRuntimeConfig } from '../runtime-config.js'
 import { getGlobalConfigDir } from '../../cli/paths.js'
@@ -23,6 +24,10 @@ const AGENT_EXTENSION = '.agent.md'
 
 function getAgentsDir(configDir: string): string {
   return join(configDir, 'agents')
+}
+
+function getProjectAgentsDir(projectDir: string): string {
+  return join(projectDir, '.openfox', 'agents')
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -94,7 +99,11 @@ export async function loadUserAgents(configDir: string): Promise<AgentDefinition
   return loadAgentsFromDir(getAgentsDir(configDir))
 }
 
-export async function loadAllAgents(configDir: string): Promise<AgentDefinition[]> {
+export async function loadProjectAgents(projectDir: string): Promise<AgentDefinition[]> {
+  return loadAgentsFromDir(getProjectAgentsDir(projectDir))
+}
+
+export async function loadAllAgents(configDir: string, projectDir?: string): Promise<AgentDefinition[]> {
   const [defaultAgents, userAgents] = await Promise.all([loadDefaultAgents(), loadUserAgents(configDir)])
 
   const agentMap = new Map<string, AgentDefinition>()
@@ -105,13 +114,44 @@ export async function loadAllAgents(configDir: string): Promise<AgentDefinition[
     agentMap.set(agent.metadata.id, agent)
   }
 
+  if (projectDir) {
+    const projectAgents = await loadProjectAgents(projectDir)
+    for (const agent of projectAgents) {
+      agentMap.set(agent.metadata.id, agent)
+    }
+  }
+
   return Array.from(agentMap.values())
+}
+
+export async function saveAgentToProject(projectDir: string, agent: AgentDefinition): Promise<void> {
+  await saveItemToDir(getProjectAgentsDir(projectDir), agent, AGENT_EXTENSION, (a) =>
+    matter.stringify(a.prompt, a.metadata),
+  )
+}
+
+export async function deleteProjectAgent(
+  projectDir: string,
+  agentId: string,
+): Promise<{ success: boolean; reason?: string }> {
+  const agentsDir = getProjectAgentsDir(projectDir)
+  const paths = getAgentFilePaths(agentsDir, agentId)
+  for (const filePath of paths) {
+    try {
+      await unlink(filePath)
+      return { success: true }
+    } catch {
+      continue
+    }
+  }
+  return { success: false }
 }
 
 export async function loadAllAgentsDefault(): Promise<AgentDefinition[]> {
   try {
-    const configDir = getGlobalConfigDir(getRuntimeConfig().mode ?? 'production')
-    return await loadAllAgents(configDir)
+    const config = getRuntimeConfig()
+    const configDir = getGlobalConfigDir(config.mode ?? 'production')
+    return await loadAllAgents(configDir, config.workdir)
   } catch {
     return loadDefaultAgents()
   }
@@ -156,12 +196,20 @@ export function getTopLevelAgents(agents: AgentDefinition[]): AgentDefinition[] 
   return agents.filter((a) => !a.metadata.subagent)
 }
 
-export async function agentExists(configDir: string, agentId: string): Promise<boolean> {
+export async function agentExists(configDir: string, agentId: string, projectDir?: string): Promise<boolean> {
   const agentsDir = getAgentsDir(configDir)
   const paths = getAgentFilePaths(agentsDir, agentId)
   for (const filePath of paths) {
     if (await pathExists(filePath)) {
       return true
+    }
+  }
+  if (projectDir) {
+    const projectPaths = getAgentFilePaths(getProjectAgentsDir(projectDir), agentId)
+    for (const filePath of projectPaths) {
+      if (await pathExists(filePath)) {
+        return true
+      }
     }
   }
   return false
@@ -195,7 +243,13 @@ export async function deleteAgent(configDir: string, agentId: string): Promise<{
   return { success: false }
 }
 
-export async function getOverrideAgentIds(configDir: string): Promise<string[]> {
-  const [defaultIds, userAgents] = await Promise.all([getDefaultAgentIds(), loadUserAgents(configDir)])
-  return userAgents.map((agent) => agent.metadata.id).filter((id) => defaultIds.includes(id))
+export async function getOverrideAgentIds(configDir: string, projectDir?: string): Promise<string[]> {
+  const [defaultIds, userAgents, projectAgents] = await Promise.all([
+    getDefaultAgentIds(),
+    loadUserAgents(configDir),
+    projectDir ? loadProjectAgents(projectDir) : [],
+  ])
+  const userOverrides = userAgents.map((agent) => agent.metadata.id).filter((id) => defaultIds.includes(id))
+  const projectOverrides = projectAgents.map((agent) => agent.metadata.id).filter((id) => defaultIds.includes(id))
+  return [...userOverrides, ...projectOverrides]
 }

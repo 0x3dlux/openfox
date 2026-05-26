@@ -17,6 +17,7 @@ type SkillFormData = {
   version: string
   prompt: string
   isReadOnly: boolean
+  destination: 'project' | 'user'
   [key: string]: unknown
 }
 
@@ -55,6 +56,7 @@ function SkillListItem({
 export function SkillsContent({ isOpen }: { isOpen: boolean }) {
   const defaults = useSkillsStore((state) => state.defaults)
   const userItems = useSkillsStore((state) => state.userItems)
+  const projectItems = useSkillsStore((state) => state.projectItems)
   const loading = useSkillsStore((state) => state.loading)
   const fetchSkills = useSkillsStore((state) => state.fetchSkills)
   const fetchSkill = useSkillsStore((state) => state.fetchSkill)
@@ -85,6 +87,7 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
       version: skill.metadata.version ?? '1.0.0',
       prompt: skill.prompt,
       isReadOnly: readOnly,
+      destination: 'user',
     })
   }
 
@@ -119,7 +122,15 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
   }
 
   const handleNew = () => {
-    setFormData({ name: '', id: '', description: '', version: '1.0.0', prompt: '', isReadOnly: false })
+    setFormData({
+      name: '',
+      id: '',
+      description: '',
+      version: '1.0.0',
+      prompt: '',
+      isReadOnly: false,
+      destination: 'user',
+    })
     setView('edit')
   }
 
@@ -157,7 +168,9 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
       prompt: formData.prompt,
     }
 
-    const result = editingId ? await updateSkill(editingId, skill) : await createSkill(skill)
+    const result = editingId
+      ? await updateSkill(editingId, skill)
+      : await createSkill(skill, formData.destination as 'project' | 'user')
 
     setSaving(false)
 
@@ -240,6 +253,20 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
           />
         </div>
 
+        {!editingId && (
+          <div className="flex items-center gap-2 pt-2">
+            <label className="text-xs text-text-secondary">Save to:</label>
+            <select
+              value={formData.destination as string}
+              onChange={(e) => setFormData((prev) => ({ ...prev, destination: e.target.value as 'project' | 'user' }))}
+              className="px-2 py-1 bg-bg-tertiary border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-accent-primary"
+            >
+              <option value="user">Global config</option>
+              <option value="project">Project (.openfox/)</option>
+            </select>
+          </div>
+        )}
+
         <KvCacheWarning />
 
         <div className="flex justify-end gap-2 pt-3 border-t border-border flex-shrink-0">
@@ -321,6 +348,26 @@ export function SkillsContent({ isOpen }: { isOpen: boolean }) {
               />
             ))}
           </ItemsHeader>
+        )}
+
+        {projectItems.length > 0 && (
+          <div className="mt-4">
+            <h3 className="text-xs font-medium text-text-secondary mb-2 uppercase tracking-wide">Project</h3>
+            <div className="space-y-2">
+              {projectItems.map((skill) => (
+                <SkillListItem
+                  key={skill.id}
+                  skill={skill}
+                  isBuiltIn={false}
+                  isConfirmingDelete={false}
+                  onView={() => handleView(skill.id)}
+                  onEdit={() => handleEdit(skill.id)}
+                  onDuplicate={() => handleDuplicate(skill.id)}
+                  onDelete={() => handleDelete(skill.id)}
+                />
+              ))}
+            </div>
+          </div>
         )}
       </CRUDListView>
     </div>

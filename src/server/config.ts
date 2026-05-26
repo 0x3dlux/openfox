@@ -11,7 +11,7 @@ const envSchema = z.object({
   OPENFOX_MODEL_NAME: z.string().default('qwen3.5-122b-int4-autoround'),
   OPENFOX_MAX_CONTEXT: z.coerce.number().default(200000),
   OPENFOX_PORT: z.coerce.number().default(10369),
-  OPENFOX_HOST: z.string().default('0.0.0.0'),
+  OPENFOX_HOST: z.string().optional(),
   OPENFOX_WORKDIR: z.string().optional(),
   OPENFOX_DB_PATH: z.string().default('./openfox.db'),
   OPENFOX_LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
@@ -49,7 +49,7 @@ export function loadConfig(): Config {
     },
     server: {
       port: env.OPENFOX_PORT,
-      host: env.OPENFOX_HOST,
+      ...(env.OPENFOX_HOST !== undefined ? { host: env.OPENFOX_HOST } : {}),
     },
     database: {
       path: env.OPENFOX_DB_PATH,

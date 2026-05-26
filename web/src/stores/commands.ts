@@ -17,23 +17,31 @@ export interface CommandFull {
 interface CommandsState {
   defaults: CommandInfo[]
   userItems: CommandInfo[]
+  projectItems: CommandInfo[]
   loading: boolean
   fetchCommands: () => Promise<void>
   fetchCommand: (commandId: string) => Promise<CommandFull | null>
   fetchDefaultContent: (commandId: string) => Promise<CommandFull | null>
-  createCommand: (command: CommandFull) => Promise<{ success: boolean; error?: string }>
+  createCommand: (
+    command: CommandFull,
+    destination?: 'project' | 'user',
+  ) => Promise<{ success: boolean; error?: string }>
   updateCommand: (id: string, command: Partial<CommandFull>) => Promise<{ success: boolean; error?: string }>
   deleteCommand: (commandId: string) => Promise<{ success: boolean; error?: string; reason?: string }>
-  duplicateCommand: (commandId: string) => Promise<{ success: boolean; error?: string }>
+  duplicateCommand: (
+    commandId: string,
+    destination?: 'project' | 'user',
+  ) => Promise<{ success: boolean; error?: string }>
 }
 
 export const useCommandsStore = create<CommandsState>((set, get) => ({
   defaults: [],
   userItems: [],
+  projectItems: [],
   loading: false,
 
   fetchCommands: async () => {
-    await fetchItems('/api/commands', set as unknown as (partial: unknown) => void)
+    await fetchItems('/api/commands', set as unknown as (partial: unknown) => void, true)
   },
 
   fetchCommand: async (commandId: string) => {
@@ -56,8 +64,11 @@ export const useCommandsStore = create<CommandsState>((set, get) => ({
     }
   },
 
-  createCommand: async (command: CommandFull) => {
-    const result = await saveEntity('POST', '/api/commands', command as unknown as Record<string, unknown>)
+  createCommand: async (command: CommandFull, destination?: 'project' | 'user') => {
+    const result = await saveEntity('POST', '/api/commands', {
+      ...command,
+      destination,
+    } as unknown as Record<string, unknown>)
     if (result.success) await get().fetchCommands()
     return result
   },
@@ -84,9 +95,13 @@ export const useCommandsStore = create<CommandsState>((set, get) => ({
     }
   },
 
-  duplicateCommand: async (commandId: string) => {
+  duplicateCommand: async (commandId: string, destination?: 'project' | 'user') => {
     try {
-      const res = await authFetch(`/api/commands/${commandId}/duplicate`, { method: 'POST' })
+      const res = await authFetch(`/api/commands/${commandId}/duplicate`, {
+        method: 'POST',
+        body: destination ? JSON.stringify({ destination }) : undefined,
+        headers: destination ? { 'Content-Type': 'application/json' } : undefined,
+      })
       const data = await res.json()
       if (res.ok) {
         await get().fetchCommands()

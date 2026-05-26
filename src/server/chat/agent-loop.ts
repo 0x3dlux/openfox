@@ -362,8 +362,9 @@ export async function runTopLevelAgentLoop(
       requestMessages.push({ role: 'user', content: FORMAT_CORRECTION_PROMPT, source: 'history' })
     }
 
-    const configDir = getGlobalConfigDir(getRuntimeConfig().mode ?? 'production')
-    const skills = await getEnabledSkillMetadata(configDir)
+    const runtimeConfig = getRuntimeConfig()
+    const configDir = getGlobalConfigDir(runtimeConfig.mode ?? 'production')
+    const skills = await getEnabledSkillMetadata(configDir, runtimeConfig.workdir)
     if (signal?.aborted) throw new Error('Aborted')
 
     const assembledRequest = config.assembleRequest({

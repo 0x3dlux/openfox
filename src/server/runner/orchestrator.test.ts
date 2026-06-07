@@ -10,6 +10,7 @@ vi.mock('../runtime-config.js', () => ({
   getRuntimeConfig: vi.fn(() => ({
     mode: 'production',
     activeWorkflowId: undefined,
+    agent: { toolTimeout: 120000 },
   })),
 }))
 

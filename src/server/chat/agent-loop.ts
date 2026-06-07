@@ -84,6 +84,7 @@ export interface ToolBatchContext {
   llmClient?: LLMClientWithModel | undefined
   statsIdentity?: StatsIdentity | undefined
   onToolExecuted?: ((toolCall: ToolCall, result: ToolResult) => void) | undefined
+  agentTimeout?: number
 }
 
 export interface ToolBatchResult {
@@ -561,6 +562,7 @@ export async function runTopLevelAgentLoop(
         if (session.dangerLevel) {
           batchContext.dangerLevel = session.dangerLevel
         }
+        batchContext.agentTimeout = getRuntimeConfig().agent.toolTimeout
         const batchResult = await executeToolBatch(assistantMsgId, result.toolCalls, batchContext)
         if (batchResult.returnValueContent) {
           returnValueContent = batchResult.returnValueContent

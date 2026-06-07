@@ -1,17 +1,9 @@
-/**
- * Web Fetch Tool
- *
- * Fetches content from a URL and returns it as text, markdown, or HTML.
- * Ported from opencode's WebFetchTool with adaptations for Node.js.
- */
-
 import TurndownService from 'turndown'
 import { createTool } from './tool-helpers.js'
 import { OUTPUT_LIMITS } from './types.js'
 
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024 // 5MB
 const DEFAULT_TIMEOUT_MS = 30_000
-const MAX_TIMEOUT_MS = 120_000
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36'
@@ -56,19 +48,15 @@ function convertHTMLToMarkdown(html: string): string {
 }
 
 function stripHTMLTags(html: string): string {
-  // Remove script/style/noscript blocks entirely
   const text = html
     .replace(/<(script|style|noscript|iframe|object|embed)[^>]*>[\s\S]*?<\/\1>/gi, '')
-    // Remove all remaining HTML tags
     .replace(/<[^>]+>/g, ' ')
-    // Decode common HTML entities
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
-    // Collapse whitespace
     .replace(/\s+/g, ' ')
     .trim()
   return text
@@ -96,7 +84,7 @@ export const webFetchTool = createTool<WebFetchArgs>(
           },
           timeout: {
             type: 'number',
-            description: 'Optional timeout in seconds (max 120). Defaults to 30.',
+            description: 'Optional timeout in seconds. Defaults to 30.',
           },
         },
         required: ['url'],
@@ -107,13 +95,11 @@ export const webFetchTool = createTool<WebFetchArgs>(
     const url = args.url
     const format = args.format ?? 'markdown'
 
-    // Validate URL
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       return helpers.error('URL must start with http:// or https://')
     }
 
-    // Build timeout signal
-    const timeoutMs = Math.min((args.timeout ?? DEFAULT_TIMEOUT_MS / 1000) * 1000, MAX_TIMEOUT_MS)
+    const timeoutMs = (args.timeout ?? DEFAULT_TIMEOUT_MS / 1000) * 1000
     const signal = buildSignal(timeoutMs, context.signal)
 
     const headers = {
@@ -122,10 +108,8 @@ export const webFetchTool = createTool<WebFetchArgs>(
       'Accept-Language': 'en-US,en;q=0.9',
     }
 
-    // Initial fetch
     const initial = await fetch(url, { signal, headers })
 
-    // Retry with honest UA if blocked by Cloudflare bot detection (TLS fingerprint mismatch)
     const response =
       initial.status === 403 && initial.headers.get('cf-mitigated') === 'challenge'
         ? await fetch(url, { signal, headers: { ...headers, 'User-Agent': 'openfox' } })
@@ -135,7 +119,6 @@ export const webFetchTool = createTool<WebFetchArgs>(
       return helpers.error(`Request failed with status code: ${response.status}`)
     }
 
-    // Check content length before downloading body
     const contentLength = response.headers.get('content-length')
     if (contentLength && parseInt(contentLength) > MAX_RESPONSE_SIZE) {
       return helpers.error('Response too large (exceeds 5MB limit)')
@@ -149,7 +132,6 @@ export const webFetchTool = createTool<WebFetchArgs>(
     const contentType = response.headers.get('content-type') || ''
     const mime = contentType.split(';')[0]?.trim().toLowerCase() || ''
 
-    // Image handling — return base64 in metadata (like read_file does)
     const isImage = mime.startsWith('image/') && mime !== 'image/svg+xml' && mime !== 'image/vnd.fastbidsheet'
 
     if (isImage) {
@@ -164,7 +146,6 @@ export const webFetchTool = createTool<WebFetchArgs>(
       })
     }
 
-    // Text content
     const rawContent = new TextDecoder().decode(arrayBuffer)
     let output: string
 
@@ -182,7 +163,6 @@ export const webFetchTool = createTool<WebFetchArgs>(
         output = rawContent
     }
 
-    // Truncate if needed
     const maxBytes = OUTPUT_LIMITS.web_fetch.maxBytes
     let truncated = false
     if (output.length > maxBytes) {

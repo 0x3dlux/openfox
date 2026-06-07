@@ -35,6 +35,7 @@ vi.mock('../runtime-config.js', () => ({
   getRuntimeConfig: vi.fn(() => ({
     mode: 'development',
     context: { compactionThreshold: 0.9 },
+    agent: { toolTimeout: 120000 },
   })),
 }))
 

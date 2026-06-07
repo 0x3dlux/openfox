@@ -203,6 +203,26 @@ echo "line 3"
     expect(result.output).toContain('ready')
     expect(result.output).toContain('[interrupted by user]')
   }, 10000)
+  it('uses the agent-requested timeout directly (no hard cap)', async () => {
+    const contextWithAgentTimeout: ToolContext = {
+      sessionManager: mockSessionManager,
+      workdir: tempDir,
+      sessionId: 'test-session',
+      agentTimeout: 500,
+    }
+
+    const startTime = Date.now()
+
+    const result = await runCommandTool.execute({ command: 'sleep 10', timeout: 2000 }, contextWithAgentTimeout)
+
+    const elapsed = Date.now() - startTime
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('timed out')
+    // Should time out at ~2000ms (agent-requested), NOT at 500ms (agentTimeout)
+    expect(elapsed).toBeGreaterThanOrEqual(1000)
+    expect(elapsed).toBeLessThan(5000)
+  }, 7000)
 })
 
 // Separate import for afterEach

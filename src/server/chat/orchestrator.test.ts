@@ -71,6 +71,7 @@ vi.mock('../runtime-config.js', () => ({
   getRuntimeConfig: vi.fn(() => ({
     mode: 'development',
     context: { maxTokens: 200000, compactionThreshold: 0.85, compactionTarget: 0.6 },
+    agent: { toolTimeout: 120000 },
   })),
   setRuntimeConfig: vi.fn(),
 }))

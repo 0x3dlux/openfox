@@ -398,6 +398,7 @@ export async function executeSubAgent(options: SubAgentExecutionOptions): Promis
       turnMetrics,
       signal,
       onMessage,
+      agentTimeout: getRuntimeConfig().agent.toolTimeout,
     })
 
     // Capture return_value content and result

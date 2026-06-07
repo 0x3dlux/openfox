@@ -31,7 +31,7 @@ export const runCommandTool = createTool<RunCommandArgs>(
           },
           timeout: {
             type: 'number',
-            description: 'Timeout in milliseconds (default: 120000, max: 300000)',
+            description: 'Timeout in milliseconds (default: 120000)',
           },
         },
         required: ['command'],
@@ -39,36 +39,28 @@ export const runCommandTool = createTool<RunCommandArgs>(
     },
   },
   async (args, context, helpers) => {
-    const timeout = Math.min(args.timeout ?? 120_000, 300_000)
+    const timeout = args.timeout ?? 120_000
 
-    // Resolve working directory
     const workingDir = args.cwd ? helpers.resolvePath(args.cwd) : context.workdir
 
-    // Collect all paths that need checking
     const pathsToCheck: string[] = [workingDir]
 
-    // Extract absolute paths from command (including ~ expansion)
     const commandPaths = extractAbsolutePathsFromCommand(args.command)
     for (const cmdPath of commandPaths) {
       const resolved = isAbsolute(cmdPath) ? cmdPath : resolve(workingDir, cmdPath)
       pathsToCheck.push(resolved)
     }
 
-    // Extract sensitive file paths from command (like .env, credentials.json)
     const sensitivePaths = extractSensitivePathsFromCommand(args.command)
     for (const sensitivePath of sensitivePaths) {
       const resolved = isAbsolute(sensitivePath) ? sensitivePath : resolve(workingDir, sensitivePath)
       pathsToCheck.push(resolved)
     }
 
-    // Check all paths - request confirmation for paths outside workdir or sensitive files
-    // Also checks for dangerous commands
     await helpers.checkPathAccess(pathsToCheck, args.command)
 
-    // Execute command
     const result = await executeCommand(args.command, workingDir, timeout, context.signal, context.onProgress)
 
-    // Format output
     let output = ''
 
     if (result.stdout) {
@@ -82,7 +74,6 @@ export const runCommandTool = createTool<RunCommandArgs>(
 
     output += `\n\n[Exit code: ${result.exitCode}]`
 
-    // Check truncation
     let truncated = false
     if (output.length > OUTPUT_LIMITS.run_command.maxBytes) {
       output = output.slice(0, OUTPUT_LIMITS.run_command.maxBytes)
@@ -98,13 +89,10 @@ export const runCommandTool = createTool<RunCommandArgs>(
       truncated = true
     }
 
-    // Check if this was an interrupted command (marker in output, exit code 130)
     const wasInterrupted = output.includes('[interrupted by user]')
 
     return helpers.success(output, truncated, {
-      // Mark as not successful if non-zero exit (unless interrupted)
       success: result.exitCode === 0,
-      // Don't set error for interrupted commands - the marker is sufficient
       ...(result.exitCode !== 0 && !wasInterrupted ? { error: `Command exited with code ${result.exitCode}` } : {}),
     })
   },
@@ -124,7 +112,6 @@ function executeCommand(
   onProgress?: (message: string) => void,
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
-    // Check if already aborted before starting
     if (checkAborted(signal)) {
       reject(new Error('Command aborted before execution'))
       return
@@ -143,7 +130,6 @@ function executeCommand(
       reject(new Error(`Command timed out after ${timeout}ms`))
     }, timeout)
 
-    // Handle abort signal - kill entire process group (like Ctrl+C)
     const onAbort = () => {
       if (!killed && !aborted) {
         aborted = true
@@ -170,19 +156,17 @@ function executeCommand(
       signal?.removeEventListener('abort', onAbort)
 
       if (killed) {
-        // Already rejected by timeout
         return
       }
 
       if (aborted) {
-        // Return partial output with interrupted marker (not an error)
         let output = stdout.trim()
         if (output) output += '\n\n'
         output += '[interrupted by user]'
         resolve({
           stdout: output,
           stderr: stderr.trim(),
-          exitCode: 130, // Standard SIGINT exit code
+          exitCode: 130,
         })
         return
       }

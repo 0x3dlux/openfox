@@ -45,7 +45,7 @@ export function loadConfig(): Config {
     agent: {
       maxIterations: 10,
       maxConsecutiveFailures: 3,
-      toolTimeout: 120_000,
+      toolTimeout: 300_000,
     },
     server: {
       port: env.OPENFOX_PORT,

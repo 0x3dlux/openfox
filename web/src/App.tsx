@@ -7,6 +7,8 @@ import { useSessionStore } from './stores/session'
 import { useProjectStore } from './stores/project'
 import { useConfigStore } from './stores/config'
 import { useThemeStore } from './stores/theme'
+import { useProjectLoader } from './hooks/useProjectLoader'
+import { useSessionLoader } from './hooks/useSessionLoader'
 
 // Apply theme synchronously from localStorage before React renders
 // to prevent flash of default theme
@@ -45,21 +47,12 @@ function ProjectView({ sidebarOpen, onSidebarToggle }: { sidebarOpen: boolean; o
   const projectId = params?.projectId
 
   const connectionStatus = useSessionStore((state) => state.connectionStatus)
-  const clearSession = useSessionStore((state) => state.clearSession)
   const currentProject = useProjectStore((state) => state.currentProject)
 
   const hasToken = hasStoredToken()
   const canLoad = connectionStatus === 'connected' || hasToken
 
-  useEffect(() => {
-    if (canLoad && projectId && currentProject?.id !== projectId) {
-      useProjectStore.getState().loadProject(projectId)
-    }
-    if (canLoad && projectId) {
-      useSessionStore.getState().listSessions(projectId)
-      clearSession()
-    }
-  }, [canLoad, projectId, currentProject?.id, clearSession])
+  useProjectLoader({ canLoad, projectId, currentProjectId: currentProject?.id })
 
   if (!currentProject || currentProject.id !== projectId) {
     return <LoadingSpinner />
@@ -100,17 +93,13 @@ function ProjectSessionView({
   const hasToken = hasStoredToken()
   const canLoad = connectionStatus === 'connected' || hasToken
 
-  useEffect(() => {
-    if (canLoad && projectId && currentProject?.id !== projectId) {
-      useProjectStore.getState().loadProject(projectId)
-    }
-    if (canLoad && sessionId && session?.id !== sessionId) {
-      useSessionStore.getState().loadSession(sessionId)
-    }
-    if (canLoad && projectId) {
-      useSessionStore.getState().listSessions(projectId)
-    }
-  }, [canLoad, projectId, currentProject?.id, sessionId, session?.id])
+  useSessionLoader({
+    canLoad,
+    projectId,
+    sessionId,
+    currentProjectId: currentProject?.id,
+    currentSessionId: session?.id,
+  })
 
   useEffect(() => {
     if (error?.code === 'NOT_FOUND' && projectId) {

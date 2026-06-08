@@ -423,26 +423,29 @@ export function PlanPanel({
               <RunningIndicator />
             </div>
           )}
-          <button
-            type="button"
-            className="absolute -top-8 right-12 md:right-16 text-sm text-text-muted hover:text-text-primary z-10 flex items-center gap-1.5"
-            onClick={() => setAutoScroll(!isAutoScrollActive)}
-          >
-            {isAutoScrollActive ? (
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-success" />
-            ) : (
-              <ChevronDownIcon className="w-3 h-3 text-text-muted" />
-            )}
-            {isAutoScrollActive ? 'live' : 'scroll to bottom'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowMessageSearch(true)}
-            className="absolute -top-8 right-2 md:right-4 text-sm text-text-muted hover:text-text-primary z-10 flex items-center p-0.5 rounded hover:bg-bg-tertiary transition-colors"
-            aria-label="Search messages"
-          >
-            <SearchIcon />
-          </button>
+          <div className="absolute -top-8 right-2 md:right-4 z-10 flex items-center gap-2">
+            <button
+              type="button"
+              className="text-sm text-text-muted hover:text-text-primary flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-bg-tertiary transition-colors"
+              onClick={() => setAutoScroll(!isAutoScrollActive)}
+            >
+              {isAutoScrollActive ? (
+                <span className="w-1.5 h-1.5 rounded-full bg-accent-success" />
+              ) : (
+                <ChevronDownIcon className="w-3 h-3 text-text-muted" />
+              )}
+              {isAutoScrollActive ? 'live' : 'scroll to bottom'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowMessageSearch(true)}
+              className="text-sm text-text-muted hover:text-text-primary flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-bg-tertiary transition-colors"
+              aria-label="Browse history"
+            >
+              <SearchIcon />
+              Browse history
+            </button>
+          </div>
           {/* Hidden file input */}
           <input
             ref={fileInputRef}

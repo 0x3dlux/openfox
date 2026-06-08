@@ -14,6 +14,7 @@ export const SETTINGS_KEYS = {
   DISPLAY_THEME: 'display.theme',
   DISPLAY_USER_PRESETS: 'display.userPresets',
   LLM_DISABLE_XML_PROTECTION: 'llm.disableXmlProtection',
+  KEYBINDINGS: 'keybindings',
 } as const
 
 interface SettingsState {

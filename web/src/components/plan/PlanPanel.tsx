@@ -33,6 +33,7 @@ import { MessageSearchModal } from './MessageSearchModal'
 import { groupMessages, type DisplayItem } from './groupMessages.js'
 import { usePromptHistory } from '../../hooks/usePromptHistory.js'
 import { useAutoScroll } from '@/hooks/useAutoScroll.ts'
+import { useKeybindings, useBinding, useAgentSwitchingBindings } from '../../hooks/useKeybindings'
 
 interface PlanPanelProps {
   criteriaSidebarOpen?: boolean
@@ -209,24 +210,16 @@ export function PlanPanel({
     turnStatsModal,
   ])
 
-  // Double Shift opens quick action modal
-  const lastShiftRef = useRef<number>(0)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        const now = Date.now()
-        if (now - lastShiftRef.current < 300) {
-          e.preventDefault()
-          setShowQuickAction(true)
-          lastShiftRef.current = 0
-        } else {
-          lastShiftRef.current = now
-        }
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  // Configurable quick action keybinding
+  const keybindings = useKeybindings()
+  useBinding(keybindings.quickAction, () => {
+    setShowQuickAction(true)
+  })
+
+  // Configurable agent switching keybindings (Ctrl+1/2/3/4 by default)
+  useAgentSwitchingBindings(keybindings.agentSwitching, topLevelAgents, (agentId) => {
+    useSessionStore.getState().switchMode(agentId)
+  })
 
   // Paste event listener for textarea
   useEffect(() => {
@@ -279,18 +272,6 @@ export function PlanPanel({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Ctrl+1/2/3/4 to switch agents (layout-independent via e.code)
-    if ((e.ctrlKey || e.metaKey) && e.code.startsWith('Digit')) {
-      const digit = parseInt(e.code.slice(-1), 10)
-      const agentIndex = digit - 1
-      const agent = topLevelAgents[agentIndex]
-      if (agent) {
-        e.preventDefault()
-        useSessionStore.getState().switchMode(agent.id)
-      }
-      return
-    }
-
     // Handle prompt history navigation when history is visible
     if (showHistory) {
       switch (e.key) {

@@ -3,6 +3,8 @@ import { useSessionStore } from '../../stores/session'
 import { ChevronDownIcon, CheckIcon } from '../shared/icons'
 import { useAgentsStore, getAgentColor } from '../../stores/agents'
 import { AgentsModal } from '../settings/AgentsModal'
+import { useKeybindings } from '../../hooks/useKeybindings'
+import { formatKeybinding } from '../../lib/keybindings'
 
 export function AgentSelector() {
   const currentMode = useSessionStore((state) => state.currentSession?.mode)
@@ -31,6 +33,8 @@ export function AgentSelector() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  const keybindings = useKeybindings()
+
   if (!currentMode) return null
 
   const topLevelAgents = agents.filter((a) => !a.subagent)
@@ -57,7 +61,8 @@ export function AgentSelector() {
           {topLevelAgents.map((agent, index) => {
             const isActive = agent.id === currentMode
             const color = getAgentColor(agents, agent.id)
-            const shortcut = index < 4 ? `Ctrl+${index + 1}` : null
+            const binding = keybindings.agentSwitching[index]
+            const shortcut = binding ? formatKeybinding(binding) : null
             return (
               <div
                 key={agent.id}
@@ -80,7 +85,7 @@ export function AgentSelector() {
                 </button>
                 {shortcut && (
                   <span className="shrink-0 px-1.5 py-0.5 text-[10px] bg-bg-tertiary text-text-muted rounded">
-                    Ctrl+{index + 1}
+                    {shortcut}
                   </span>
                 )}
               </div>

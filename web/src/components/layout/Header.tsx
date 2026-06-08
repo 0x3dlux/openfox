@@ -18,6 +18,7 @@ import { useSessionStore } from '../../stores/session'
 import { useProjectStore } from '../../stores/project'
 import { useConfigStore } from '../../stores/config'
 import { useTerminalStore } from '../../stores/terminal'
+import { useKeybindings, useBinding } from '../../hooks/useKeybindings'
 import { GlobalSettingsModal } from '../settings/GlobalSettingsModal'
 import { TerminalDrawer } from '../terminal/TerminalDrawer'
 import { DropdownMenu, DropdownMenuItem } from '../shared/DropdownMenu'
@@ -358,25 +359,15 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
     return () => window.removeEventListener('open-session-dropdown', handler)
   }, [])
 
-  // Double Ctrl opens terminal
-  const lastCtrlRef = useRef<number>(0)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Control' && !e.shiftKey && !e.metaKey && !e.altKey) {
-        const now = Date.now()
-        if (now - lastCtrlRef.current < 300) {
-          e.preventDefault()
-          e.stopPropagation()
-          useTerminalStore.getState().toggleOpen()
-          lastCtrlRef.current = 0
-        } else {
-          lastCtrlRef.current = now
-        }
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [])
+  // Configurable terminal toggle keybinding
+  const keybindings = useKeybindings()
+  useBinding(
+    keybindings.terminalToggle,
+    () => {
+      useTerminalStore.getState().toggleOpen()
+    },
+    { capture: true },
+  )
 
   // Start auto-refresh on mount
   useEffect(() => {

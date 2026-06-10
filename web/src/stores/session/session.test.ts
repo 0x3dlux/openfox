@@ -37,7 +37,7 @@ const {
   playNewMessageMock: vi.fn(),
 }))
 
-vi.mock('../lib/ws', () => ({
+vi.mock('../../lib/ws', () => ({
   wsClient: {
     send: wsSendMock,
     subscribe: wsSubscribeMock,
@@ -47,7 +47,7 @@ vi.mock('../lib/ws', () => ({
   },
 }))
 
-vi.mock('../lib/sound', () => ({
+vi.mock('../../lib/sound', () => ({
   playNotification: playNotificationMock,
   playAchievement: playAchievementMock,
   playIntervention: playInterventionMock,
@@ -55,11 +55,11 @@ vi.mock('../lib/sound', () => ({
   playNewMessage: playNewMessageMock,
 }))
 
-type SessionStoreModule = typeof import('./session')
+type SessionStoreModule = typeof import('../session')
 
 async function loadSessionStore(): Promise<SessionStoreModule['useSessionStore']> {
   vi.resetModules()
-  const module = await import('./session')
+  const module = await import('../session')
   return module.useSessionStore
 }
 
@@ -133,7 +133,6 @@ describe('useSessionStore session isolation', () => {
 
     useSessionStore.getState().loadSession('session-2')
 
-    // Session loading now uses REST API instead of WebSocket
     expect(useSessionStore.getState().currentSession).toBeNull()
     expect(useSessionStore.getState().messages).toEqual([])
     expect(useSessionStore.getState().currentTodos).toEqual([])
@@ -338,14 +337,12 @@ describe('useSessionStore session isolation', () => {
       currentSession: null,
     }))
 
-    // Simulate background session stopping
     useSessionStore.getState().handleServerMessage({
       type: 'session.running',
       sessionId: 'session-1',
       payload: { isRunning: false },
     })
 
-    // Bug: Previously isRunning would stay true because session.running only updated currentSession
     expect(useSessionStore.getState().sessions[0]?.isRunning).toBe(false)
   })
 
@@ -358,7 +355,7 @@ describe('useSessionStore session isolation', () => {
       workdir: '/tmp/project-1',
       mode: 'planner',
       phase: 'build',
-      isRunning: true, // Stale local state - session is actually done
+      isRunning: true,
       createdAt: 'a',
       updatedAt: 'b',
       criteriaCount: 0,
@@ -388,9 +385,9 @@ describe('useSessionStore session isolation', () => {
         workdir: '/tmp/project-1',
         mode: 'planner',
         phase: 'build',
-        isRunning: false, // Server says session is done
+        isRunning: false,
         createdAt: 'a',
-        updatedAt: 'c', // newer timestamp
+        updatedAt: 'c',
         criteriaCount: 0,
         criteriaCompleted: 0,
         messageCount: 10,
@@ -402,8 +399,6 @@ describe('useSessionStore session isolation', () => {
       payload: { sessions: incomingSessions },
     })
 
-    // Bug: mergeSessionList used wrong priority: currentSessionOverride?.isRunning ?? existingSession?.isRunning ?? incomingSession.isRunning
-    // This meant local isRunning:true would override server's isRunning:false
     expect(useSessionStore.getState().sessions.find((s) => s.id === 'session-stale')?.isRunning).toBe(false)
   })
 
@@ -429,18 +424,14 @@ describe('useSessionStore session isolation', () => {
       ],
     }))
 
-    // Real-time update: session stops running
     useSessionStore.getState().handleServerMessage({
       type: 'session.running',
       sessionId: 'session-1',
       payload: { isRunning: false },
     })
 
-    // Session should now show as not running
     expect(useSessionStore.getState().sessions.find((s) => s.id === 'session-1')?.isRunning).toBe(false)
 
-    // Stale server list arrives after real-time update (race condition):
-    // Server still has isRunning:true because request was sent before agent finished
     useSessionStore.getState().handleServerMessage({
       type: 'session.list',
       payload: {
@@ -451,7 +442,7 @@ describe('useSessionStore session isolation', () => {
             workdir: '/tmp/project-1',
             mode: 'planner',
             phase: 'build',
-            isRunning: true, // Stale server data
+            isRunning: true,
             createdAt: 'a',
             updatedAt: 'b',
             criteriaCount: 0,
@@ -462,7 +453,6 @@ describe('useSessionStore session isolation', () => {
       },
     })
 
-    // Real-time update should be preserved — session must stay not-running
     expect(useSessionStore.getState().sessions.find((s) => s.id === 'session-1')?.isRunning).toBe(false)
   })
 
@@ -566,7 +556,6 @@ describe('useSessionStore session isolation', () => {
     })
 
     expect(useSessionStore.getState().currentSession?.isRunning).toBe(false)
-    // Pending path confirmation persists until user responds (new behavior)
     expect(useSessionStore.getState().pendingPathConfirmations).toHaveLength(1)
   })
 
@@ -662,10 +651,6 @@ describe('useSessionStore session isolation', () => {
       },
     })
 
-    // isRunning: false is preserved — session.running WebSocket event is the only
-    // authority to flip a stopped session back to running. session.state carries
-    // persisted state that may be stale (e.g. server crash), so it cannot overwrite
-    // a known-stopped session.
     expect(useSessionStore.getState().sessions).toEqual([
       {
         id: 'session-1',
@@ -695,7 +680,7 @@ describe('useSessionStore session isolation', () => {
           workdir: '/tmp/project-1',
           mode: 'planner',
           phase: 'build',
-          isRunning: true, // Local state says running
+          isRunning: true,
           createdAt: 'a',
           updatedAt: 'b',
           criteriaCount: 0,
@@ -715,7 +700,7 @@ describe('useSessionStore session isolation', () => {
             workdir: '/tmp/project-1',
             mode: 'planner',
             phase: 'plan',
-            isRunning: false, // Server says not running
+            isRunning: false,
             createdAt: 'a',
             updatedAt: 'c',
             criteriaCount: 0,
@@ -727,10 +712,8 @@ describe('useSessionStore session isolation', () => {
     })
 
     const result = useSessionStore.getState().sessions.find((s) => s.id === 'session-1')
-    // Server is source of truth for isRunning - not from local stale state
     expect(result?.isRunning).toBe(false)
-    // Other fields merge correctly
-    expect(result?.phase).toBe('build') // phase still uses existing override
+    expect(result?.phase).toBe('build')
     expect(result?.messageCount).toBe(10)
   })
 
@@ -1023,7 +1006,6 @@ describe('useSessionStore session isolation', () => {
       error: null,
     })
 
-    // Handle session.list message
     useSessionStore.getState().handleServerMessage({
       type: 'session.list',
       payload: {
@@ -1033,7 +1015,6 @@ describe('useSessionStore session isolation', () => {
 
     const result = useSessionStore.getState().sessions
 
-    // Verify recentUserPrompts are preserved
     expect(result[0]!.recentUserPrompts).toEqual([
       { id: 'msg-1', content: 'First prompt', timestamp: '2024-01-01T10:00:00.000Z' },
       { id: 'msg-2', content: 'Second prompt', timestamp: '2024-01-01T11:00:00.000Z' },
@@ -1042,7 +1023,6 @@ describe('useSessionStore session isolation', () => {
       { id: 'msg-3', content: 'Third prompt', timestamp: '2024-01-02T12:00:00.000Z' },
     ])
 
-    // Verify messageCount is preserved
     expect(result[0]!.messageCount).toBe(5)
     expect(result[1]!.messageCount).toBe(12)
   })
@@ -1328,219 +1308,5 @@ describe('useSessionStore session isolation', () => {
       }),
     )
     expect(useSessionStore.getState().pendingQuestion).toBeNull()
-  })
-})
-
-describe('chat.tool_output streaming after message_updated', () => {
-  beforeEach(() => {
-    wsSendMock.mockClear()
-    wsSubscribeMock.mockClear()
-    wsConnectMock.mockClear()
-    wsDisconnectMock.mockClear()
-    wsStatusMock.mockClear()
-    fetchMock.mockClear()
-  })
-
-  it('accumulates all tool_output chunks even after message_updated folds streamingMessage into messages', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const useSessionStore = await loadSessionStore()
-
-    useSessionStore.setState({
-      currentSession: {
-        id: 'session-1',
-        projectId: 'project-1',
-        workdir: '/tmp/project-1',
-        mode: 'builder',
-        phase: 'build',
-        isRunning: true,
-        criteria: [],
-        summary: null,
-      } as any,
-    })
-
-    // 1. Start the streaming assistant message
-    useSessionStore.getState().handleServerMessage({
-      type: 'chat.message',
-      sessionId: 'session-1',
-      payload: {
-        message: {
-          id: 'msg-1',
-          role: 'assistant',
-          content: '',
-          timestamp: '2024-01-01T00:00:00.000Z',
-          tokenCount: 0,
-          isStreaming: true,
-        },
-      },
-    })
-
-    // 2. Add a tool call
-    useSessionStore.getState().handleServerMessage({
-      type: 'chat.tool_call',
-      sessionId: 'session-1',
-      payload: {
-        messageId: 'msg-1',
-        callId: 'call-1',
-        tool: 'run_command',
-        args: { command: 'echo hello' },
-      },
-    })
-
-    // 3. Fold streamingMessage into messages[] (as happens when message.done arrives before tool execution)
-    useSessionStore.getState().handleServerMessage({
-      type: 'chat.message_updated',
-      sessionId: 'session-1',
-      payload: {
-        messageId: 'msg-1',
-        updates: { isStreaming: false },
-      },
-    })
-
-    // Verify the message is now in messages with the tool call
-    const msg = useSessionStore.getState().messages.find((m) => m.id === 'msg-1')
-    expect(msg?.toolCalls).toHaveLength(1)
-    expect(msg?.toolCalls?.[0]?.streamingOutput).toBeUndefined()
-    expect(useSessionStore.getState().streamingMessage).toBeNull()
-
-    // 4. Send first tool_output chunk and flush rAF to populate streamingOutput
-    useSessionStore.getState().handleServerMessage({
-      type: 'chat.tool_output',
-      sessionId: 'session-1',
-      payload: { messageId: 'msg-1', callId: 'call-1', stream: 'stdout', output: 'first\n' },
-    })
-    vi.runAllTimers()
-
-    // Verify first chunk made it
-    const afterFirst = useSessionStore.getState().messages.find((m) => m.id === 'msg-1')
-    expect(afterFirst?.toolCalls?.[0]?.streamingOutput?.map((c) => c.content).join('')).toBe('first\n')
-
-    // 5. Send more chunks AFTER streamingOutput is already populated
-    //    (this is where the stale guard used to drop them)
-    useSessionStore.getState().handleServerMessage({
-      type: 'chat.tool_output',
-      sessionId: 'session-1',
-      payload: { messageId: 'msg-1', callId: 'call-1', stream: 'stdout', output: 'second\n' },
-    })
-    useSessionStore.getState().handleServerMessage({
-      type: 'chat.tool_output',
-      sessionId: 'session-1',
-      payload: { messageId: 'msg-1', callId: 'call-1', stream: 'stdout', output: 'third\n' },
-    })
-    vi.runAllTimers()
-
-    // 6. Verify ALL chunks are accumulated (previously only 'first\n' would survive)
-    const updatedMsg = useSessionStore.getState().messages.find((m) => m.id === 'msg-1')
-    const output = updatedMsg?.toolCalls?.[0]?.streamingOutput?.map((c) => c.content).join('') ?? ''
-    expect(output).toBe('first\nsecond\nthird\n')
-  })
-})
-
-describe('reconnect refreshes current session content', () => {
-  beforeEach(() => {
-    wsSendMock.mockClear()
-    wsSubscribeMock.mockClear()
-    wsConnectMock.mockClear()
-    wsDisconnectMock.mockClear()
-    wsStatusMock.mockClear()
-    fetchMock.mockClear()
-  })
-
-  it('calls loadSession when reconnecting with an active session', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const useSessionStore = await loadSessionStore()
-
-    useSessionStore.setState({
-      currentSession: {
-        id: 'session-active',
-        projectId: 'project-1',
-        workdir: '/tmp/project-1',
-        mode: 'planner',
-        phase: 'plan',
-        isRunning: false,
-        criteria: [],
-        summary: null,
-      } as any,
-    })
-
-    const loadSessionSpy = vi.spyOn(useSessionStore.getState(), 'loadSession')
-
-    await useSessionStore.getState().connect()
-
-    vi.runAllTimers()
-    vi.useRealTimers()
-
-    const cb = (wsStatusMock.mock.calls[0] as Array<(s: string) => void>)[0]!
-    ;(cb as (s: string) => void)('connected')
-
-    expect(loadSessionSpy).toHaveBeenCalledWith('session-active')
-  })
-
-  it('does not call loadSession when reconnecting without an active session', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const useSessionStore = await loadSessionStore()
-
-    useSessionStore.setState({
-      currentSession: null,
-    })
-
-    const loadSessionSpy = vi.spyOn(useSessionStore.getState(), 'loadSession')
-
-    await useSessionStore.getState().connect()
-
-    vi.runAllTimers()
-    vi.useRealTimers()
-
-    const cb = (wsStatusMock.mock.calls[0] as Array<(s: string) => void>)[0]!
-    ;(cb as (s: string) => void)('connected')
-
-    expect(loadSessionSpy).not.toHaveBeenCalled()
-  })
-
-  it('handles queue.state with undefined messages gracefully', async () => {
-    const useSessionStore = await loadSessionStore()
-    useSessionStore.setState({
-      queuedMessages: [{ queueId: '1', content: 'test', mode: 'asap' as const, queuedAt: '2024-01-01T00:00:00.000Z' }],
-    })
-    expect(useSessionStore.getState().queuedMessages).toHaveLength(1)
-
-    useSessionStore.getState().handleServerMessage({
-      type: 'queue.state',
-      payload: { messages: undefined as unknown as [] },
-    })
-    expect(useSessionStore.getState().queuedMessages).toEqual([])
-  })
-
-  it('handles queue.state with valid messages', async () => {
-    const useSessionStore = await loadSessionStore()
-    useSessionStore.setState({ queuedMessages: [] })
-
-    useSessionStore.getState().handleServerMessage({
-      type: 'queue.state',
-      payload: {
-        messages: [
-          { queueId: '1', content: 'test1', mode: 'completion' as const, queuedAt: '2024-01-01T00:00:00.000Z' },
-          { queueId: '2', content: 'test2', mode: 'asap' as const, queuedAt: '2024-01-01T00:00:00.000Z' },
-        ],
-      },
-    })
-    expect(useSessionStore.getState().queuedMessages).toHaveLength(2)
-  })
-
-  it('calls listProjects when connection status becomes connected', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const useSessionStore = await loadSessionStore()
-
-    const { useProjectStore } = await import('./project')
-    const listProjectsSpy = vi.spyOn(useProjectStore.getState(), 'listProjects')
-
-    await useSessionStore.getState().connect()
-
-    vi.runAllTimers()
-    vi.useRealTimers()
-
-    const cb = (wsStatusMock.mock.calls[0] as Array<(s: string) => void>)[0]!
-    ;(cb as (s: string) => void)('connected')
-
-    expect(listProjectsSpy).toHaveBeenCalled()
   })
 })

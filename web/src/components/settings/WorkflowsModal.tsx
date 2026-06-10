@@ -92,36 +92,12 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId }: WorkflowsModa
         if (isDefault) {
           fetchDefaultContent(initialEditId).then((workflow) => {
             if (!workflow) return
-            setFormName(workflow.metadata.name + ' (copy)')
-            setFormId(`${initialEditId}-copy-${Date.now()}`)
-            setFormDescription(workflow.metadata.description)
-            setFormVersion(workflow.metadata.version)
-            setFormColor(workflow.metadata.color ?? '#3b82f6')
-            setFormEntryStep(workflow.entryStep)
-            setFormMaxIterations(workflow.settings.maxIterations)
-            setFormSteps(workflow.steps)
-            setFormStartCondition(workflow.startCondition ?? { type: 'always' })
-            setFormError('')
-            setEditingId(null)
-            setIsReadOnly(false)
-            setView('edit')
+            populateForm({ ...workflow, metadata: { ...workflow.metadata, name: workflow.metadata.name + ' (copy)', id: `${initialEditId}-copy-${Date.now()}` } }, { editingId: null, isReadOnly: false })
           })
         } else {
           fetchWorkflow(initialEditId).then((workflow) => {
             if (!workflow) return
-            setFormName(workflow.metadata.name)
-            setFormId(workflow.metadata.id)
-            setFormDescription(workflow.metadata.description)
-            setFormVersion(workflow.metadata.version)
-            setFormColor(workflow.metadata.color ?? '#3b82f6')
-            setFormEntryStep(workflow.entryStep)
-            setFormMaxIterations(workflow.settings.maxIterations)
-            setFormSteps(workflow.steps)
-            setFormStartCondition(workflow.startCondition ?? { type: 'always' })
-            setFormError('')
-            setEditingId(initialEditId)
-            setIsReadOnly(false)
-            setView('edit')
+            populateForm(workflow, { editingId: initialEditId, isReadOnly: false })
           })
         }
       } else {
@@ -132,10 +108,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId }: WorkflowsModa
     }
   }, [isOpen, fetchWorkflows, fetchWorkflow, fetchDefaultContent, fetchTemplateVariables, initialEditId])
 
-  const handleEdit = async (workflowId: string) => {
-    const workflow = await fetchWorkflow(workflowId)
-    if (!workflow) return
-    setEditingId(workflowId)
+  const populateForm = (workflow: { metadata: { name: string; id: string; description: string; version: string; color?: string }; entryStep: string; settings: { maxIterations: number }; steps: import('../../stores/workflows').WorkflowStep[]; startCondition?: { type: string; result?: string } }, extra?: Partial<{ editingId: string | null; isReadOnly: boolean; selectedNodeKey: null; selectedEdgeKey: null }>) => {
     setFormName(workflow.metadata.name)
     setFormId(workflow.metadata.id)
     setFormDescription(workflow.metadata.description)
@@ -146,9 +119,17 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId }: WorkflowsModa
     setFormSteps(workflow.steps)
     setFormStartCondition(workflow.startCondition ?? { type: 'always' })
     setFormError('')
-    setSelectedNodeKey(null)
-    setSelectedEdgeKey(null)
+    if (extra?.editingId !== undefined) setEditingId(extra.editingId)
+    if (extra?.isReadOnly !== undefined) setIsReadOnly(extra.isReadOnly)
+    if (extra?.selectedNodeKey !== undefined) setSelectedNodeKey(null)
+    if (extra?.selectedEdgeKey !== undefined) setSelectedEdgeKey(null)
     setView('edit')
+  }
+
+  const handleEdit = async (workflowId: string) => {
+    const workflow = await fetchWorkflow(workflowId)
+    if (!workflow) return
+    populateForm(workflow, { editingId: workflowId, isReadOnly: false, selectedNodeKey: null, selectedEdgeKey: null })
   }
 
   const doSave = async () => {
@@ -214,57 +195,16 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId }: WorkflowsModa
 
   const handleView = async (workflowId: string) => {
     const isDefault = defaults.some((d) => d.id === workflowId)
-    if (isDefault) {
-      const content = await fetchDefaultContent(workflowId)
-      if (!content) return
-      setFormName(content.metadata.name)
-      setFormId(content.metadata.id)
-      setFormDescription(content.metadata.description)
-      setFormVersion(content.metadata.version)
-      setFormColor(content.metadata.color ?? '#3b82f6')
-      setFormEntryStep(content.entryStep)
-      setFormMaxIterations(content.settings.maxIterations)
-      setFormSteps(content.steps)
-      setFormStartCondition(content.startCondition ?? { type: 'always' })
-      setFormError('')
-      setEditingId(workflowId)
-      setIsReadOnly(true)
-    } else {
-      const workflow = await fetchWorkflow(workflowId)
-      if (!workflow) return
-      setFormName(workflow.metadata.name)
-      setFormId(workflow.metadata.id)
-      setFormDescription(workflow.metadata.description)
-      setFormVersion(workflow.metadata.version)
-      setFormColor(workflow.metadata.color ?? '#3b82f6')
-      setFormEntryStep(workflow.entryStep)
-      setFormMaxIterations(workflow.settings.maxIterations)
-      setFormSteps(workflow.steps)
-      setFormStartCondition(workflow.startCondition ?? { type: 'always' })
-      setFormError('')
-      setEditingId(workflowId)
-      setIsReadOnly(true)
-    }
-    setView('edit')
+    const content = isDefault ? await fetchDefaultContent(workflowId) : await fetchWorkflow(workflowId)
+    if (!content) return
+    populateForm(content, { editingId: workflowId, isReadOnly: true })
   }
 
   const handleDuplicate = async (workflowId: string) => {
     const isDefault = defaults.some((d) => d.id === workflowId)
     const content = isDefault ? await fetchDefaultContent(workflowId) : await fetchWorkflow(workflowId)
     if (!content) return
-    setFormName(content.metadata.name + ' (copy)')
-    setFormId(`${workflowId}-copy-${Date.now()}`)
-    setFormDescription(content.metadata.description)
-    setFormVersion(content.metadata.version)
-    setFormColor(content.metadata.color ?? '#3b82f6')
-    setFormEntryStep(content.entryStep)
-    setFormMaxIterations(content.settings.maxIterations)
-    setFormSteps(content.steps)
-    setFormStartCondition(content.startCondition ?? { type: 'always' })
-    setFormError('')
-    setEditingId(null)
-    setIsReadOnly(false)
-    setView('edit')
+    populateForm({ ...content, metadata: { ...content.metadata, name: content.metadata.name + ' (copy)', id: `${workflowId}-copy-${Date.now()}` } }, { editingId: null, isReadOnly: false })
   }
 
   const handleNew = () => {

@@ -104,10 +104,14 @@ export function computeLayout(
   nodes.push({ id: '$start', type: 'terminal', label: 'Start', cx: effectiveLeftCx, cy: startCy, w: TERM_W, h: TERM_H })
   posMap.set('$start', { cx: effectiveLeftCx, cy: startCy, w: TERM_W, h: TERM_H })
 
+  const addDoneNode = (cy: number) => {
+    nodes.push({ id: '$done', type: 'terminal', label: 'Done', cx: effectiveLeftCx, cy, w: TERM_W, h: TERM_H })
+    posMap.set('$done', { cx: effectiveLeftCx, cy, w: TERM_W, h: TERM_H })
+  }
+
   if (steps.length === 0) {
     const bottomY = startCy + TERM_H / 2 + GAP_Y * 2 + TERM_H / 2
-    nodes.push({ id: '$done', type: 'terminal', label: 'Done', cx: effectiveLeftCx, cy: bottomY, w: TERM_W, h: TERM_H })
-    posMap.set('$done', { cx: effectiveLeftCx, cy: bottomY, w: TERM_W, h: TERM_H })
+    addDoneNode(bottomY)
     return { nodes, edges, width: canvasW, height: bottomY + TERM_H / 2 + PAD, posMap }
   }
 
@@ -137,8 +141,7 @@ export function computeLayout(
   const rightBot = hasRight ? startY + (rightSteps.length - 1) * (NODE_H + GAP_Y) + NODE_H / 2 : startCy
   const bottomY = Math.max(leftBot, rightBot) + NODE_H / 2 + GAP_Y + TERM_H / 2
 
-  nodes.push({ id: '$done', type: 'terminal', label: 'Done', cx: effectiveLeftCx, cy: bottomY, w: TERM_W, h: TERM_H })
-  posMap.set('$done', { cx: effectiveLeftCx, cy: bottomY, w: TERM_W, h: TERM_H })
+  addDoneNode(bottomY)
 
   interface RawEdge {
     from: string

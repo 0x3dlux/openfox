@@ -118,6 +118,27 @@ function mergeSessionList(
   })
 }
 
+function updateSessionField(
+  message: { sessionId?: string },
+  set: (fn: (state: SessionState) => Partial<SessionState>) => void,
+  get: () => SessionState,
+  updater: (session: import('@shared/types.js').SessionSummary) => import('@shared/types.js').SessionSummary,
+) {
+  const eventSessionId = message.sessionId
+  const activeSessionId = get().currentSession?.id
+  const isBackgroundSession = eventSessionId && eventSessionId !== activeSessionId
+
+  set((state) => ({
+    sessions: state.sessions.map((s) => (s.id === eventSessionId ? updater(s) : s)),
+  }))
+
+  if (!isBackgroundSession) {
+    set((state) => ({
+      currentSession: state.currentSession ? updater(state.currentSession as any) as any : null,
+    }))
+  }
+}
+
 export function handleServerMessage(
   message: ServerMessage,
   set: (partial: Partial<SessionState> | ((state: SessionState) => Partial<SessionState>)) => void,
@@ -190,19 +211,9 @@ export function handleServerMessage(
 
     case 'session.running': {
       const payload = message.payload as SessionRunningPayload
-      const eventSessionId = message.sessionId
-      const activeSessionId = get().currentSession?.id
-      const isBackgroundSession = eventSessionId && eventSessionId !== activeSessionId
-
-      set((state) => ({
-        sessions: state.sessions.map((s) => (s.id === eventSessionId ? { ...s, isRunning: payload.isRunning } : s)),
-      }))
-
-      if (!isBackgroundSession) {
-        set((state) => ({
-          currentSession: state.currentSession ? { ...state.currentSession, isRunning: payload.isRunning } : null,
-          ...(!payload.isRunning ? { abortInProgress: false, queuedMessages: [] } : {}),
-        }))
+      updateSessionField(message, set, get, (s) => ({ ...s, isRunning: payload.isRunning }))
+      if (!payload.isRunning) {
+        set({ abortInProgress: false, queuedMessages: [] })
       }
       break
     }
@@ -609,19 +620,7 @@ export function handleServerMessage(
 
     case 'phase.changed': {
       const payload = message.payload as PhaseChangedPayload
-      const eventSessionId = message.sessionId
-      const activeSessionId = get().currentSession?.id
-      const isBackgroundSession = eventSessionId && eventSessionId !== activeSessionId
-
-      set((state) => ({
-        sessions: state.sessions.map((s) => (s.id === eventSessionId ? { ...s, phase: payload.phase } : s)),
-      }))
-
-      if (!isBackgroundSession) {
-        set((state) => ({
-          currentSession: state.currentSession ? { ...state.currentSession, phase: payload.phase } : null,
-        }))
-      }
+      updateSessionField(message, set, get, (s) => ({ ...s, phase: payload.phase }))
       break
     }
 

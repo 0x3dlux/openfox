@@ -16,6 +16,25 @@ let wsUnsubscribe: (() => void) | null = null
 const loadingSessionIds = new Set<string>()
 const listingSessionsForProject = new Map<string, Promise<void>>()
 
+function applyToolOutputs(
+  toolCalls: import('@shared/types.js').ToolCall[] | undefined,
+  toolOutputs: Array<{ callId: string; stream: 'stdout' | 'stderr'; content: string }>,
+  matchedCallIds: Set<string>,
+): import('@shared/types.js').ToolCall[] | undefined {
+  return toolCalls?.map((tc) => {
+    const outputs = toolOutputs.filter((o) => o.callId === tc.id)
+    if (outputs.length === 0) return tc
+    matchedCallIds.add(tc.id)
+    return {
+      ...tc,
+      streamingOutput: [
+        ...(tc.streamingOutput ?? []),
+        ...outputs.map((o) => ({ stream: o.stream, content: o.content, timestamp: Date.now() })),
+      ],
+    }
+  })
+}
+
 async function postMessage(
   sessionId: string,
   content: string | undefined,
@@ -74,26 +93,9 @@ export const useSessionStore = create<SessionState>((set, get) => {
         }
         if (hasToolOutput) {
           const matchedCallIds = new Set<string>()
-          updated.toolCalls = updated.toolCalls?.map((tc) => {
-            const outputs = toolOutputs.filter((o) => o.callId === tc.id)
-            if (outputs.length === 0) return tc
-            matchedCallIds.add(tc.id)
-            return {
-              ...tc,
-              streamingOutput: [
-                ...(tc.streamingOutput ?? []),
-                ...outputs.map((o) => ({
-                  stream: o.stream as 'stdout' | 'stderr',
-                  content: o.content,
-                  timestamp: Date.now(),
-                })),
-              ],
-            }
-          })
+          updated.toolCalls = applyToolOutputs(updated.toolCalls, toolOutputs, matchedCallIds)
           const unmatched = toolOutputs.filter((o) => !matchedCallIds.has(o.callId))
-          if (unmatched.length > 0) {
-            buf.toolOutput.push(...unmatched)
-          }
+          if (unmatched.length > 0) buf.toolOutput.push(...unmatched)
         }
         return { streamingMessage: updated }
       }
@@ -102,28 +104,10 @@ export const useSessionStore = create<SessionState>((set, get) => {
         const matchedCallIds = new Set<string>()
         const updatedMessages = state.messages.map((m) => {
           if (m.id !== buf.messageId) return m
-          const updatedToolCalls = m.toolCalls?.map((tc) => {
-            const outputs = toolOutputs.filter((o) => o.callId === tc.id)
-            if (outputs.length === 0) return tc
-            matchedCallIds.add(tc.id)
-            return {
-              ...tc,
-              streamingOutput: [
-                ...(tc.streamingOutput ?? []),
-                ...outputs.map((o) => ({
-                  stream: o.stream as 'stdout' | 'stderr',
-                  content: o.content,
-                  timestamp: Date.now(),
-                })),
-              ],
-            }
-          })
-          return { ...m, toolCalls: updatedToolCalls }
+          return { ...m, toolCalls: applyToolOutputs(m.toolCalls, toolOutputs, matchedCallIds) }
         })
         const unmatched = toolOutputs.filter((o) => !matchedCallIds.has(o.callId))
-        if (unmatched.length > 0) {
-          buf.toolOutput.push(...unmatched)
-        }
+        if (unmatched.length > 0) buf.toolOutput.push(...unmatched)
         return { messages: updatedMessages }
       }
 

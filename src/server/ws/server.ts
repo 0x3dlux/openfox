@@ -149,7 +149,7 @@ function moduleGitDiff(cwd: string): Promise<{ hash: string; files: GitDiffFile[
 
 const moduleWorkdirLastHash = new Map<string, string>()
 const moduleWorkdirInterval = new Map<string, ReturnType<typeof setInterval>>()
-const gitPollInterval = 10_000
+const gitPollInterval = parseInt(process.env['OPENFOX_GIT_POLL_INTERVAL'] ?? '', 10) || 10_000
 let moduleClients: Map<WebSocket, ClientConnection> | null = null
 let moduleEnqueueSend: ((client: ClientConnection, data: string, seq: number) => void) | null = null
 

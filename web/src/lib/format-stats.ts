@@ -9,6 +9,7 @@ export function formatTokens(tokens: number): string {
  * Format speed with k suffix
  */
 export function formatSpeed(n: number): string {
+  if (!Number.isFinite(n)) return '0'
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
   return n.toFixed(1)
 }
@@ -17,6 +18,7 @@ export function formatSpeed(n: number): string {
  * Format seconds to compact time
  */
 export function formatTime(seconds: number): string {
+  if (!Number.isFinite(seconds)) return '0s'
   if (seconds < 60) return `${seconds.toFixed(1)}s`
   const mins = Math.floor(seconds / 60)
   const secs = Math.round(seconds % 60)

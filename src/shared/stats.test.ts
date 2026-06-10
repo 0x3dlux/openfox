@@ -410,6 +410,31 @@ describe('computeSessionStats', () => {
     ])
   })
 
+  it('skips messages with error-only stats (e.g., aborted/terminated)', () => {
+    const messages: Message[] = [
+      createMessageWithStats('1', { mode: 'builder' }),
+      {
+        id: '2',
+        role: 'assistant',
+        content: 'aborted',
+        timestamp: '2024-01-01T10:00:01Z',
+        tokenCount: 50,
+        stats: { error: 'terminated' } as unknown as MessageStats,
+      },
+      createMessageWithStats('3', { mode: 'builder' }),
+    ]
+
+    const result = computeSessionStats(messages)
+
+    expect(result).not.toBeNull()
+    expect(result!.responseCount).toBe(2)
+    expect(result!.totalTime).toBeGreaterThan(0)
+    expect(result!.avgPrefillSpeed).toBeGreaterThan(0)
+    expect(Number.isNaN(result!.totalTime)).toBe(false)
+    expect(Number.isNaN(result!.avgPrefillSpeed)).toBe(false)
+    expect(Number.isNaN(result!.avgGenerationSpeed)).toBe(false)
+  })
+
   it('groups session stats by provider and model', () => {
     const messages = [
       createMessageWithStats('1', {

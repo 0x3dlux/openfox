@@ -17,6 +17,10 @@ const roundTo1 = (n: number): number => Math.round(n * 10) / 10
 
 type MessageWithStats = Message & { stats: NonNullable<Message['stats']> }
 
+function hasValidStats(stats: NonNullable<Message['stats']>): stats is MessageStats {
+  return typeof stats.totalTime === 'number' && !Number.isNaN(stats.totalTime)
+}
+
 function getStatsIdentity(stats: MessageStats): StatsIdentity {
   return {
     providerId: stats.providerId,
@@ -133,7 +137,7 @@ function buildSessionStats(messagesWithStats: MessageWithStats[]): Omit<SessionS
  */
 export function computeSessionStats(messages: Message[]): SessionStats | null {
   const messagesWithStats = messages
-    .filter((msg): msg is MessageWithStats => msg.stats !== undefined && msg.stats !== null)
+    .filter((msg): msg is MessageWithStats => msg.stats !== undefined && msg.stats !== null && hasValidStats(msg.stats))
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
 
   if (messagesWithStats.length === 0) {

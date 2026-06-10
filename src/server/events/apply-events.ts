@@ -12,6 +12,13 @@ export interface FormatRetry {
   timestamp: number
 }
 
+type CompleteReason = 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
+
+function markComplete(msg: { isComplete?: boolean; completeReason?: CompleteReason }, reason: CompleteReason): void {
+  msg.isComplete = true
+  msg.completeReason = reason
+}
+
 export interface MessageFragment {
   tokenCount?: number
   contextWindowId?: string
@@ -263,46 +270,14 @@ export function applyEvents<
         const data = event.data as Extract<TurnEvent, { type: 'chat.done' }>['data']
         const msg = messages.get(data.messageId)
         if (msg) {
-          ;(
-            msg as T & {
-              isComplete: boolean
-              completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
-            }
-          ).isComplete = true
-          ;(
-            msg as T & {
-              isComplete: boolean
-              completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
-            }
-          ).completeReason = data.reason
+          markComplete(msg, data.reason)
         }
         break
       }
       case 'chat.error': {
-        const data = event.data as Extract<TurnEvent, { type: 'chat.error' }>['data']
         for (const msg of messages.values()) {
           if (msg.role === 'assistant' && !('isComplete' in msg)) {
-            ;(
-              msg as T & {
-                isComplete: boolean
-                completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
-                stats?: { error?: string }
-              }
-            ).isComplete = true
-            ;(
-              msg as T & {
-                isComplete: boolean
-                completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
-                stats?: { error?: string }
-              }
-            ).completeReason = 'error'
-            ;(
-              msg as T & {
-                isComplete: boolean
-                completeReason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
-                stats?: { error?: string }
-              }
-            ).stats = { error: data.error }
+            markComplete(msg, 'error')
           }
         }
         break

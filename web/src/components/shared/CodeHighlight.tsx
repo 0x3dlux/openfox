@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, useState, useRef } from 'react'
 import { highlightCode, useShikiTheme } from '../../lib/syntax-highlighter'
 
 interface CodeHighlightProps {
@@ -9,18 +9,24 @@ interface CodeHighlightProps {
   startLine?: number
 }
 
-export const CodeHighlight = memo(function CodeHighlight({ code, language, variant, showLineNumbers = false, startLine = 1 }: CodeHighlightProps) {
+export const CodeHighlight = memo(function CodeHighlight({
+  code,
+  language,
+  variant,
+  showLineNumbers = false,
+  startLine = 1,
+}: CodeHighlightProps) {
   const [html, setHtml] = useState<string | null>(null)
   const shikiTheme = useShikiTheme()
+  const latestCodeRef = useRef(code)
 
   useEffect(() => {
-    let cancelled = false
+    latestCodeRef.current = code
     highlightCode(code, language, shikiTheme).then((result) => {
-      if (!cancelled) setHtml(result)
+      if (latestCodeRef.current === code) {
+        setHtml(result)
+      }
     })
-    return () => {
-      cancelled = true
-    }
   }, [code, language, shikiTheme])
 
   if (!html) {
@@ -37,5 +43,11 @@ export const CodeHighlight = memo(function CodeHighlight({ code, language, varia
   }
 
   const className = showLineNumbers ? '' : 'shiki-plain'
-  return <div className={className} style={{ '--shiki-start': startLine } as React.CSSProperties} dangerouslySetInnerHTML={{ __html: html }} />
+  return (
+    <div
+      className={className}
+      style={{ '--shiki-start': startLine } as React.CSSProperties}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  )
 })

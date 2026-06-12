@@ -1,4 +1,4 @@
-import { memo, useMemo, useEffect, useState } from 'react'
+import { memo, useMemo, useEffect, useState, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { highlightCode, useShikiTheme } from '../../lib/syntax-highlighter'
@@ -12,7 +12,7 @@ interface MarkdownProps {
   muted?: boolean
 }
 
-function CodeBlock({
+const CodeBlock = memo(function CodeBlock({
   language,
   codeString,
   showSyntaxHighlighting,
@@ -24,16 +24,16 @@ function CodeBlock({
   const { copied, copy } = useCopyToClipboard()
   const [html, setHtml] = useState<string | null>(null)
   const shikiTheme = useShikiTheme()
+  const latestCodeRef = useRef(codeString)
 
   useEffect(() => {
     if (!showSyntaxHighlighting) return
-    let cancelled = false
+    latestCodeRef.current = codeString
     highlightCode(codeString, language, shikiTheme).then((result) => {
-      if (!cancelled) setHtml(result)
+      if (latestCodeRef.current === codeString) {
+        setHtml(result)
+      }
     })
-    return () => {
-      cancelled = true
-    }
   }, [codeString, language, shikiTheme, showSyntaxHighlighting])
 
   return (
@@ -64,7 +64,7 @@ function CodeBlock({
       )}
     </div>
   )
-}
+})
 
 function createMarkdownComponents(muted: boolean, showSyntaxHighlighting: boolean) {
   const headingColor = muted ? 'text-text-muted' : 'text-sky-400'

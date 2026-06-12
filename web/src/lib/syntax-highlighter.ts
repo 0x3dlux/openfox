@@ -57,13 +57,32 @@ export async function getHighlighter() {
   return highlighterPromise
 }
 
+const highlightCache = new Map<string, string>()
+const CACHE_MAX = 50
+
+function cacheKey(code: string, language: string, theme: string): string {
+  return `${code}|${language}|${theme}`
+}
+
 export async function highlightCode(code: string, language: string, theme = 'github-dark-default'): Promise<string> {
+  const key = cacheKey(code, language, theme)
+  const cached = highlightCache.get(key)
+  if (cached) return cached
+
   const h = await getHighlighter()
-  return h.codeToHtml(code, {
+  const result = h.codeToHtml(code, {
     lang: language,
     theme,
     transformers: [lineNumbersTransformer()],
   })
+
+  if (highlightCache.size >= CACHE_MAX) {
+    const firstKey = highlightCache.keys().next().value
+    if (firstKey) highlightCache.delete(firstKey)
+  }
+  highlightCache.set(key, result)
+
+  return result
 }
 
 if (import.meta.hot) {

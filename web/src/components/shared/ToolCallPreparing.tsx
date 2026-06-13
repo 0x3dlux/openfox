@@ -16,6 +16,7 @@ const toolDescriptions: Record<string, string> = {
   grep: 'Searching content',
   ask_user: 'Asking user',
   criterion: 'Managing criterion',
+  session_metadata: 'Managing session data',
   todo_write: 'Updating tasks',
 }
 

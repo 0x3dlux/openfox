@@ -16,9 +16,9 @@ describe('SessionSidebar', () => {
     expect(html).toContain('Progress')
   })
 
-  it('shows "No criteria yet" when there are no criteria', () => {
+  it('shows Progress section in sidebar', () => {
     const html = renderToStaticMarkup(<SessionSidebar messages={[]} />)
 
-    expect(html).toContain('No criteria yet')
+    expect(html).toContain('Progress')
   })
 })

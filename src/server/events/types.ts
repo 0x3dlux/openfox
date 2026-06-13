@@ -216,6 +216,17 @@ export type TurnEvent =
     }
 
   // ----------------------------------------------------------------------------
+  // Metadata (session_metadata tool)
+  // ----------------------------------------------------------------------------
+  | {
+      type: 'metadata.set'
+      data: {
+        key: string
+        entries: import('../../shared/types.js').MetadataEntry[]
+      }
+    }
+
+  // ----------------------------------------------------------------------------
   // Context management
   // ----------------------------------------------------------------------------
   | {
@@ -373,6 +384,7 @@ export interface SessionSnapshot {
 
   messages: SnapshotMessage[]
   criteria: Criterion[]
+  metadataEntries: Record<string, import('../../shared/types.js').MetadataEntry[]>
   contextState: ContextState
   currentContextWindowId: string
   todos: Todo[]

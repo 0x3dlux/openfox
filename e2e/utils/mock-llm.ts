@@ -88,7 +88,7 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
       promptMatch: /Create the file.*then.*complete/i,
       toolCalls: [
         { name: 'write_file', arguments: { path: 'src/utils.ts', content: 'export const x = 1' } },
-        { name: 'criterion', arguments: { action: 'complete', id: '0' } },
+        { name: 'session_metadata', arguments: { action: 'update', key: 'criteria', id: '0', status: 'completed' } },
       ],
       response: 'I created the file and completed the criterion.',
     },
@@ -111,9 +111,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
       promptMatch: /add.*criterion/i,
       toolCalls: [
         {
-          name: 'criterion',
+          name: 'session_metadata',
           arguments: {
             action: 'add',
+            key: 'criteria',
             description: 'Test criterion',
           },
         },
@@ -124,9 +125,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
       promptMatch: /Add criterion ID "emit-test"/i,
       toolCalls: [
         {
-          name: 'criterion',
+          name: 'session_metadata',
           arguments: {
             action: 'add',
+            key: 'criteria',
             id: 'emit-test',
             description: 'Testing events',
           },
@@ -138,9 +140,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
       promptMatch: /Add criterion ID "get-test"/i,
       toolCalls: [
         {
-          name: 'criterion',
+          name: 'session_metadata',
           arguments: {
             action: 'add',
+            key: 'criteria',
             id: 'get-test',
             description: 'For testing get',
           },
@@ -152,9 +155,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
       promptMatch: /Add criterion ID "update-me"/i,
       toolCalls: [
         {
-          name: 'criterion',
+          name: 'session_metadata',
           arguments: {
             action: 'add',
+            key: 'criteria',
             id: 'update-me',
             description: 'Original description',
           },
@@ -166,9 +170,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
       promptMatch: /Add criterion ID "remove-me"/i,
       toolCalls: [
         {
-          name: 'criterion',
+          name: 'session_metadata',
           arguments: {
             action: 'add',
+            key: 'criteria',
             id: 'remove-me',
             description: 'Will be removed',
           },
@@ -180,9 +185,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
       promptMatch: /Add criterion ID "persist-test"/i,
       toolCalls: [
         {
-          name: 'criterion',
+          name: 'session_metadata',
           arguments: {
             action: 'add',
+            key: 'criteria',
             id: 'persist-test',
             description: 'Persistence test',
           },
@@ -194,9 +200,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
       promptMatch: /Add criterion ID "file-created"/i,
       toolCalls: [
         {
-          name: 'criterion',
+          name: 'session_metadata',
           arguments: {
             action: 'add',
+            key: 'criteria',
             id: 'file-created',
             description: 'A new file utils.ts exists',
           },
@@ -208,9 +215,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
       promptMatch: /Add criterion ID "edit-direct"/i,
       toolCalls: [
         {
-          name: 'criterion',
+          name: 'session_metadata',
           arguments: {
             action: 'add',
+            key: 'criteria',
             id: 'edit-direct',
             description: 'Initial',
           },
@@ -222,9 +230,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
       promptMatch: /Add criterion ID "trivial-pass"/i,
       toolCalls: [
         {
-          name: 'criterion',
+          name: 'session_metadata',
           arguments: {
             action: 'add',
+            key: 'criteria',
             id: 'trivial-pass',
             description: 'Trivial pass criterion',
           },
@@ -357,14 +366,14 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
     // Get criteria (for planner)
     {
       promptMatch: /get.*criteria|show.*criteria|list.*criteria/i,
-      toolCalls: [{ name: 'criterion', arguments: { action: 'get' } }],
+      toolCalls: [{ name: 'session_metadata', arguments: { action: 'get', key: 'criteria' } }],
       response: 'Here are the criteria.',
     },
     // Complete criterion + step done (for workflow builder steps)
     {
       promptMatch: /complete.*criterion|mark.*complete|complete_criterion|fulfil.*criteria|Complete the first/i,
       toolCalls: [
-        { name: 'criterion', arguments: { action: 'complete', id: '0' } },
+        { name: 'session_metadata', arguments: { action: 'update', key: 'criteria', id: '0', status: 'completed' } },
         { name: 'step_done', arguments: {} },
       ],
       response: 'I completed the criterion and finished the step.',
@@ -373,7 +382,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
     {
       promptMatch: /pass.*criterion|pass_criterion|Pass the first/i,
       toolCalls: [
-        { name: 'criterion', arguments: { action: 'pass', id: '0', reason: 'Verified' } },
+        {
+          name: 'session_metadata',
+          arguments: { action: 'update', key: 'criteria', id: '0', status: 'passed', reason: 'Verified' },
+        },
         { name: 'step_done', arguments: {} },
       ],
       response: 'I passed the criterion.',
@@ -395,7 +407,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
             prompt: 'Verify completed criteria against implementation',
           },
         },
-        { name: 'criterion', arguments: { action: 'pass', id: '0', reason: 'Verified' } },
+        {
+          name: 'session_metadata',
+          arguments: { action: 'update', key: 'criteria', id: '0', status: 'passed', reason: 'Verified' },
+        },
       ],
       thinking: 'Starting the verifier to check implementation against criteria.',
       response: 'I launched the verifier.',
@@ -404,7 +419,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
     {
       promptMatch: /Verify.*criterion.*NEEDS VERIFICATION/i,
       toolCalls: [
-        { name: 'criterion', arguments: { action: 'pass', id: '0', reason: 'Verified successfully' } },
+        {
+          name: 'session_metadata',
+          arguments: { action: 'update', key: 'criteria', id: '0', status: 'passed', reason: 'Verified successfully' },
+        },
         { name: 'return_value', arguments: { summary: 'Verified criterion.' } },
       ],
       response: 'Verified the criterion.',
@@ -412,7 +430,16 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
     {
       promptMatch: /Verify.*verify-fail/i,
       toolCalls: [
-        { name: 'criterion', arguments: { action: 'fail', id: '0', reason: 'Verification failed for this criterion' } },
+        {
+          name: 'session_metadata',
+          arguments: {
+            action: 'update',
+            key: 'criteria',
+            id: '0',
+            status: 'failed',
+            reason: 'Verification failed for this criterion',
+          },
+        },
         { name: 'return_value', arguments: { summary: 'Verification failed.' } },
       ],
       response: 'Verification completed with failures.',
@@ -422,9 +449,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
       promptMatch: /update.*criterion|update_criterion/i,
       toolCalls: [
         {
-          name: 'criterion',
+          name: 'session_metadata',
           arguments: {
             action: 'update',
+            key: 'criteria',
             id: '0',
             description: 'Updated description',
           },
@@ -437,9 +465,10 @@ export function createMockLLMClient(config: MockLLMConfig = {}): MockLLMClient {
       promptMatch: /remove.*criterion|remove_criterion/i,
       toolCalls: [
         {
-          name: 'criterion',
+          name: 'session_metadata',
           arguments: {
             action: 'remove',
+            key: 'criteria',
             id: '0',
           },
         },

@@ -30,12 +30,14 @@ import type {
   ModeChangedPayload,
   PhaseChangedPayload,
   CriteriaUpdatedPayload,
+  MetadataUpdatedPayload,
   ContextStatePayload,
   ErrorPayload,
   QueueStatePayload,
   QueuedMessage,
 } from '../../shared/protocol.js'
 import type { GitStatusPayload } from '../../shared/protocol.js'
+import type { MetadataEntry } from '../../shared/types.js'
 import { isClientMessage, createServerMessage } from '../../shared/protocol.js'
 import type {
   Project,
@@ -311,6 +313,13 @@ export function createCriteriaUpdatedMessage(
   return createServerMessage('criteria.updated', { criteria, ...(changedId ? { changedId } : {}) })
 }
 
+export function createMetadataUpdatedMessage(
+  key: string,
+  entries: MetadataEntry[],
+): ServerMessage<MetadataUpdatedPayload> {
+  return createServerMessage('metadata.updated', { key, entries })
+}
+
 // Context messages
 export function createContextStateMessage(
   context: ContextState,
@@ -494,6 +503,11 @@ export function storedEventToServerMessage(event: StoredEvent): ServerMessage | 
     case 'criteria.set': {
       const data = event.data as Extract<TurnEvent, { type: 'criteria.set' }>['data']
       return createCriteriaUpdatedMessage(data.criteria)
+    }
+
+    case 'metadata.set': {
+      const data = event.data as Extract<TurnEvent, { type: 'metadata.set' }>['data']
+      return createMetadataUpdatedMessage(data.key, data.entries)
     }
 
     case 'criterion.updated': {

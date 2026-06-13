@@ -43,6 +43,7 @@ export interface Session {
   contextWindows: ContextWindow[] // Context windows for this session
   executionState: ExecutionState | null
   metadata: SessionMetadata
+  metadataEntries: Record<string, MetadataEntry[]> // Key-value store for structured session data (criteria, todos, review_findings, etc.)
   dangerLevel?: DangerLevel // Controls path confirmation bypass
   messageCount?: number // Cached message count for efficient sidebar display (optional, populated on load)
 }
@@ -374,10 +375,8 @@ export type ToolName =
   | 'glob'
   | 'grep'
   | 'ask_user'
-  // Criteria tools
-  | 'criterion'
-  // Task tracking
-  | 'todo'
+  // Session metadata
+  | 'session_metadata'
   // Web
   | 'web_fetch'
 
@@ -413,6 +412,17 @@ export interface CriterionAttempt {
 export interface Todo {
   content: string
   status: 'pending' | 'in_progress' | 'completed'
+}
+
+// ============================================================================
+// Metadata Entry Types (for session_metadata tool)
+// ============================================================================
+
+export interface MetadataEntry {
+  id: string
+  description: string
+  status: string
+  [key: string]: unknown
 }
 
 // ============================================================================

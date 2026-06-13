@@ -5,7 +5,7 @@ import { useConfigStore } from '../../stores/config'
 import { useSessionStore } from '../../stores/session'
 import { formatTime, formatSpeed } from '../../lib/format-stats'
 import { StatsModal } from './StatsModal'
-import { CriteriaProgressSummary } from '../shared/CriteriaProgressSummary'
+import { MetadataEntries } from '../shared/MetadataEntries'
 import { DevServerFooter } from './DevServerFooter'
 import { BackgroundProcesses } from './BackgroundProcesses'
 import { BranchIcon, ReloadIcon } from '../shared/icons'
@@ -88,7 +88,8 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
       <div className="flex flex-col flex-1 overflow-y-auto">
         <div className="mt-4">
           <h3 className="text-sm font-semibold text-text-primary mb-2">Progress</h3>
-          <CriteriaProgressSummary criteria={session?.criteria ?? []} />
+          <MetadataEntries entries={session?.metadataEntries?.['criteria'] ?? []} title="Criteria" />
+          <MetadataEntries entries={session?.metadataEntries?.['review_findings'] ?? []} title="Review Findings" />
         </div>
       </div>
 

@@ -8,7 +8,7 @@ allowedTools:
   - read_file
   - web_fetch
   - run_command
-  - criterion:add,get,update,remove
+  - session_metadata:get,add,update,remove
   - call_sub_agent
   - load_skill
   - background_process

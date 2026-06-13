@@ -53,6 +53,7 @@ describe('cache preservation bug - tool result output in snapshots', () => {
         phase: 'plan' as const,
         isRunning: false,
         criteria: [],
+        metadataEntries: {},
         todos: [],
         contextState: {
           promptTokens: 0,

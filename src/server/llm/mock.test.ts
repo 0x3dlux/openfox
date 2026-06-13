@@ -23,9 +23,10 @@ describe('mock llm runtime reminders', () => {
 
     expect(response.toolCalls).toEqual([
       expect.objectContaining({
-        name: 'criterion',
+        name: 'session_metadata',
         arguments: {
           action: 'add',
+          key: 'criteria',
           id: 'inspect-src',
           description: 'Inspect the src directory and report what exists',
         },
@@ -48,9 +49,10 @@ describe('mock llm runtime reminders', () => {
 
     expect(response.toolCalls).toEqual([
       expect.objectContaining({
-        name: 'criterion',
+        name: 'session_metadata',
         arguments: {
           action: 'get',
+          key: 'criteria',
         },
       }),
     ])
@@ -80,9 +82,11 @@ describe('mock llm runtime reminders', () => {
 
     expect(response.toolCalls).toEqual([
       expect.objectContaining({
-        name: 'criterion',
+        name: 'session_metadata',
         arguments: {
-          action: 'complete',
+          action: 'update',
+          key: 'criteria',
+          status: 'completed',
           id: 'trivial-pass',
           reason: 'Trivial criterion passes immediately',
         },
@@ -106,7 +110,7 @@ describe('mock llm runtime reminders', () => {
 
     expect(response.toolCalls).toEqual([
       expect.objectContaining({ name: 'write_file' }),
-      expect.objectContaining({ name: 'criterion' }),
+      expect.objectContaining({ name: 'session_metadata' }),
       expect.objectContaining({ name: 'step_done' }),
     ])
   })
@@ -127,8 +131,8 @@ describe('mock llm runtime reminders', () => {
           toolCalls: [
             {
               id: 'call-1',
-              name: 'criterion',
-              arguments: { action: 'add', id: 'get-test', description: 'For testing get' },
+              name: 'session_metadata',
+              arguments: { action: 'add', key: 'criteria', id: 'get-test', description: 'For testing get' },
             },
           ],
         },
@@ -147,9 +151,10 @@ describe('mock llm runtime reminders', () => {
 
     expect(response.toolCalls).toEqual([
       expect.objectContaining({
-        name: 'criterion',
+        name: 'session_metadata',
         arguments: {
           action: 'get',
+          key: 'criteria',
         },
       }),
     ])
@@ -171,8 +176,12 @@ describe('mock llm runtime reminders', () => {
           toolCalls: [
             {
               id: 'call-1',
-              name: 'add_criterion',
-              arguments: { id: 'inspect-src', description: 'Inspect the src directory and report what exists' },
+              name: 'session_metadata',
+              arguments: {
+                key: 'criteria',
+                id: 'inspect-src',
+                description: 'Inspect the src directory and report what exists',
+              },
             },
           ],
         },
@@ -191,9 +200,11 @@ describe('mock llm runtime reminders', () => {
     expect(response.toolCalls).toEqual([
       expect.objectContaining({ name: 'read_file' }),
       expect.objectContaining({
-        name: 'criterion',
+        name: 'session_metadata',
         arguments: {
-          action: 'complete',
+          action: 'update',
+          key: 'criteria',
+          status: 'completed',
           id: 'inspect-src',
           reason: 'Inspected the src directory and reported what exists',
         },
@@ -218,8 +229,12 @@ describe('mock llm runtime reminders', () => {
           toolCalls: [
             {
               id: 'call-1',
-              name: 'add_criterion',
-              arguments: { id: 'inspect-src', description: 'Inspect the src directory and report what exists' },
+              name: 'session_metadata',
+              arguments: {
+                key: 'criteria',
+                id: 'inspect-src',
+                description: 'Inspect the src directory and report what exists',
+              },
             },
           ],
         },
@@ -237,9 +252,11 @@ describe('mock llm runtime reminders', () => {
 
     expect(response.toolCalls).toEqual([
       expect.objectContaining({
-        name: 'criterion',
+        name: 'session_metadata',
         arguments: {
-          action: 'pass',
+          action: 'update',
+          key: 'criteria',
+          status: 'passed',
           id: 'inspect-src',
           reason: 'Verified the src directory was inspected successfully',
         },
@@ -266,8 +283,8 @@ describe('mock llm runtime reminders', () => {
           toolCalls: [
             {
               id: 'call-1',
-              name: 'add_criterion',
-              arguments: { id: 'file-created', description: 'A new file utils.ts exists' },
+              name: 'session_metadata',
+              arguments: { key: 'criteria', id: 'file-created', description: 'A new file utils.ts exists' },
             },
           ],
         },
@@ -289,8 +306,14 @@ describe('mock llm runtime reminders', () => {
         arguments: { path: 'src/utils.ts', content: 'export const created = true' },
       }),
       expect.objectContaining({
-        name: 'criterion',
-        arguments: { action: 'complete', id: 'file-created', reason: 'Created the requested file' },
+        name: 'session_metadata',
+        arguments: {
+          action: 'update',
+          key: 'criteria',
+          status: 'completed',
+          id: 'file-created',
+          reason: 'Created the requested file',
+        },
       }),
       expect.objectContaining({ name: 'step_done', arguments: {} }),
     ])
@@ -311,8 +334,8 @@ describe('mock llm runtime reminders', () => {
           toolCalls: [
             {
               id: 'call-1',
-              name: 'add_criterion',
-              arguments: { id: 'file-created', description: 'A new file utils.ts exists' },
+              name: 'session_metadata',
+              arguments: { key: 'criteria', id: 'file-created', description: 'A new file utils.ts exists' },
             },
           ],
         },
@@ -331,8 +354,8 @@ describe('mock llm runtime reminders', () => {
           toolCalls: [
             {
               id: 'call-2',
-              name: 'add_criterion',
-              arguments: { id: 'trivial-pass', description: 'Trivial pass criterion' },
+              name: 'session_metadata',
+              arguments: { key: 'criteria', id: 'trivial-pass', description: 'Trivial pass criterion' },
             },
           ],
         },
@@ -350,12 +373,24 @@ describe('mock llm runtime reminders', () => {
 
     expect(response.toolCalls).toEqual([
       expect.objectContaining({
-        name: 'criterion',
-        arguments: { action: 'pass', id: 'trivial-pass', reason: 'Verified successfully' },
+        name: 'session_metadata',
+        arguments: {
+          action: 'update',
+          key: 'criteria',
+          status: 'passed',
+          id: 'trivial-pass',
+          reason: 'Verified successfully',
+        },
       }),
       expect.objectContaining({
-        name: 'criterion',
-        arguments: { action: 'pass', id: 'file-created', reason: 'Verified the file was created successfully' },
+        name: 'session_metadata',
+        arguments: {
+          action: 'update',
+          key: 'criteria',
+          status: 'passed',
+          id: 'file-created',
+          reason: 'Verified the file was created successfully',
+        },
       }),
       expect.objectContaining({
         name: 'return_value',
@@ -379,8 +414,8 @@ describe('mock llm runtime reminders', () => {
           toolCalls: [
             {
               id: 'call-1',
-              name: 'add_criterion',
-              arguments: { id: 'trivial-pass', description: 'Trivial pass criterion' },
+              name: 'session_metadata',
+              arguments: { key: 'criteria', id: 'trivial-pass', description: 'Trivial pass criterion' },
             },
           ],
         },
@@ -399,8 +434,14 @@ describe('mock llm runtime reminders', () => {
 
     expect(response.toolCalls).toEqual([
       expect.objectContaining({
-        name: 'criterion',
-        arguments: { action: 'complete', id: 'trivial-pass', reason: 'Trivial criterion passes immediately' },
+        name: 'session_metadata',
+        arguments: {
+          action: 'update',
+          key: 'criteria',
+          status: 'completed',
+          id: 'trivial-pass',
+          reason: 'Trivial criterion passes immediately',
+        },
       }),
       expect.objectContaining({ name: 'step_done', arguments: {} }),
     ])
@@ -414,20 +455,26 @@ describe('mock llm runtime reminders', () => {
         {
           role: 'user',
           content:
-            'First call get_criteria to see what needs to be done, then create src/test.ts and call complete_criterion for "test-file".',
+            'First call get_criteria to see what needs to be done, then create src/test.ts and call session_metadata to mark criteria as completed for "test-file".',
         },
       ],
     })
 
     expect(response.toolCalls).toEqual([
-      expect.objectContaining({ name: 'criterion', arguments: { action: 'get' } }),
+      expect.objectContaining({ name: 'session_metadata', arguments: { action: 'get', key: 'criteria' } }),
       expect.objectContaining({
         name: 'write_file',
         arguments: { path: 'src/test.ts', content: 'export const created = true' },
       }),
       expect.objectContaining({
-        name: 'criterion',
-        arguments: { action: 'complete', id: 'test-file', reason: 'Created the requested file' },
+        name: 'session_metadata',
+        arguments: {
+          action: 'update',
+          key: 'criteria',
+          status: 'completed',
+          id: 'test-file',
+          reason: 'Created the requested file',
+        },
       }),
       expect.objectContaining({ name: 'step_done', arguments: {} }),
     ])

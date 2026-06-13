@@ -180,15 +180,17 @@ function logMessage(msg: ServerMessage): void {
       break
     }
 
-    case 'criteria.updated': {
-      const p = msg.payload as { criteria: Array<{ id: string; status: { type: string } }> }
-      const summary = p.criteria
-        .map((c) => {
-          const icon = c.status.type === 'passed' ? '✓' : c.status.type === 'failed' ? '✗' : '○'
-          return `${icon} ${c.id}`
-        })
-        .join('  ')
-      console.log(`${COLORS.magenta}[criteria] ${summary}${COLORS.reset}`)
+    case 'metadata.updated': {
+      const p = msg.payload as { key: string; entries: Array<{ id: string; status: string }> }
+      if (p.key === 'criteria') {
+        const summary = p.entries
+          .map((e) => {
+            const icon = e.status === 'passed' ? '✓' : e.status === 'failed' ? '✗' : '○'
+            return `${icon} ${e.id}`
+          })
+          .join('  ')
+        console.log(`${COLORS.magenta}[criteria] ${summary}${COLORS.reset}`)
+      }
       break
     }
 
@@ -292,10 +294,13 @@ export async function createTestClient(options: TestClientOptions = {}): Promise
         const payload = msg.payload as ProjectStatePayload
         currentProject = payload.project
       }
-      // Update criteria from criteria.updated events
-      if (msg.type === 'criteria.updated' && currentSession) {
-        const payload = msg.payload as { criteria: Session['criteria'] }
-        currentSession = { ...currentSession, criteria: payload.criteria }
+      // Update metadata from metadata.updated events
+      if (msg.type === 'metadata.updated' && currentSession) {
+        const payload = msg.payload as { key: string; entries: Session['metadataEntries'][string] }
+        currentSession = {
+          ...currentSession,
+          metadataEntries: { ...currentSession.metadataEntries, [payload.key]: payload.entries },
+        }
       }
       // Update mode from mode.changed events
       if (msg.type === 'mode.changed' && currentSession) {

@@ -6,7 +6,7 @@ const {
   editExecuteMock,
   shellExecuteMock,
   askExecuteMock,
-  criterionExecuteMock,
+  sessionMetadataExecuteMock,
   todoExecuteMock,
   loadSkillExecuteMock,
   webFetchExecuteMock,
@@ -16,7 +16,12 @@ const {
   editExecuteMock: vi.fn(async () => ({ success: true, output: 'edit', durationMs: 1, truncated: false })),
   shellExecuteMock: vi.fn(async () => ({ success: true, output: 'shell', durationMs: 1, truncated: false })),
   askExecuteMock: vi.fn(async () => ({ success: true, output: 'ask', durationMs: 1, truncated: false })),
-  criterionExecuteMock: vi.fn(async () => ({ success: true, output: 'criterion', durationMs: 1, truncated: false })),
+  sessionMetadataExecuteMock: vi.fn(async () => ({
+    success: true,
+    output: 'session_metadata',
+    durationMs: 1,
+    truncated: false,
+  })),
   todoExecuteMock: vi.fn(async () => ({ success: true, output: 'todo', durationMs: 1, truncated: false })),
   loadSkillExecuteMock: vi.fn(async () => ({ success: true, output: 'skill', durationMs: 1, truncated: false })),
   webFetchExecuteMock: vi.fn(async () => ({ success: true, output: 'web_fetch', durationMs: 1, truncated: false })),
@@ -61,11 +66,14 @@ vi.mock('./ask.js', async (importOriginal) => {
     },
   }
 })
-vi.mock('./criterion.js', () => ({
-  criterionTool: {
-    name: 'criterion',
-    definition: { type: 'function', function: { name: 'criterion', description: 'Criterion', parameters: {} } },
-    execute: criterionExecuteMock,
+vi.mock('./session-metadata.js', () => ({
+  sessionMetadataTool: {
+    name: 'session_metadata',
+    definition: {
+      type: 'function',
+      function: { name: 'session_metadata', description: 'Session Metadata', parameters: {} },
+    },
+    execute: sessionMetadataExecuteMock,
   },
 }))
 vi.mock('./todo.js', () => ({
@@ -108,8 +116,7 @@ const builderDef: AgentDefinition = {
       'edit_file',
       'run_command',
       'ask_user',
-      'criterion',
-      'todo',
+      'session_metadata',
       'call_sub_agent',
       'load_skill',
     ],
@@ -130,8 +137,7 @@ const builderWithReturnValueDef: AgentDefinition = {
       'edit_file',
       'run_command',
       'ask_user',
-      'criterion',
-      'todo',
+      'session_metadata',
       'call_sub_agent',
       'load_skill',
       'return_value',
@@ -146,7 +152,7 @@ const verifierDef: AgentDefinition = {
     name: 'Verifier',
     description: 'Verifies',
     subagent: true,
-    allowedTools: ['read_file', 'run_command', 'criterion:pass,fail', 'web_fetch'],
+    allowedTools: ['read_file', 'run_command', 'session_metadata:get,add,update,remove', 'web_fetch'],
   },
   prompt: 'Verify.',
 }
@@ -172,7 +178,7 @@ describe('tool registries', () => {
     const registry = getToolRegistryForAgent(verifierDef)
     const toolNames = registry.tools.map((t) => t.name)
     expect(toolNames).toContain('read_file')
-    expect(toolNames).toContain('criterion')
+    expect(toolNames).toContain('session_metadata')
     expect(toolNames).toContain('return_value')
   })
 
@@ -182,7 +188,7 @@ describe('tool registries', () => {
     expect(toolNames).toContain('read_file')
     expect(toolNames).toContain('write_file')
     expect(toolNames).toContain('run_command')
-    expect(toolNames).toContain('criterion')
+    expect(toolNames).toContain('session_metadata')
   })
 
   it('executes tools, reports unknown tools, and catches generic failures', async () => {
@@ -212,8 +218,8 @@ describe('tool registries', () => {
     askExecuteMock.mockRejectedValueOnce(new AskUserInterrupt('call-1', 'Need input?'))
     await expect(registry.execute('ask_user', {}, context)).rejects.toBeInstanceOf(AskUserInterrupt)
 
-    criterionExecuteMock.mockRejectedValueOnce(new PathAccessDeniedError(['/etc/passwd'], 'criterion'))
-    await expect(registry.execute('criterion', {}, context)).rejects.toBeInstanceOf(PathAccessDeniedError)
+    sessionMetadataExecuteMock.mockRejectedValueOnce(new PathAccessDeniedError(['/etc/passwd'], 'session_metadata'))
+    await expect(registry.execute('session_metadata', {}, context)).rejects.toBeInstanceOf(PathAccessDeniedError)
   })
 
   it('allows execution of authorized tools', async () => {
@@ -302,16 +308,16 @@ describe('tool registries', () => {
     expect(result.success).toBe(true)
   })
 
-  it('allows granular tool permissions like criterion:pass,fail', async () => {
+  it('allows granular tool permissions like session_metadata:get,add', async () => {
     const allToolsRegistry = createToolRegistry()
     const context = { workdir: '/tmp/project', sessionId: 'session-1', sessionManager: {} as never }
 
-    const tools = allToolsRegistry.tools.filter((t) => t.name === 'criterion')
-    const allowedTools = ['criterion:pass,fail']
+    const tools = allToolsRegistry.tools.filter((t) => t.name === 'session_metadata')
+    const allowedTools = ['session_metadata:get,add']
 
     const restrictedRegistry = createRegistryFromTools(tools, allowedTools)
 
-    const result = await restrictedRegistry.execute('criterion', { action: 'pass', id: 'test-id' }, context)
+    const result = await restrictedRegistry.execute('session_metadata', { action: 'get', key: 'criteria' }, context)
 
     expect(result.success).toBe(true)
   })

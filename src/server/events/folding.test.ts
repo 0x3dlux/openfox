@@ -876,6 +876,7 @@ describe('event folding', () => {
       isRunning: true,
       messages,
       criteria: [],
+      metadataEntries: {},
       contextState: {
         currentTokens: 100,
         maxTokens: 200000,

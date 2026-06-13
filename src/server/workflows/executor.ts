@@ -71,19 +71,19 @@ export const TEMPLATE_VARIABLES: Array<{ name: string; description: string }> = 
   { name: 'modifiedFiles', description: 'List of modified files' },
 ]
 
-export function formatCriteriaList(criteria: Criterion[]): string {
-  if (criteria.length === 0) return '(none)'
-  return criteria
-    .map((c) => {
+export function formatCriteriaList(entries: import('../../shared/types.js').MetadataEntry[]): string {
+  if (entries.length === 0) return '(none)'
+  return entries
+    .map((e) => {
       const status =
-        c.status.type === 'passed'
+        e.status === 'passed'
           ? '[PASSED]'
-          : c.status.type === 'completed'
+          : e.status === 'completed'
             ? '[NEEDS VERIFICATION]'
-            : c.status.type === 'failed'
+            : e.status === 'failed'
               ? '[FAILED]'
               : '[NOT COMPLETED]'
-      return `- **${c.id}** ${status}: ${c.description}`
+      return `- **${e.id}** ${status}: ${e.description}`
     })
     .join('\n')
 }
@@ -118,6 +118,7 @@ export function evaluateCondition(
   condition: TransitionCondition,
   criteria: Criterion[],
   stepOutcome: StepOutcome | null,
+  metadataEntries?: Record<string, import('../../shared/types.js').MetadataEntry[]>,
 ): boolean {
   switch (condition.type) {
     case 'all_criteria_passed':
@@ -127,18 +128,38 @@ export function evaluateCondition(
       return criteria.every((c) => c.status.type === 'completed' || c.status.type === 'passed')
 
     case 'any_criteria_blocked':
-      return criteria.some(
-        (c) =>
-          c.status.type === 'failed' &&
-          c.attempts.filter((a) => a.status === 'failed').length >= RUNNER_CONFIG.maxVerifyRetries,
+      return (
+        criteria.some(
+          (c) =>
+            c.status.type === 'failed' &&
+            c.attempts.filter((a) => a.status === 'failed').length >= RUNNER_CONFIG.maxVerifyRetries,
+        ) ||
+        (metadataEntries?.['criteria']?.some((e) => e.status === 'failed') ?? false)
       )
 
     case 'has_pending_criteria':
-      return criteria.some((c) => c.status.type !== 'passed')
+      return (
+        criteria.some((c) => c.status.type !== 'passed') ||
+        (metadataEntries?.['criteria']?.some((e) => e.status !== 'passed') ?? false)
+      )
 
     case 'step_result':
       if (!stepOutcome) return false
       return stepOutcome.result === condition.result
+
+    case 'metadata_all_match': {
+      if (!metadataEntries) return false
+      const entries = metadataEntries[condition.key]
+      if (!entries || entries.length === 0) return false
+      return entries.every((e) => e[condition.field] === condition.value)
+    }
+
+    case 'metadata_all_in': {
+      if (!metadataEntries) return false
+      const entries = metadataEntries[condition.key]
+      if (!entries || entries.length === 0) return false
+      return entries.every((e) => condition.values.includes(e[condition.field] as string))
+    }
 
     case 'always':
       return true
@@ -149,9 +170,10 @@ export function evaluateTransitions(
   transitions: Transition[],
   criteria: Criterion[],
   stepOutcome: StepOutcome | null,
+  metadataEntries?: Record<string, import('../../shared/types.js').MetadataEntry[]>,
 ): string {
   for (const transition of transitions) {
-    if (evaluateCondition(transition.when, criteria, stepOutcome)) {
+    if (evaluateCondition(transition.when, criteria, stepOutcome, metadataEntries)) {
       return transition.goto
     }
   }
@@ -238,7 +260,12 @@ export async function executeWorkflow(
   if (workflow.startCondition && workflow.startCondition.type !== 'always') {
     const session = sessionManager.requireSession(sessionId)
     const criteria = session.criteria
-    const conditionMet = evaluateCondition(workflow.startCondition as TransitionCondition, criteria, null)
+    const conditionMet = evaluateCondition(
+      workflow.startCondition as TransitionCondition,
+      criteria,
+      null,
+      session.metadataEntries,
+    )
     if (!conditionMet) {
       logger.debug('Workflow start condition not met', { sessionId, condition: workflow.startCondition.type })
       return {
@@ -309,14 +336,15 @@ export async function executeWorkflow(
     const criteria = session.criteria
 
     // Build template context
+    const criteriaEntries = session.metadataEntries['criteria'] ?? []
     const templateCtx: TemplateContext = {
       workdir: session.workdir,
       reason: buildReason(criteria),
       verifierFindings: lastStepOutput['content'] ?? '',
       previousStepOutput: lastStepOutput['stdout'] ?? '',
-      criteriaCount: criteria.length,
-      pendingCount: criteria.filter((c) => c.status.type !== 'passed').length,
-      criteriaList: formatCriteriaList(criteria),
+      criteriaCount: criteriaEntries.length,
+      pendingCount: criteriaEntries.filter((e) => e.status !== 'passed').length,
+      criteriaList: formatCriteriaList(criteriaEntries),
       modifiedFiles: await formatModifiedFiles(session),
       stepOutput: lastStepOutput,
     }
@@ -543,7 +571,12 @@ export async function executeWorkflow(
 
     // Evaluate transitions
     const refreshedSession = sessionManager.requireSession(sessionId)
-    const nextStepId = evaluateTransitions(step.transitions, refreshedSession.criteria, stepOutcome)
+    const nextStepId = evaluateTransitions(
+      step.transitions,
+      refreshedSession.criteria,
+      stepOutcome,
+      refreshedSession.metadataEntries,
+    )
 
     // Handle terminal states
     if (nextStepId === TERMINAL_DONE) {

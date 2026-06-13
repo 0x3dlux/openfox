@@ -1086,7 +1086,6 @@ async function handleClientMessage(
         logger.info('User launched runner - resetting blocked state', { sessionId })
         // setPhase emits phase.changed event
         sessionManager.setPhase(sessionId, 'build')
-        sessionManager.resetAllCriteriaAttempts(sessionId)
       }
 
       // Parse launch payload

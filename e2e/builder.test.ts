@@ -160,13 +160,13 @@ describe('Builder Mode', () => {
   })
 
   describe('Criterion Completion', () => {
-    it('uses complete_criterion to mark criteria done', async () => {
+    it('uses session_metadata to mark criteria done', async () => {
       const sessionId = client.getSession()!.id
 
       // First add criteria in planner mode
       await setSessionMode(server.url, sessionId, 'planner', server.wsUrl)
       await client.send('chat.send', {
-        content: 'Add criterion ID "file-created": "A new file utils.ts exists". Use add_criterion.',
+        content: 'Add criterion ID "file-created": "A new file utils.ts exists". Use session_metadata.',
       })
       await client.waitForChatDone()
 
@@ -175,37 +175,44 @@ describe('Builder Mode', () => {
 
       // Ask to implement and complete
       await client.send('chat.send', {
-        content: 'Create the file src/utils.ts with any content, then call complete_criterion for "file-created".',
+        content:
+          'Create the file src/utils.ts with any content, then call session_metadata to mark criteria as completed for "file-created".',
       })
 
       const events = await collectChatEvents(client)
       assertNoErrors(events)
 
-      // Should have criterion tool call with action 'complete'
+      // Should have session_metadata tool call with action 'update' and status 'completed'
       const toolCalls = events.get('chat.tool_call')
       const completeCall = toolCalls.find((e) => {
         const payload = e.payload as { tool: string; args: Record<string, unknown> }
-        return payload.tool === 'criterion' && (payload.args as any).action === 'complete'
+        return (
+          payload.tool === 'session_metadata' &&
+          (payload.args as any).action === 'update' &&
+          (payload.args as any).status === 'completed'
+        )
       })
       expect(completeCall).toBeDefined()
 
       // Criterion should be marked completed
-      const criteriaEvents = events.get('criteria.updated')
-      if (criteriaEvents.length > 0) {
-        const lastCriteria = criteriaEvents[criteriaEvents.length - 1]!
-        const payload = lastCriteria.payload as { criteria: Array<{ status: { type: string } }> }
-        const completed = payload.criteria.find((c) => c.status.type === 'completed')
-        expect(completed).toBeDefined()
+      const metadataEvents = events.get('metadata.updated')
+      if (metadataEvents.length > 0) {
+        const lastMeta = metadataEvents[metadataEvents.length - 1]!
+        const payload = lastMeta.payload as { key: string; entries: Array<{ status: string }> }
+        if (payload.key === 'criteria') {
+          const completed = payload.entries.find((e) => e.status === 'completed')
+          expect(completed).toBeDefined()
+        }
       }
     })
 
-    it('can read criteria with get_criteria before completing them', async () => {
+    it('can read criteria with session_metadata before completing them', async () => {
       const sessionId = client.getSession()!.id
 
       // First add a criterion in planner mode
       await setSessionMode(server.url, sessionId, 'planner', server.wsUrl)
       await client.send('chat.send', {
-        content: 'Add criterion ID "test-file": "A test file exists". Use add_criterion.',
+        content: 'Add criterion ID "test-file": "A test file exists". Use session_metadata.',
       })
       await client.waitForChatDone()
 
@@ -215,21 +222,25 @@ describe('Builder Mode', () => {
       // Ask builder to read criteria first, then implement
       await client.send('chat.send', {
         content:
-          'First call get_criteria to see what needs to be done, then create src/test.ts and call complete_criterion for "test-file".',
+          'First call get_criteria to see what needs to be done, then create src/test.ts and call session_metadata to mark criteria as completed for "test-file".',
       })
 
       const events = await collectChatEvents(client)
       assertNoErrors(events)
 
-      // Should have criterion tool calls with actions 'get' and 'complete'
+      // Should have session_metadata tool calls with actions 'get' and 'update'
       const toolCalls = events.get('chat.tool_call')
       const getCall = toolCalls.find((e) => {
         const payload = e.payload as { tool: string; args: Record<string, unknown> }
-        return payload.tool === 'criterion' && (payload.args as any).action === 'get'
+        return payload.tool === 'session_metadata' && (payload.args as any).action === 'get'
       })
       const completeCall = toolCalls.find((e) => {
         const payload = e.payload as { tool: string; args: Record<string, unknown> }
-        return payload.tool === 'criterion' && (payload.args as any).action === 'complete'
+        return (
+          payload.tool === 'session_metadata' &&
+          (payload.args as any).action === 'update' &&
+          (payload.args as any).status === 'completed'
+        )
       })
 
       expect(getCall).toBeDefined()
@@ -241,29 +252,22 @@ describe('Builder Mode', () => {
   })
 
   describe('Todo Tracking', () => {
-    it('uses todo_write to track progress', async () => {
+    it('uses session_metadata to track progress', async () => {
       await client.send('chat.send', {
         content:
-          'Use the todo_write tool to create a todo list with 2 items: "Read files" (in_progress) and "Make changes" (pending)',
+          'Use the session_metadata tool with key "todos" to create a todo list with 2 items: "Read files" (in_progress) and "Make changes" (pending)',
       })
 
       const events = await collectChatEvents(client)
       assertNoErrors(events)
 
-      // Should have todo tool call with action 'write'
+      // Should have session_metadata tool call with action 'add' and key 'todos'
       const toolCalls = events.get('chat.tool_call')
       const todoCall = toolCalls.find((e) => {
         const payload = e.payload as { tool: string; args: Record<string, unknown> }
-        return payload.tool === 'todo' && (payload.args as any).action === 'write'
+        return payload.tool === 'session_metadata' && (payload.args as any).key === 'todos'
       })
       expect(todoCall).toBeDefined()
-
-      // Should have chat.todo event
-      const todoEvents = events.get('chat.todo')
-      if (todoEvents.length > 0) {
-        const payload = todoEvents[0]!.payload as { todos: Array<{ content: string }> }
-        expect(payload.todos.length).toBeGreaterThan(0)
-      }
     })
   })
 

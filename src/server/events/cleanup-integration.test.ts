@@ -177,6 +177,7 @@ describe('Event Cleanup Integration', () => {
         isRunning: false,
         messages: [{ id: 'msg-1', role: 'user', content: 'First message', timestamp: Date.now() }],
         criteria: [],
+        metadataEntries: {},
         contextState: {
           currentTokens: 50,
           maxTokens: 200000,
@@ -218,6 +219,7 @@ describe('Event Cleanup Integration', () => {
           { id: 'msg-2', role: 'assistant', content: 'Second message', timestamp: Date.now() },
         ],
         criteria: [],
+        metadataEntries: {},
         contextState: {
           currentTokens: 100,
           maxTokens: 200000,
@@ -268,6 +270,7 @@ describe('Event Cleanup Integration', () => {
         isRunning: false,
         messages: [],
         criteria: [],
+        metadataEntries: {},
         contextState: {
           currentTokens: 0,
           maxTokens: 200000,

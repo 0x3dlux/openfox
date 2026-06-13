@@ -153,19 +153,19 @@ describe('Planner Mode', () => {
 
       await client.send('chat.send', {
         content:
-          'I want to add a multiply function to math.ts. Propose acceptance criteria for this task. Use the add_criterion tool.',
+          'I want to add a multiply function to math.ts. Propose acceptance criteria for this task. Use the session_metadata tool.',
       })
 
       const events = await collectChatEvents(client)
       assertNoErrors(events)
 
       // Should have criteria update event
-      const criteriaEvents = events.get('criteria.updated')
-      expect(criteriaEvents.length).toBeGreaterThan(0)
+      const metadataEvents = events.get('metadata.updated')
+      expect(metadataEvents.length).toBeGreaterThan(0)
 
       // Check session has criteria
       const session = client.getSession()!
-      expect(session.criteria.length).toBeGreaterThan(0)
+      expect(session.metadataEntries?.['criteria']?.length ?? 0).toBeGreaterThan(0)
     })
 
     it('can add multiple criteria', async () => {
@@ -176,27 +176,28 @@ describe('Planner Mode', () => {
 1. A multiply function exists in math.ts that takes two numbers
 2. The multiply function returns the correct product
 
-Use add_criterion for each one.`,
+Use session_metadata for each one.`,
       })
 
       await client.waitForChatDone()
 
       const session = client.getSession()!
-      expect(session.criteria.length).toBeGreaterThanOrEqual(2)
+      expect(session.metadataEntries?.['criteria']?.length ?? 0).toBeGreaterThanOrEqual(2)
     })
 
     it('criteria have pending status initially', async () => {
       const { client } = pool.get()
 
       await client.send('chat.send', {
-        content: 'Add a criterion: Tests pass with npm test. Use add_criterion.',
+        content: 'Add a criterion: Tests pass with npm test. Use session_metadata.',
       })
 
       await client.waitForChatDone()
 
       const session = client.getSession()!
-      const criterion = session.criteria[0]!
-      expect(criterion.status.type).toBe('pending')
+      const criteria = session.metadataEntries?.['criteria'] ?? []
+      const criterion = criteria[0] as { status: string } | undefined
+      expect(criterion?.status).toBe('pending')
     })
   })
 
@@ -220,18 +221,18 @@ Use add_criterion for each one.`,
 
       // Add first criterion
       await client.send('chat.send', {
-        content: 'Add criterion: Function is exported. Use add_criterion.',
+        content: 'Add criterion: Function is exported. Use session_metadata.',
       })
       await client.waitForChatDone()
 
       // Add second criterion
       await client.send('chat.send', {
-        content: 'Add criterion: Function has JSDoc. Use add_criterion.',
+        content: 'Add criterion: Function has JSDoc. Use session_metadata.',
       })
       await client.waitForChatDone()
 
       const session = client.getSession()!
-      expect(session.criteria.length).toBeGreaterThanOrEqual(2)
+      expect(session.metadataEntries?.['criteria']?.length ?? 0).toBeGreaterThanOrEqual(2)
     })
   })
 

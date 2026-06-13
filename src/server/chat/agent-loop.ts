@@ -138,10 +138,8 @@ export async function executeToolBatch(
 ): Promise<ToolBatchResult> {
   const eventStore = getEventStore()
   const toolMessages: RequestContextMessage[] = []
-  let criteriaChanged = false
   let returnValueContent: string | undefined
   let returnValueResult: string | undefined
-  const session = ctx.sessionManager.requireSession(ctx.sessionId)
 
   if (ctx.signal?.aborted) {
     throw new Error('Aborted')
@@ -287,13 +285,7 @@ export async function executeToolBatch(
     })
   }
 
-  const updatedSession = ctx.sessionManager.requireSession(ctx.sessionId)
-  if (JSON.stringify(updatedSession.criteria) !== JSON.stringify(session.criteria)) {
-    eventStore.append(ctx.sessionId, { type: 'criteria.set', data: { criteria: updatedSession.criteria } })
-    criteriaChanged = true
-  }
-
-  return { toolMessages, criteriaChanged, returnValueContent, returnValueResult }
+  return { toolMessages, criteriaChanged: false, returnValueContent, returnValueResult }
 }
 
 // ============================================================================

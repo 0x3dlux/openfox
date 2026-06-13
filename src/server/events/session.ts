@@ -483,6 +483,21 @@ export function emitTodosUpdated(sessionId: string, todos: Todo[]): void {
 }
 
 /**
+ * Emit metadata set
+ */
+export function emitMetadataSet(
+  sessionId: string,
+  key: string,
+  entries: import('../../shared/types.js').MetadataEntry[],
+): void {
+  const eventStore = getEventStore()
+  eventStore.append(sessionId, {
+    type: 'metadata.set',
+    data: { key, entries },
+  })
+}
+
+/**
  * Emit file read (for cache tracking)
  */
 export function emitFileRead(sessionId: string, path: string, tokenCount: number, contextWindowId: string): void {

@@ -814,7 +814,6 @@ describe('chat orchestrator', () => {
     expect(appendedTypes).toContain('format.retry')
     expect(appendedTypes).toContain('tool.call')
     expect(appendedTypes).toContain('tool.result')
-    expect(appendedTypes).toContain('criteria.set')
     expect(appendedTypes).toContain('chat.done')
     expect(sessionManager.addModifiedFile).toHaveBeenCalledWith('session-1', 'src/index.ts')
   })
@@ -1407,7 +1406,6 @@ describe('chat orchestrator', () => {
     const types = eventStore.append.mock.calls.map(([, event]) => event.type)
     expect(types).toContain('tool.call')
     expect(types).toContain('tool.result')
-    expect(types).toContain('criteria.set')
     expect(types).toContain('chat.done')
   })
 

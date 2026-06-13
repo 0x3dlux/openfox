@@ -63,6 +63,7 @@ describe('ws/protocol', () => {
       contextWindows: [],
       executionState: null,
       metadata: { totalTokensUsed: 0, totalToolCalls: 0, iterationCount: 0 },
+      metadataEntries: {},
     }
 
     const assistantMessage = {

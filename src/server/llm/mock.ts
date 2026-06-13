@@ -43,34 +43,34 @@ interface MockMatchResult {
 
 const RULES: MockRule[] = [
   // -------------------------------------------------------------------------
-  // Criterion Tools
+  // Session Metadata Tools (criteria, todos, review_findings)
   // -------------------------------------------------------------------------
   // Multi-criteria: ID "crit-a": "First" and ID "crit-b": "Second"
   {
     match: /ID\s*["']([a-z0-9-]+)["']:\s*["']([^"']+)["'][\s\S]*ID\s*["']([a-z0-9-]+)["']:\s*["']([^"']+)["']/i,
     tools: [
-      { name: 'criterion', arguments: { action: 'add', id: '$1', description: '$2' } },
-      { name: 'criterion', arguments: { action: 'add', id: '$3', description: '$4' } },
+      { name: 'session_metadata', arguments: { action: 'add', key: 'criteria', id: '$1', description: '$2' } },
+      { name: 'session_metadata', arguments: { action: 'add', key: 'criteria', id: '$3', description: '$4' } },
     ],
     response: 'Added both criteria.',
   },
   // Single criterion: "Add criterion ID "test-1" with description "The tests pass""
   {
     match: /Add criterion ID\s*["']([a-z0-9-]+)["']\s*with description\s*["']([^"']+)["'][\s\S]*/i,
-    tools: [{ name: 'criterion', arguments: { action: 'add', id: '$1', description: '$2' } }],
+    tools: [{ name: 'session_metadata', arguments: { action: 'add', key: 'criteria', id: '$1', description: '$2' } }],
     response: 'Added the criterion.',
   },
   // Single criterion: ID "test-1" with/: description "The tests pass"
   {
     match: /ID\s*["']([a-z0-9-]+)["'].*description\s*["']([^"']+)["']/i,
-    tools: [{ name: 'criterion', arguments: { action: 'add', id: '$1', description: '$2' } }],
+    tools: [{ name: 'session_metadata', arguments: { action: 'add', key: 'criteria', id: '$1', description: '$2' } }],
     response: 'Added the criterion.',
   },
   {
     match: /Add these two acceptance criteria:\s*1\.\s*([^\n]+)\s*2\.\s*([^\n]+)\s*Use criterion for each\./i,
     tools: [
-      { name: 'criterion', arguments: { action: 'add', id: 'criterion-1', description: '$1' } },
-      { name: 'criterion', arguments: { action: 'add', id: 'criterion-2', description: '$2' } },
+      { name: 'session_metadata', arguments: { action: 'add', key: 'criteria', id: 'criterion-1', description: '$1' } },
+      { name: 'session_metadata', arguments: { action: 'add', key: 'criteria', id: 'criterion-2', description: '$2' } },
     ],
     response: 'Added both criteria.',
   },
@@ -78,127 +78,154 @@ const RULES: MockRule[] = [
     match:
       /Add these two acceptance criteria:[\s\S]*?1\.\s*([^\n]+)[\s\S]*?2\.\s*([^\n]+)[\s\S]*?Use (?:add_)?criterion for each one\./i,
     tools: [
-      { name: 'criterion', arguments: { action: 'add', id: 'criterion-1', description: '$1' } },
-      { name: 'criterion', arguments: { action: 'add', id: 'criterion-2', description: '$2' } },
+      { name: 'session_metadata', arguments: { action: 'add', key: 'criteria', id: 'criterion-1', description: '$1' } },
+      { name: 'session_metadata', arguments: { action: 'add', key: 'criteria', id: 'criterion-2', description: '$2' } },
     ],
     response: 'Added both criteria.',
   },
   {
     match: /Add these two acceptance criteria:[\s\S]*?1\.\s*([^\n]+)[\s\S]*?2\.\s*([^\n]+)/i,
     tools: [
-      { name: 'criterion', arguments: { action: 'add', id: 'criterion-1', description: '$1' } },
-      { name: 'criterion', arguments: { action: 'add', id: 'criterion-2', description: '$2' } },
+      { name: 'session_metadata', arguments: { action: 'add', key: 'criteria', id: 'criterion-1', description: '$1' } },
+      { name: 'session_metadata', arguments: { action: 'add', key: 'criteria', id: 'criterion-2', description: '$2' } },
     ],
     response: 'Added both criteria.',
   },
   {
     match: /Add criterion:\s*([\s\S]+?)\s*Use criterion\.?/i,
-    tools: [{ name: 'criterion', arguments: { action: 'add', id: '$auto', description: '$1' } }],
+    tools: [
+      { name: 'session_metadata', arguments: { action: 'add', key: 'criteria', id: '$auto', description: '$1' } },
+    ],
     response: 'Added the criterion.',
+  },
+  // Propose acceptance criteria (for planning prompts)
+  {
+    match: /propose acceptance criteria/i,
+    tools: [
+      {
+        name: 'session_metadata',
+        arguments: {
+          action: 'add',
+          key: 'criteria',
+          id: 'criteria-1',
+          description: 'A multiply function exists in math.ts that takes two numbers',
+        },
+      },
+      {
+        name: 'session_metadata',
+        arguments: {
+          action: 'add',
+          key: 'criteria',
+          id: 'criteria-2',
+          description: 'The multiply function returns the correct product',
+        },
+      },
+    ],
+    response: 'Added criteria for the multiply function.',
   },
   // Single criterion: ID "test-1": "The tests pass" (colon format)
   {
     match: /ID\s*["']([a-z0-9-]+)["']\s*:\s*["']([^"']+)["']/i,
-    tools: [{ name: 'criterion', arguments: { action: 'add', id: '$1', description: '$2' } }],
+    tools: [{ name: 'session_metadata', arguments: { action: 'add', key: 'criteria', id: '$1', description: '$2' } }],
     response: 'Added the criterion.',
   },
-  // complete_criterion to mark "id" as done
+  // session_metadata to mark criteria as completed (natural language)
   {
-    match: /complete_criterion.*mark\s*["']([a-z0-9-]+)["']/i,
-    tools: [{ name: 'criterion', arguments: { action: 'complete', id: '$1', reason: 'Completed successfully' } }],
+    match: /session_metadata.*(?:mark|status.*completed).*["']([a-z0-9-]+)["']/i,
+    tools: [
+      { name: 'session_metadata', arguments: { action: 'update', key: 'criteria', id: '$1', status: 'completed' } },
+    ],
     response: 'Marked criterion as complete.',
   },
-  // complete_criterion with ID
+  // session_metadata to mark criteria as completed (explicit args)
   {
-    match: /complete_criterion.*["']([a-z0-9-]+)["']/i,
-    tools: [{ name: 'criterion', arguments: { action: 'complete', id: '$1', reason: 'Completed successfully' } }],
+    match:
+      /session_metadata.*action\s*["']update["'].*key\s*["']criteria["'].*id\s*["']([a-z0-9-]+)["'].*status\s*["']completed["']/i,
+    tools: [
+      { name: 'session_metadata', arguments: { action: 'update', key: 'criteria', id: '$1', status: 'completed' } },
+    ],
     response: 'Marked criterion as complete.',
   },
-  // criterion with action "complete" for "id"
+  // session_metadata to mark criteria as passed
   {
-    match: /criterion.*action\s*["']complete["'].*["']([a-z0-9-]+)["']/i,
-    tools: [{ name: 'criterion', arguments: { action: 'complete', id: '$1', reason: 'Completed successfully' } }],
-    response: 'Marked criterion as complete.',
+    match:
+      /session_metadata.*action\s*["']update["'].*key\s*["']criteria["'].*id\s*["']([a-z0-9-]+)["'].*status\s*["']passed["']/i,
+    tools: [{ name: 'session_metadata', arguments: { action: 'update', key: 'criteria', id: '$1', status: 'passed' } }],
+    response: 'Criterion passed.',
   },
-  // remove_criterion to remove "id"
+  // session_metadata to mark criteria as failed
   {
-    match: /remove_criterion.*remove\s*["']([a-z0-9-]+)["']/i,
-    tools: [{ name: 'criterion', arguments: { action: 'remove', id: '$1' } }],
-    response: 'Removed the criterion.',
+    match:
+      /session_metadata.*action\s*["']update["'].*key\s*["']criteria["'].*id\s*["']([a-z0-9-]+)["'].*status\s*["']failed["']/i,
+    tools: [
+      {
+        name: 'session_metadata',
+        arguments: { action: 'update', key: 'criteria', id: '$1', status: 'failed', reason: 'Verification failed' },
+      },
+    ],
+    response: 'Criterion failed.',
   },
-  // remove_criterion with ID
-  {
-    match: /remove_criterion.*["']([a-z0-9-]+)["']/i,
-    tools: [{ name: 'criterion', arguments: { action: 'remove', id: '$1' } }],
-    response: 'Removed the criterion.',
-  },
-  // update_criterion to change "id" description to "new"
-  {
-    match: /update_criterion.*change\s*["']([a-z0-9-]+)["'].*to\s*["']([^"']+)["']/i,
-    tools: [{ name: 'criterion', arguments: { action: 'update', id: '$1', description: '$2' } }],
-    response: 'Updated the criterion.',
-  },
-  // update_criterion with ID and description
-  {
-    match: /update_criterion.*["']([a-z0-9-]+)["'].*["']([^"']+)["']/i,
-    tools: [{ name: 'criterion', arguments: { action: 'update', id: '$1', description: '$2' } }],
-    response: 'Updated the criterion.',
-  },
-  // get_criteria
+  // get criteria via session_metadata
   {
     match: /get_criteria|show.*criteria|list.*criteria/i,
-    tools: [{ name: 'criterion', arguments: { action: 'get' } }],
+    tools: [{ name: 'session_metadata', arguments: { action: 'get', key: 'criteria' } }],
     response: 'Here are the current criteria.',
   },
-  // pass_criterion
+  // Update criterion via session_metadata
   {
-    match: /pass_criterion.*["']([a-z0-9-]+)["']/i,
-    tools: [{ name: 'criterion', arguments: { action: 'pass', id: '$1', reason: 'Verified successfully' } }],
-    response: 'Criterion passed.',
+    match: /session_metadata.*action\s*["']update["'].*description/i,
+    tools: [
+      {
+        name: 'session_metadata',
+        arguments: { action: 'update', key: 'criteria', id: '0', description: 'Updated description' },
+      },
+    ],
+    response: 'Updated the criterion.',
   },
-  // fail_criterion
+  // Remove criterion via session_metadata
   {
-    match: /fail_criterion.*["']([a-z0-9-]+)["']/i,
-    tools: [{ name: 'criterion', arguments: { action: 'fail', id: '$1', reason: 'Verification failed' } }],
-    response: 'Criterion failed.',
+    match: /session_metadata.*action\s*["']remove["']/i,
+    tools: [{ name: 'session_metadata', arguments: { action: 'remove', key: 'criteria', id: '0' } }],
+    response: 'Removed the criterion.',
   },
-  // Generic add criterion (fallback)
+  // Generic add criterion via session_metadata
   {
     match: /add.*criterion/i,
-    tools: [{ name: 'criterion', arguments: { action: 'add', description: 'Test criterion' } }],
+    tools: [{ name: 'session_metadata', arguments: { action: 'add', key: 'criteria', description: 'Test criterion' } }],
     response: 'Added the criterion.',
   },
-  // Verifier nudge with fail criterion (check for "fail" in ID) - MUST come before general pass rule
+
+  // -------------------------------------------------------------------------
+  // Session Metadata Tools
+  // -------------------------------------------------------------------------
   {
-    match: /Use criterion with action ["']pass["'] or ["']fail["'].*criterion.*:\s*([a-z0-9-]*fail[a-z0-9-]*)/i,
-    tools: [{ name: 'criterion', arguments: { action: 'fail', id: '$1', reason: 'Verification failed' } }],
-    response: 'Criterion failed.',
+    match: /session_metadata.*action\s*["']add["'].*key\s*["']criteria["'].*description\s*["']([^"']+)["']/i,
+    tools: [{ name: 'session_metadata', arguments: { action: 'add', key: 'criteria', description: '$1' } }],
+    response: 'Added criterion.',
   },
-  // Verifier nudge: Use criterion with action "pass" or "fail" for criterion-id-1, criterion-id-2
   {
-    match: /Use criterion with action ["']pass["'] or ["']fail["'].*criterion:\s*([a-z0-9-]+)/i,
-    tools: [{ name: 'criterion', arguments: { action: 'pass', id: '$1', reason: 'Verified successfully' } }],
+    match:
+      /session_metadata.*action\s*["']update["'].*key\s*["']criteria["'].*id\s*["']([a-z0-9-]+)["'].*status\s*["']completed["']/i,
+    tools: [
+      { name: 'session_metadata', arguments: { action: 'update', key: 'criteria', id: '$1', status: 'completed' } },
+    ],
+    response: 'Criterion completed.',
+  },
+  {
+    match:
+      /session_metadata.*action\s*["']update["'].*key\s*["']criteria["'].*id\s*["']([a-z0-9-]+)["'].*status\s*["']passed["']/i,
+    tools: [{ name: 'session_metadata', arguments: { action: 'update', key: 'criteria', id: '$1', status: 'passed' } }],
     response: 'Criterion passed.',
   },
-  // Verifier nudge with multiple criteria
   {
-    match: /Use criterion with action ["']pass["'] or ["']fail["'].*criterion:\s*([a-z0-9-]+),\s*([a-z0-9-]+)/i,
+    match:
+      /session_metadata.*action\s*["']update["'].*key\s*["']criteria["'].*id\s*["']([a-z0-9-]+)["'].*status\s*["']failed["']/i,
     tools: [
-      { name: 'criterion', arguments: { action: 'pass', id: '$1', reason: 'Verified successfully' } },
-      { name: 'criterion', arguments: { action: 'pass', id: '$2', reason: 'Verified successfully' } },
+      {
+        name: 'session_metadata',
+        arguments: { action: 'update', key: 'criteria', id: '$1', status: 'failed', reason: 'Verification failed' },
+      },
     ],
-    response: 'Criteria passed.',
-  },
-  // Verifier should fail a criterion
-  {
-    match: /Verifier should fail.*criterion.*ID\s*["']([a-z0-9-]+)["']/i,
-    tools: [{ name: 'criterion', arguments: { action: 'fail', id: '$1', reason: 'Verification failed' } }],
-    response: 'Criterion failed.',
-  },
-  // Verifier fail_criterion command
-  {
-    match: /fail_criterion.*ID\s*["']([a-z0-9-]+)["']/i,
-    tools: [{ name: 'criterion', arguments: { action: 'fail', id: '$1', reason: 'Verification failed' } }],
     response: 'Criterion failed.',
   },
 
@@ -510,13 +537,19 @@ const RULES: MockRule[] = [
     match: /todo_write.*Read files.*Make changes/i,
     tools: [
       {
-        name: 'todo',
+        name: 'session_metadata',
         arguments: {
-          action: 'write',
-          todos: [
-            { content: 'Read files', status: 'in_progress' },
-            { content: 'Make changes', status: 'pending' },
-          ],
+          action: 'add',
+          key: 'todos',
+          description: 'Read files',
+        },
+      },
+      {
+        name: 'session_metadata',
+        arguments: {
+          action: 'add',
+          key: 'todos',
+          description: 'Make changes',
         },
       },
     ],
@@ -526,10 +559,11 @@ const RULES: MockRule[] = [
     match: /todo_write|todo.*list/i,
     tools: [
       {
-        name: 'todo',
+        name: 'session_metadata',
         arguments: {
-          action: 'write',
-          todos: [{ content: 'Test task', status: 'pending' }],
+          action: 'add',
+          key: 'todos',
+          description: 'Test task',
         },
       },
     ],
@@ -800,17 +834,47 @@ function getPromptAwareToolResponse(prompt: string): MockMatchResult | null {
   const exactCommandMatch = prompt.match(/Run the exact command:\s*(.+)$/i) ?? prompt.match(/^Run exactly:\s*(.+)$/i)
   const quotedValues = [...prompt.matchAll(/"([^"]+)"/g)].map((match) => match[1]!)
 
+  if (/Use the session_metadata tool with key.*todos.*to create a todo list/i.test(prompt)) {
+    return {
+      tools: [
+        {
+          name: 'session_metadata',
+          arguments: {
+            action: 'add',
+            key: 'todos',
+            description: 'Read files',
+          },
+        },
+        {
+          name: 'session_metadata',
+          arguments: {
+            action: 'add',
+            key: 'todos',
+            description: 'Make changes',
+          },
+        },
+      ],
+      response: 'Created todo list.',
+    }
+  }
+
   if (/Use the todo_write tool to create a todo list with 2 items/i.test(prompt)) {
     return {
       tools: [
         {
-          name: 'todo',
+          name: 'session_metadata',
           arguments: {
-            action: 'write',
-            todos: [
-              { content: 'Read files', status: 'in_progress' },
-              { content: 'Make changes', status: 'pending' },
-            ],
+            action: 'add',
+            key: 'todos',
+            description: 'Read files',
+          },
+        },
+        {
+          name: 'session_metadata',
+          arguments: {
+            action: 'add',
+            key: 'todos',
+            description: 'Make changes',
           },
         },
       ],
@@ -819,15 +883,24 @@ function getPromptAwareToolResponse(prompt: string): MockMatchResult | null {
   }
 
   if (
-    /First call get_criteria to see what needs to be done, then create src\/test\.ts and call complete_criterion for ["']test-file["']\./i.test(
+    /First call get_criteria to see what needs to be done, then create src\/test\.ts and call session_metadata to mark criteria as completed for ["']test-file["']\./i.test(
       prompt,
     )
   ) {
     return {
       tools: [
-        { name: 'criterion', arguments: { action: 'get' } },
+        { name: 'session_metadata', arguments: { action: 'get', key: 'criteria' } },
         { name: 'write_file', arguments: { path: 'src/test.ts', content: 'export const created = true' } },
-        { name: 'criterion', arguments: { action: 'complete', id: 'test-file', reason: 'Created the requested file' } },
+        {
+          name: 'session_metadata',
+          arguments: {
+            action: 'update',
+            key: 'criteria',
+            status: 'completed',
+            id: 'test-file',
+            reason: 'Created the requested file',
+          },
+        },
         { name: 'step_done', arguments: {} },
       ],
       response: 'Reviewed the criteria, created the file, and completed the criterion.',
@@ -839,8 +912,14 @@ function getPromptAwareToolResponse(prompt: string): MockMatchResult | null {
       tools: [
         { name: 'write_file', arguments: { path: 'src/utils.ts', content: 'export const created = true' } },
         {
-          name: 'criterion',
-          arguments: { action: 'complete', id: 'file-created', reason: 'Created the requested file' },
+          name: 'session_metadata',
+          arguments: {
+            action: 'update',
+            key: 'criteria',
+            status: 'completed',
+            id: 'file-created',
+            reason: 'Created the requested file',
+          },
         },
         { name: 'step_done', arguments: {} },
       ],
@@ -960,9 +1039,11 @@ function getConversationAwareToolResponse(request: LLMCompletionRequest): MockMa
       tools.push(
         { name: 'read_file', arguments: { path: 'src' } },
         {
-          name: 'criterion',
+          name: 'session_metadata',
           arguments: {
-            action: 'complete',
+            action: 'update',
+            key: 'criteria',
+            status: 'completed',
             id: 'inspect-src',
             reason: 'Inspected the src directory and reported what exists',
           },
@@ -973,16 +1054,28 @@ function getConversationAwareToolResponse(request: LLMCompletionRequest): MockMa
 
     if (conversationText.includes('trivial-pass')) {
       tools.push({
-        name: 'criterion',
-        arguments: { action: 'complete', id: 'trivial-pass', reason: 'Trivial criterion passes immediately' },
+        name: 'session_metadata',
+        arguments: {
+          action: 'update',
+          key: 'criteria',
+          status: 'completed',
+          id: 'trivial-pass',
+          reason: 'Trivial criterion passes immediately',
+        },
       })
       completedCriteria.push('trivial-pass')
     }
 
     if (conversationText.includes('verify-fail')) {
       tools.push({
-        name: 'criterion',
-        arguments: { action: 'complete', id: 'verify-fail', reason: 'Prepared criterion for verification' },
+        name: 'session_metadata',
+        arguments: {
+          action: 'update',
+          key: 'criteria',
+          status: 'completed',
+          id: 'verify-fail',
+          reason: 'Prepared criterion for verification',
+        },
       })
       completedCriteria.push('verify-fail')
     }
@@ -991,8 +1084,14 @@ function getConversationAwareToolResponse(request: LLMCompletionRequest): MockMa
       tools.push(
         { name: 'write_file', arguments: { path: 'src/utils.ts', content: 'export const created = true' } },
         {
-          name: 'criterion',
-          arguments: { action: 'complete', id: 'file-created', reason: 'Created the requested file' },
+          name: 'session_metadata',
+          arguments: {
+            action: 'update',
+            key: 'criteria',
+            status: 'completed',
+            id: 'file-created',
+            reason: 'Created the requested file',
+          },
         },
       )
       completedCriteria.push('file-created')
@@ -1001,8 +1100,14 @@ function getConversationAwareToolResponse(request: LLMCompletionRequest): MockMa
     // Fallback: if no specific criterion matched, just complete a mock one
     if (tools.length === 0) {
       tools.push({
-        name: 'criterion',
-        arguments: { action: 'complete', id: 'mock-crit', reason: 'Completed for testing' },
+        name: 'session_metadata',
+        arguments: {
+          action: 'update',
+          key: 'criteria',
+          status: 'completed',
+          id: 'mock-crit',
+          reason: 'Completed for testing',
+        },
       })
       completedCriteria.push('mock-crit')
     }
@@ -1019,7 +1124,16 @@ function getConversationAwareToolResponse(request: LLMCompletionRequest): MockMa
   if (/fulfil the \d+ criteria/i.test(prompt)) {
     return {
       tools: [
-        { name: 'criterion', arguments: { action: 'complete', id: 'mock-crit', reason: 'Completed for testing' } },
+        {
+          name: 'session_metadata',
+          arguments: {
+            action: 'update',
+            key: 'criteria',
+            status: 'completed',
+            id: 'mock-crit',
+            reason: 'Completed for testing',
+          },
+        },
         { name: 'step_done', arguments: {} },
       ],
       response: 'Completed criterion and finished step.',
@@ -1034,32 +1148,62 @@ function getConversationAwareToolResponse(request: LLMCompletionRequest): MockMa
       tools.push(
         { name: 'write_file', arguments: { path: 'src/utils.ts', content: 'export const created = true' } },
         {
-          name: 'criterion',
-          arguments: { action: 'complete', id: 'file-created', reason: 'Created the requested file' },
+          name: 'session_metadata',
+          arguments: {
+            action: 'update',
+            key: 'criteria',
+            status: 'completed',
+            id: 'file-created',
+            reason: 'Created the requested file',
+          },
         },
       )
     } else if (conversationText.includes('trivial-pass')) {
       tools.push({
-        name: 'criterion',
-        arguments: { action: 'complete', id: 'trivial-pass', reason: 'Trivial criterion passes immediately' },
+        name: 'session_metadata',
+        arguments: {
+          action: 'update',
+          key: 'criteria',
+          status: 'completed',
+          id: 'trivial-pass',
+          reason: 'Trivial criterion passes immediately',
+        },
       })
     } else if (conversationText.includes('verify-fail')) {
       // Builder retry after verifier failed - just complete it again
       tools.push({
-        name: 'criterion',
-        arguments: { action: 'complete', id: 'verify-fail', reason: 'Prepared criterion for verification' },
+        name: 'session_metadata',
+        arguments: {
+          action: 'update',
+          key: 'criteria',
+          status: 'completed',
+          id: 'verify-fail',
+          reason: 'Prepared criterion for verification',
+        },
       })
     } else {
       // Check prompt for criteria count hint
       if (/1 criteria remaining/i.test(prompt)) {
         tools.push({
-          name: 'criterion',
-          arguments: { action: 'complete', id: 'trivial-pass', reason: 'Trivial criterion passes immediately' },
+          name: 'session_metadata',
+          arguments: {
+            action: 'update',
+            key: 'criteria',
+            status: 'completed',
+            id: 'trivial-pass',
+            reason: 'Trivial criterion passes immediately',
+          },
         })
       } else {
         tools.push({
-          name: 'criterion',
-          arguments: { action: 'complete', id: 'mock-crit', reason: 'Completed for testing' },
+          name: 'session_metadata',
+          arguments: {
+            action: 'update',
+            key: 'criteria',
+            status: 'completed',
+            id: 'mock-crit',
+            reason: 'Completed for testing',
+          },
         })
       }
     }
@@ -1077,7 +1221,8 @@ function getConversationAwareToolResponse(request: LLMCompletionRequest): MockMa
       (m) =>
         m.role === 'assistant' &&
         m.toolCalls?.some(
-          (tc) => tc.name === 'criterion' && (tc.arguments['action'] === 'pass' || tc.arguments['action'] === 'fail'),
+          (tc) =>
+            tc.name === 'session_metadata' && (tc.arguments['action'] === 'pass' || tc.arguments['action'] === 'fail'),
         ),
     )
     if (alreadyVerified) {
@@ -1089,17 +1234,25 @@ function getConversationAwareToolResponse(request: LLMCompletionRequest): MockMa
 
     if (conversationText.includes('trivial-pass')) {
       tools.push({
-        name: 'criterion',
-        arguments: { action: 'pass', id: 'trivial-pass', reason: 'Verified successfully' },
+        name: 'session_metadata',
+        arguments: {
+          action: 'update',
+          key: 'criteria',
+          status: 'passed',
+          id: 'trivial-pass',
+          reason: 'Verified successfully',
+        },
       })
       terminalizedCriteria.push('trivial-pass')
     }
 
     if (conversationText.includes('inspect-src')) {
       tools.push({
-        name: 'criterion',
+        name: 'session_metadata',
         arguments: {
-          action: 'pass',
+          action: 'update',
+          key: 'criteria',
+          status: 'passed',
           id: 'inspect-src',
           reason: 'Verified the src directory was inspected successfully',
         },
@@ -1109,9 +1262,11 @@ function getConversationAwareToolResponse(request: LLMCompletionRequest): MockMa
 
     if (conversationText.includes('verify-fail')) {
       tools.push({
-        name: 'criterion',
+        name: 'session_metadata',
         arguments: {
-          action: 'complete',
+          action: 'update',
+          key: 'criteria',
+          status: 'completed',
           id: 'verify-fail',
           reason: 'Verification fails intentionally for this criterion',
         },
@@ -1121,16 +1276,28 @@ function getConversationAwareToolResponse(request: LLMCompletionRequest): MockMa
 
     if (conversationText.includes('file-created')) {
       tools.push({
-        name: 'criterion',
-        arguments: { action: 'pass', id: 'file-created', reason: 'Verified the file was created successfully' },
+        name: 'session_metadata',
+        arguments: {
+          action: 'update',
+          key: 'criteria',
+          status: 'passed',
+          id: 'file-created',
+          reason: 'Verified the file was created successfully',
+        },
       })
       terminalizedCriteria.push('file-created')
     }
 
     if (conversationText.includes('impossible/path')) {
       tools.push({
-        name: 'criterion',
-        arguments: { action: 'complete', id: 'auto-impossible', reason: 'Impossible path does not exist' },
+        name: 'session_metadata',
+        arguments: {
+          action: 'update',
+          key: 'criteria',
+          status: 'completed',
+          id: 'auto-impossible',
+          reason: 'Impossible path does not exist',
+        },
       })
       terminalizedCriteria.push('auto-impossible')
     }

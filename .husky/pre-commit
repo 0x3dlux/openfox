@@ -11,7 +11,7 @@ run_check() {
   name=$1
   shift
   "$@" > "$TMPDIR/$name.log" 2>&1
-  echo $? > "$TMPDIR/$name.exit"
+  echo "$?" > "$TMPDIR/$name.exit" 2>/dev/null
 }
 
 run_check "lint" npm run lint &
@@ -19,34 +19,44 @@ run_check "typecheck" npm run typecheck &
 run_check "duplicate" npm run duplicate &
 run_check "test" npm test &
 
+sleep 0.1
+
+any_failed=0
 remaining=4
-while [ $remaining -gt 0 ]; do
+while [ "$remaining" -gt 0 ]; do
   for name in lint typecheck duplicate test; do
     if [ -f "$TMPDIR/$name.exit" ] && [ ! -f "$TMPDIR/$name.done" ]; then
       touch "$TMPDIR/$name.done"
-      exit_code=$(cat "$TMPDIR/$name.exit")
+      read -r exit_code < "$TMPDIR/$name.exit"
       if [ "$exit_code" -eq 0 ]; then
         echo "  $name ✓"
       else
         echo "  $name ✗"
+        any_failed=1
       fi
       remaining=$((remaining - 1))
     fi
   done
-  [ $remaining -gt 0 ] && sleep 0.2
+  if [ "$any_failed" -eq 1 ]; then
+    kill $(jobs -p) 2>/dev/null
+    sleep 0.2
+    break
+  fi
+  [ "$remaining" -gt 0 ] && sleep 0.2
 done
 
 echo
 
-any_failed=0
-for check in lint typecheck duplicate test; do
-  exit_code=$(cat "$TMPDIR/$check.exit")
-  if [ "$exit_code" -ne 0 ]; then
-    any_failed=1
-    echo "--- $check ---"
-    cat "$TMPDIR/$check.log"
-    echo
-  fi
-done
-
-exit $any_failed
+if [ "$any_failed" -eq 1 ]; then
+  for name in lint typecheck duplicate test; do
+    if [ -f "$TMPDIR/$name.exit" ]; then
+      read -r exit_code < "$TMPDIR/$name.exit"
+      if [ "$exit_code" -ne 0 ]; then
+        echo "--- $name ---"
+        cat "$TMPDIR/$name.log"
+        echo
+      fi
+    fi
+  done
+  exit 1
+fi

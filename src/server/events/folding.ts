@@ -192,6 +192,7 @@ export interface FoldedSessionState {
   messages: SnapshotMessage[]
   criteria: Criterion[]
   todos: Todo[]
+  metadataEntries: Record<string, import('../../shared/types.js').MetadataEntry[]>
   contextState: ContextState
   currentContextWindowId: string
   readFiles: ReadFileEntry[]
@@ -495,6 +496,23 @@ export function foldTodos(events: EventLike[]): Todo[] {
 }
 
 // ============================================================================
+// Metadata Folding
+// ============================================================================
+
+export function foldMetadata(events: EventLike[]): Record<string, import('../../shared/types.js').MetadataEntry[]> {
+  const metadata: Record<string, import('../../shared/types.js').MetadataEntry[]> = {}
+
+  for (const event of events) {
+    if (event.type === 'metadata.set') {
+      const data = event.data as Extract<TurnEvent, { type: 'metadata.set' }>['data']
+      metadata[data.key] = data.entries
+    }
+  }
+
+  return metadata
+}
+
+// ============================================================================
 // Context State Folding
 // ============================================================================
 
@@ -684,6 +702,7 @@ export function foldSessionState(
       : foldTurnEventsToSnapshotMessages(events)
   const criteria = foldCriteria(events)
   const todos = foldTodos(events)
+  let metadataEntries = foldMetadata(events)
   const contextResult = foldContextState(events, initialWindowId)
   const pendingConfirmations = foldPendingConfirmations(events)
 
@@ -741,6 +760,10 @@ export function foldSessionState(
       }
       if (snapshotData.dynamicContextHash && !dynamicContextHash) {
         dynamicContextHash = snapshotData.dynamicContextHash
+      }
+      // Restore metadataEntries from snapshot if not already set by live events
+      if (snapshotData.metadataEntries && Object.keys(metadataEntries).length === 0) {
+        metadataEntries = snapshotData.metadataEntries
       }
     }
   }
@@ -858,6 +881,7 @@ export function foldSessionState(
     messages,
     criteria,
     todos,
+    metadataEntries,
     contextState,
     currentContextWindowId: contextResult.currentContextWindowId,
     readFiles: contextResult.readFiles,
@@ -894,6 +918,7 @@ export function buildSnapshot(
     isRunning: foldedState.isRunning,
     messages: foldedState.messages,
     criteria: foldedState.criteria,
+    metadataEntries: foldedState.metadataEntries,
     contextState: foldedState.contextState,
     currentContextWindowId: foldedState.currentContextWindowId,
     todos: foldedState.todos,
@@ -973,6 +998,7 @@ export function buildSnapshotFromSessionState(input: {
     isRunning: session.isRunning,
     messages,
     criteria: session.criteria,
+    metadataEntries: foldedState.metadataEntries,
     contextState: {
       currentTokens: session.executionState?.currentTokenCount ?? foldedState.contextState.currentTokens,
       maxTokens: foldedState.contextState.maxTokens,

@@ -12,7 +12,7 @@ export type DisplayItem =
 // Check if a message contains only criterion tool calls (no text content)
 // Subagent messages are never criteria-only - they stay grouped in their pane
 function isCriterionTool(toolName: string): boolean {
-  return toolName === 'criterion'
+  return toolName === 'criterion' || toolName === 'session_metadata'
 }
 
 function isCriteriaOnlyMessage(msg: Message): boolean {

@@ -23,6 +23,7 @@ import type {
   ModeChangedPayload,
   PhaseChangedPayload,
   CriteriaUpdatedPayload,
+  MetadataUpdatedPayload,
   ContextStatePayload,
   QueueStatePayload,
 } from '@shared/protocol.js'
@@ -637,6 +638,26 @@ export function handleServerMessage(
       const payload = message.payload as CriteriaUpdatedPayload
       set((state) => ({
         currentSession: state.currentSession ? { ...state.currentSession, criteria: payload.criteria } : null,
+      }))
+      break
+    }
+
+    case 'metadata.updated': {
+      if (!isMessageForCurrentSession(message, get().currentSession?.id ?? null)) {
+        markBackgroundSessionUnread()
+        break
+      }
+      const payload = message.payload as MetadataUpdatedPayload
+      set((state) => ({
+        currentSession: state.currentSession
+          ? {
+              ...state.currentSession,
+              metadataEntries: {
+                ...state.currentSession.metadataEntries,
+                [payload.key]: payload.entries,
+              },
+            }
+          : null,
       }))
       break
     }

@@ -8,6 +8,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Criterion } from '../../shared/types.js'
+import type { MetadataEntry } from '../../shared/types.js'
 import type { TransitionCondition, Transition } from './types.js'
 import { TERMINAL_BLOCKED, TERMINAL_DONE } from './types.js'
 import { RUNNER_CONFIG } from '../runner/types.js'
@@ -343,17 +344,13 @@ describe('formatCriteriaList', () => {
   })
 
   it('formats each criterion with status prefix', () => {
-    const criteria: Criterion[] = [
-      makeCriterion({ id: 'c1', description: 'Add tests', status: { type: 'passed', verifiedAt: '2025-01-01' } }),
-      makeCriterion({ id: 'c2', description: 'Fix bug', status: { type: 'completed', completedAt: '2025-01-01' } }),
-      makeCriterion({
-        id: 'c3',
-        description: 'Update docs',
-        status: { type: 'failed', reason: 'bad', failedAt: '2025-01-01' },
-      }),
-      makeCriterion({ id: 'c4', description: 'Refactor', status: { type: 'pending' } }),
+    const entries: MetadataEntry[] = [
+      { id: 'c1', description: 'Add tests', status: 'passed' },
+      { id: 'c2', description: 'Fix bug', status: 'completed' },
+      { id: 'c3', description: 'Update docs', status: 'failed' },
+      { id: 'c4', description: 'Refactor', status: 'pending' },
     ]
-    const result = formatCriteriaList(criteria)
+    const result = formatCriteriaList(entries)
     expect(result).toBe(
       '- **c1** [PASSED]: Add tests\n' +
         '- **c2** [NEEDS VERIFICATION]: Fix bug\n' +
@@ -363,8 +360,8 @@ describe('formatCriteriaList', () => {
   })
 
   it('formats a single criterion', () => {
-    const criteria = [makeCriterion({ id: 'only', description: 'One thing', status: { type: 'pending' } })]
-    expect(formatCriteriaList(criteria)).toBe('- **only** [NOT COMPLETED]: One thing')
+    const entries: MetadataEntry[] = [{ id: 'only', description: 'One thing', status: 'pending' }]
+    expect(formatCriteriaList(entries)).toBe('- **only** [NOT COMPLETED]: One thing')
   })
 })
 

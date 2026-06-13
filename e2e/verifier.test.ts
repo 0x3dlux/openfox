@@ -53,7 +53,7 @@ describe.skip('Verifier Mode', () => {
     it.skip('triggers verification after builder completes criterion', async () => {
       const session = client.getSession()!
       await client.send('chat.send', {
-        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use add_criterion.',
+        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
       await setSessionMode(server.url, session.id, 'builder', server.wsUrl)
@@ -70,7 +70,7 @@ describe.skip('Verifier Mode', () => {
   describe('Fresh Context', () => {
     it.skip('verifier uses fresh context with summary', async () => {
       await client.send('chat.send', {
-        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use add_criterion.',
+        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
       const session = client.getSession()!
@@ -97,7 +97,7 @@ describe.skip('Verifier Mode', () => {
   describe('Sub-Agent Messages', () => {
     it('marks verifier messages with subAgentId', async () => {
       await client.send('chat.send', {
-        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use add_criterion.',
+        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
       const session = client.getSession()!
@@ -125,7 +125,7 @@ describe.skip('Verifier Mode', () => {
     describe('pass_criterion', () => {
       it.skip('marks criterion as passed when verification succeeds', async () => {
         await client.send('chat.send', {
-          content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use add_criterion.',
+          content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use session_metadata.',
         })
         await client.waitForChatDone()
         const session1 = client.getSession()!
@@ -145,7 +145,7 @@ describe.skip('Verifier Mode', () => {
     describe('fail_criterion', () => {
       it.skip('marks criterion as failed and returns to builder', async () => {
         await client.send('chat.send', {
-          content: 'Add criterion ID "verify-fail": "Verifier should fail this criterion". Use add_criterion.',
+          content: 'Add criterion ID "verify-fail": "Verifier should fail this criterion". Use session_metadata.',
         })
         await client.waitForChatDone()
         const session1 = client.getSession()!
@@ -167,7 +167,7 @@ describe.skip('Verifier Mode', () => {
   describe('Verification without Thinking', () => {
     it.skip('verifier does not emit thinking content', async () => {
       await client.send('chat.send', {
-        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use add_criterion.',
+        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
       const session = client.getSession()!

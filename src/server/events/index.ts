@@ -96,6 +96,7 @@ export {
   emitChatError,
   emitFormatRetry,
   emitTurnSnapshot,
+  emitMetadataSet,
   truncateSessionMessages,
   compactContext,
   getRecentUserPromptsForSession,

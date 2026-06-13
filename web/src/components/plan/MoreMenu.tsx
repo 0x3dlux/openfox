@@ -5,7 +5,7 @@ import { CommandsModal } from '../settings/CommandsModal'
 import { useWorkflowsStore, type WorkflowInfo } from '../../stores/workflows'
 import { WorkflowsModal } from '../settings/WorkflowsModal'
 import { EditButton } from '../shared/IconButton'
-import type { Attachment, Criterion } from '@shared/types.js'
+import type { Attachment, MetadataEntry } from '@shared/types.js'
 
 interface MoreMenuProps {
   onSendCommand: (content: string, agentMode?: string, textareaContent?: string, attachments?: Attachment[]) => void
@@ -15,25 +15,23 @@ interface MoreMenuProps {
   onAttach: () => void
   textareaContent?: string
   attachments?: Attachment[]
-  criteria: Criterion[]
+  criteria: MetadataEntry[]
 }
 
 type Tab = 'commands' | 'workflows' | 'attach'
 
-function isConditionMet(workflow: WorkflowInfo, criteria: Criterion[]): boolean | null {
+function isConditionMet(workflow: WorkflowInfo, criteria: MetadataEntry[]): boolean | null {
   const cond = workflow.startCondition
   if (!cond || cond.type === 'always') return true
   switch (cond.type) {
     case 'has_pending_criteria':
-      return criteria.some((c) => c.status.type !== 'passed')
+      return criteria.some((c) => c.status !== 'passed')
     case 'all_criteria_passed':
-      return criteria.length === 0 || criteria.every((c) => c.status.type === 'passed')
+      return criteria.length === 0 || criteria.every((c) => c.status === 'passed')
     case 'all_criteria_completed_or_passed':
-      return criteria.every((c) => c.status.type === 'completed' || c.status.type === 'passed')
+      return criteria.every((c) => c.status === 'completed' || c.status === 'passed')
     case 'any_criteria_blocked':
-      return criteria.some(
-        (c) => c.status.type === 'failed' && c.attempts.filter((a) => a.status === 'failed').length >= 4,
-      )
+      return criteria.some((c) => c.status === 'failed')
     case 'step_result':
       return null
     default:

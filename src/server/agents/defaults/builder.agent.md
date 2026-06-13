@@ -11,8 +11,7 @@ allowedTools:
   - edit_file
   - run_command
   - ask_user
-  - criterion:complete,get
-  - todo:list,add,write,update,remove
+  - session_metadata:get,add,update,remove
   - call_sub_agent
   - load_skill
   - dev_server

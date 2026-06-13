@@ -250,6 +250,7 @@ describe('Session Reload After Cleanup', () => {
         isRunning: false,
         messages: [{ id: 'msg-1', role: 'user', content: 'Hello', timestamp: Date.now() }],
         criteria: [],
+        metadataEntries: {},
         contextState: {
           currentTokens: 20,
           maxTokens: 200000,
@@ -287,6 +288,7 @@ describe('Session Reload After Cleanup', () => {
           { id: 'msg-2', role: 'assistant', content: 'Hi there!', timestamp: Date.now() },
         ],
         criteria: [],
+        metadataEntries: {},
         contextState: {
           currentTokens: 40,
           maxTokens: 200000,
@@ -331,6 +333,7 @@ describe('Session Reload After Cleanup', () => {
         isRunning: false,
         messages: [{ id: 'msg-1', role: 'user', content: 'Hello', timestamp: Date.now() }],
         criteria: [],
+        metadataEntries: {},
         contextState: {
           currentTokens: 20,
           maxTokens: 200000,
@@ -450,6 +453,7 @@ describe('Session Reload After Cleanup', () => {
           },
         ],
         criteria: [],
+        metadataEntries: {},
         contextState: {
           currentTokens: 12,
           maxTokens: 200000,

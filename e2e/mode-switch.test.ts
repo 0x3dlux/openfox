@@ -105,7 +105,7 @@ describe('Mode Switching', () => {
 
       // Add criterion
       await client.send('chat.send', {
-        content: 'Add criterion: File exists. Use add_criterion.',
+        content: 'Add criterion: File exists. Use session_metadata.',
       })
       await client.waitForChatDone()
 
@@ -122,7 +122,7 @@ describe('Mode Switching', () => {
     it.skip('generates summary when using mode.accept (Start Building button)', async () => {
       // Add criterion
       await client.send('chat.send', {
-        content: 'Add criterion: File exists. Use add_criterion.',
+        content: 'Add criterion: File exists. Use session_metadata.',
       })
       await client.waitForChatDone()
 
@@ -145,7 +145,7 @@ describe('Mode Switching', () => {
     it.skip('injects the builder kickoff exactly once after accepting criteria', async () => {
       await client.send('chat.send', {
         content:
-          'Add criterion with ID "inspect-src": "Inspect the src directory and report what exists". Use add_criterion.',
+          'Add criterion with ID "inspect-src": "Inspect the src directory and report what exists". Use session_metadata.',
       })
       await client.waitForChatDone()
 
@@ -182,7 +182,7 @@ describe('Mode Switching', () => {
       // Add a trivial criterion
       await client.send('chat.send', {
         content:
-          'Add criterion with ID "trivial-pass": "This is a trivial test criterion that passes immediately". Use add_criterion.',
+          'Add criterion with ID "trivial-pass": "This is a trivial test criterion that passes immediately". Use session_metadata.',
       })
       await client.waitForChatDone()
 
@@ -205,7 +205,7 @@ describe('Mode Switching', () => {
     it.skip('sets phase to blocked after max failures', async () => {
       // Add a criterion the mock verifier intentionally fails repeatedly
       await client.send('chat.send', {
-        content: 'Add criterion ID "verify-fail": "Verifier should fail this criterion". Use add_criterion.',
+        content: 'Add criterion ID "verify-fail": "Verifier should fail this criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
 

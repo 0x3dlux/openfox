@@ -47,7 +47,6 @@ export async function startChatSession(
   // Check if session is blocked - user intervention resets it
   if (session.phase === 'blocked') {
     sessionManager.setPhase(sessionId, 'build')
-    sessionManager.resetAllCriteriaAttempts(sessionId)
     broadcastForSession(sessionId, createPhaseChangedMessage('build'))
   }
 

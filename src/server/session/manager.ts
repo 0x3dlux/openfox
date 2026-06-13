@@ -46,6 +46,7 @@ import {
   emitAssistantMessageStart,
   emitCriteriaSet,
   emitCriterionUpdated,
+  emitMetadataSet,
   emitContextCompacted,
   emitContextState,
 } from '../events/index.js'
@@ -64,6 +65,12 @@ export type SessionEvent =
   | { type: 'phase_changed'; sessionId: string; phase: SessionPhase }
   | { type: 'running_changed'; sessionId: string; isRunning: boolean }
   | { type: 'criteria_updated'; sessionId: string; criteria: Criterion[] }
+  | {
+      type: 'metadata_updated'
+      sessionId: string
+      key: string
+      entries: import('../../shared/types.js').MetadataEntry[]
+    }
   | { type: 'message_added'; sessionId: string; message: Message }
   | { type: 'queue_added'; sessionId: string; queueId: string; mode: 'asap' | 'completion'; content: string }
   | { type: 'queue_drained'; sessionId: string; queueId: string }
@@ -690,6 +697,16 @@ export class SessionManager {
   }
 
   // ============================================================================
+  // Metadata Operations
+  // ============================================================================
+
+  setMetadataEntries(sessionId: string, key: string, entries: import('../../shared/types.js').MetadataEntry[]): void {
+    this.requireSession(sessionId)
+    emitMetadataSet(sessionId, key, entries)
+    this.emit({ type: 'metadata_updated', sessionId, key, entries })
+  }
+
+  // ============================================================================
   // Message Queue (runtime state, transient while agent is running)
   // ============================================================================
 
@@ -1045,6 +1062,7 @@ export class SessionManager {
       isRunning,
       messages,
       criteria: eventState.criteria,
+      metadataEntries: eventState.metadataEntries,
       contextWindows: [], // Derived from events, not stored separately
       executionState:
         eventState.lastModeWithReminder || eventState.cachedSystemPrompt || hasCachedPrompt

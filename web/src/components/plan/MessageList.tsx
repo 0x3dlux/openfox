@@ -9,6 +9,9 @@ import { CriteriaGroupDisplay } from '../shared/CriteriaGroupDisplay'
 import { CloseButton } from '../shared/CloseButton'
 import { buildPromptContextByUserMessageId } from './prompt-context-linking.js'
 import type { DisplayItem } from './groupMessages.js'
+import type { MetadataEntry } from '@shared/types.js'
+
+const EMPTY_CRITERIA: MetadataEntry[] = []
 
 interface MessageListProps {
   displayItems: DisplayItem[]
@@ -21,7 +24,7 @@ export const MessageList = memo(function MessageList({
   scrollContainerRef,
   highlightedMessageId,
 }: MessageListProps) {
-  const criteria = useSessionStore((state) => state.currentSession?.criteria)
+  const criteria = useSessionStore((state) => state.currentSession?.metadataEntries?.['criteria'] ?? EMPTY_CRITERIA)
   const sessionId = useSessionStore((state) => state.currentSession?.id)
   const sessionMode = useSessionStore((state) => state.currentSession?.mode)
   const sessionPhase = useSessionStore((state) => state.currentSession?.phase)
@@ -40,7 +43,7 @@ export const MessageList = memo(function MessageList({
   const promptContextByUserMessageId = useMemo(() => buildPromptContextByUserMessageId(rawMessages), [rawMessages])
 
   const isPlanning = sessionMode === 'planner'
-  const hasCriteria = (criteria?.length ?? 0) > 0
+  const hasCriteria = criteria.length > 0
   const isDone = sessionPhase === 'done'
   const hasAssistantResponse = displayItems.some((item) => item.type === 'message' && item.message.role === 'assistant')
   const showStartBuilding = isPlanning && hasCriteria && !isRunning && hasAssistantResponse && !isDone

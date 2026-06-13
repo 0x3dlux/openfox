@@ -8,6 +8,7 @@ import type {
   Criterion,
   Message,
   Todo,
+  MetadataEntry,
   Diagnostic,
   ToolResult,
   ContextState,
@@ -103,7 +104,9 @@ export type ServerMessageType =
   // Task completion
   | 'task.completed' // Task finished with summary stats
   // Criteria events
-  | 'criteria.updated' // Criteria changed
+  | 'criteria.updated'
+  // Metadata events
+  | 'metadata.updated' // Criteria changed
   // Context events
   | 'context.state' // Context window state update
   // Settings events
@@ -334,6 +337,11 @@ export interface TaskCompletedPayload {
 export interface CriteriaUpdatedPayload {
   criteria: Criterion[]
   changedId?: string // Which criterion changed, if specific
+}
+
+export interface MetadataUpdatedPayload {
+  key: string
+  entries: MetadataEntry[]
 }
 
 // Context payloads

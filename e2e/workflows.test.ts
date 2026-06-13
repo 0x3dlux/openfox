@@ -64,7 +64,7 @@ The function should:
 2. Return their product
 3. Handle edge cases like zero
 
-Please explore the existing code and propose acceptance criteria using add_criterion.`,
+Please explore the existing code and propose acceptance criteria using session_metadata.`,
       })
 
       const events = await collectChatEvents(client)
@@ -72,14 +72,15 @@ Please explore the existing code and propose acceptance criteria using add_crite
 
       // 4. Verify criteria were created
       const currentSession = client.getSession()!
-      expect(currentSession.criteria.length).toBeGreaterThan(0)
+      expect(currentSession.metadataEntries?.['criteria']?.length ?? 0).toBeGreaterThan(0)
       expect(currentSession.mode).toBe('planner')
       expect(currentSession.phase).toBe('plan')
 
       // 5. Criteria should be descriptive
-      const criterion = currentSession.criteria[0]!
-      expect(criterion.description.length).toBeGreaterThan(10)
-      expect(criterion.status.type).toBe('pending')
+      const criteria = currentSession.metadataEntries?.['criteria'] ?? []
+      const criterion = criteria[0] as { description: string; status: string } | undefined
+      expect(criterion?.description?.length ?? 0).toBeGreaterThan(10)
+      expect(criterion?.status).toBe('pending')
     })
   })
 
@@ -92,7 +93,7 @@ Please explore the existing code and propose acceptance criteria using add_crite
 
       // Add a straightforward criterion the mock builder can satisfy automatically
       await client.send('chat.send', {
-        content: 'Add criterion ID "file-created": "A new file utils.ts exists". Use add_criterion.',
+        content: 'Add criterion ID "file-created": "A new file utils.ts exists". Use session_metadata.',
       })
       await client.waitForChatDone()
 
@@ -119,7 +120,7 @@ Please explore the existing code and propose acceptance criteria using add_crite
       await client.send('session.load', { sessionId: session.id })
 
       await client.send('chat.send', {
-        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use add_criterion.',
+        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
       const sessionId = client.getSession()!.id
@@ -140,7 +141,7 @@ Please explore the existing code and propose acceptance criteria using add_crite
       await client.send('session.load', { sessionId: session.id })
 
       await client.send('chat.send', {
-        content: 'Add criterion ID "verify-fail": "Verifier should fail this criterion". Use add_criterion.',
+        content: 'Add criterion ID "verify-fail": "Verifier should fail this criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
       const sessionId = client.getSession()!.id
@@ -164,11 +165,11 @@ Please explore the existing code and propose acceptance criteria using add_crite
       await client.send('session.load', { sessionId: session.id })
 
       await client.send('chat.send', {
-        content: 'Add criterion ID "file-created": "A new file utils.ts exists". Use add_criterion.',
+        content: 'Add criterion ID "file-created": "A new file utils.ts exists". Use session_metadata.',
       })
       await client.waitForChatDone()
       await client.send('chat.send', {
-        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use add_criterion.',
+        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
       const sessionId = client.getSession()!.id
@@ -192,7 +193,7 @@ Please explore the existing code and propose acceptance criteria using add_crite
 
       // Add criteria
       await client.send('chat.send', {
-        content: 'Add criterion: "Test criterion". Use add_criterion.',
+        content: 'Add criterion: "Test criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
 
@@ -249,7 +250,7 @@ Please explore the existing code and propose acceptance criteria using add_crite
 
       // Add impossible criterion to trigger blocked state
       await client.send('chat.send', {
-        content: 'Add criterion: "The file /this/path/cannot/exist.txt exists". Use add_criterion.',
+        content: 'Add criterion: "The file /this/path/cannot/exist.txt exists". Use session_metadata.',
       })
       await client.waitForChatDone()
 

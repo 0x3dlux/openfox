@@ -1,13 +1,13 @@
 import { memo } from 'react'
-import type { ToolCall, Criterion } from '@shared/types.js'
+import type { ToolCall, MetadataEntry } from '@shared/types.js'
 import { Markdown } from './Markdown'
 
 interface CriteriaGroupDisplayProps {
   toolCalls: ToolCall[]
-  criteria?: Criterion[] // For looking up criterion descriptions by ID
+  criteria?: MetadataEntry[] // For looking up criterion descriptions by ID
 }
 
-type CriterionAction = 'add' | 'update' | 'remove' | 'complete' | 'pass' | 'fail' | 'get'
+type CriterionAction = 'add' | 'update' | 'remove' | 'complete' | 'pass' | 'fail' | 'get' | 'list' | 'schema'
 
 const actionConfig: Record<CriterionAction, { icon: string; color: string }> = {
   add: { icon: '○', color: 'text-text-muted' },
@@ -17,6 +17,8 @@ const actionConfig: Record<CriterionAction, { icon: string; color: string }> = {
   pass: { icon: '✓', color: 'text-accent-success' },
   fail: { icon: '✗', color: 'text-accent-error' },
   get: { icon: '○', color: 'text-text-muted' },
+  list: { icon: '○', color: 'text-text-muted' },
+  schema: { icon: '○', color: 'text-text-muted' },
 }
 
 interface DisplayCriterion {
@@ -35,11 +37,14 @@ export const CriteriaGroupDisplay = memo(function CriteriaGroupDisplay({
 
   const getAction = toolCalls.find((tc) => tc.arguments['action'] === 'get' && tc.result?.success && tc.result?.output)
 
+  const isSessionMetadata = toolCalls.some((tc) => tc.name === 'session_metadata')
+  const headerTitle = isSessionMetadata ? 'Session Data' : 'Acceptance Criteria'
+
   return (
     <div className="my-1 rounded border border-border bg-secondary overflow-hidden">
       {/* Header */}
       <div className="px-2 py-1.5 border-b border-border bg-secondary">
-        <span className="text-xs font-medium text-text-muted">Acceptance Criteria</span>
+        <span className="text-xs font-medium text-text-muted">{headerTitle}</span>
       </div>
 
       {/* Criteria list */}
@@ -85,7 +90,7 @@ export const CriteriaGroupDisplay = memo(function CriteriaGroupDisplay({
 interface SingleCriterionRowProps {
   tc: ToolCall
   index: number
-  criteriaMap: Map<string, Criterion>
+  criteriaMap: Map<string, MetadataEntry>
 }
 
 function SingleCriterionRow({ tc, index, criteriaMap }: SingleCriterionRowProps) {
@@ -126,5 +131,5 @@ function SingleCriterionRow({ tc, index, criteriaMap }: SingleCriterionRowProps)
 
 // Type guard to check if a tool name is a criterion tool
 export function isCriterionTool(tool: string): boolean {
-  return tool === 'criterion'
+  return tool === 'criterion' || tool === 'session_metadata'
 }

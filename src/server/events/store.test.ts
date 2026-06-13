@@ -209,6 +209,7 @@ describe('EventStore', () => {
           isRunning: false,
           messages: [],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 0,
             maxTokens: 200000,
@@ -236,6 +237,7 @@ describe('EventStore', () => {
           isRunning: true,
           messages: [],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 1000,
             maxTokens: 200000,
@@ -284,6 +286,7 @@ describe('EventStore', () => {
           isRunning: false,
           messages: [],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 0,
             maxTokens: 200000,
@@ -909,6 +912,7 @@ describe('EventStore - Event Cleanup', () => {
           isRunning: false,
           messages: [],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 100,
             maxTokens: 200000,
@@ -952,6 +956,7 @@ describe('EventStore - Event Cleanup', () => {
           isRunning: false,
           messages: [],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 100,
             maxTokens: 200000,
@@ -979,6 +984,7 @@ describe('EventStore - Event Cleanup', () => {
           isRunning: false,
           messages: [],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 200,
             maxTokens: 200000,
@@ -1027,6 +1033,7 @@ describe('EventStore - Event Cleanup', () => {
           isRunning: false,
           messages: [{ id: 'msg-1', role: 'user', content: 'Hello world', timestamp: Date.now() }],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 100,
             maxTokens: 200000,
@@ -1072,6 +1079,7 @@ describe('EventStore - Event Cleanup', () => {
           isRunning: false,
           messages: [],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 100,
             maxTokens: 200000,
@@ -1117,6 +1125,7 @@ describe('EventStore - Event Cleanup', () => {
           isRunning: false,
           messages: [],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 100,
             maxTokens: 200000,
@@ -1170,6 +1179,7 @@ describe('EventStore - Event Cleanup', () => {
           isRunning: false,
           messages: [],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 100,
             maxTokens: 200000,
@@ -1206,6 +1216,7 @@ describe('EventStore - Event Cleanup', () => {
           isRunning: false,
           messages: [],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 100,
             maxTokens: 200000,
@@ -1270,6 +1281,7 @@ describe('EventStore - Event Cleanup', () => {
           isRunning: false,
           messages: [],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 100,
             maxTokens: 200000,
@@ -1311,6 +1323,7 @@ describe('EventStore - Event Cleanup', () => {
           isRunning: false,
           messages: [],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 100,
             maxTokens: 200000,
@@ -1350,6 +1363,7 @@ describe('EventStore - Event Cleanup', () => {
           isRunning: true,
           messages: [],
           criteria: [],
+          metadataEntries: {},
           contextState: {
             currentTokens: 100,
             maxTokens: 200000,

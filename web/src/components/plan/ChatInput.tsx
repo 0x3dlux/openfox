@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { useSessionStore, useIsRunning } from '../../stores/session'
-import type { Attachment, Criterion } from '@shared/types.js'
+import type { Attachment, MetadataEntry } from '@shared/types.js'
 import type { PromptHistoryItem } from '../../hooks/usePromptHistory'
 import { AttachmentPreview } from '../shared/AttachmentPreview.js'
 import { PromptHistoryList } from '../shared/PromptHistory.js'
@@ -26,7 +26,7 @@ interface ChatInputProps {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   sessionId: string | undefined
   sessionMode: string | undefined
-  criteria: Criterion[]
+  criteria: MetadataEntry[]
   showHistory: boolean
   history: PromptHistoryItem[]
   selectedIndex: number

@@ -65,6 +65,7 @@ export function createSession(
       totalToolCalls: 0,
       iterationCount: 0,
     },
+    metadataEntries: {},
     dangerLevel,
   }
 }
@@ -98,6 +99,7 @@ export function getSession(id: string): Session | null {
       totalToolCalls: row.total_tool_calls,
       iterationCount: row.iteration_count,
     },
+    metadataEntries: {},
     dangerLevel: (row.danger_level ?? 'normal') as DangerLevel,
   }
 }

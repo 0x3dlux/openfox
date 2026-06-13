@@ -108,7 +108,7 @@ describe('Session Reconnection', () => {
     it('preserves criteria across reconnection', async () => {
       // Add criteria
       await client.send('chat.send', {
-        content: 'Add criterion ID "persist-test": "This should persist". Use add_criterion.',
+        content: 'Add criterion ID "persist-test": "This should persist". Use session_metadata.',
       })
       await client.waitForChatDone()
 
@@ -119,8 +119,9 @@ describe('Session Reconnection', () => {
         await client2.send('session.load', { sessionId })
 
         const session = client2.getSession()!
-        expect(session.criteria.length).toBeGreaterThan(0)
-        expect(session.criteria[0]!.id).toBe('persist-test')
+        expect(session.metadataEntries?.['criteria']?.length ?? 0).toBeGreaterThan(0)
+        const c0 = (session.metadataEntries?.['criteria'] ?? [])[0] as { id: string } | undefined
+        expect(c0?.id).toBe('persist-test')
       } finally {
         await client2.close()
       }
@@ -270,7 +271,7 @@ describe('Session Reconnection', () => {
     it('preserves session phase across reconnection', async () => {
       // Set up criteria to enable phase transitions
       await client.send('chat.send', {
-        content: 'Add criterion ID "phase-test": "Test criterion". Use add_criterion.',
+        content: 'Add criterion ID "phase-test": "Test criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
 

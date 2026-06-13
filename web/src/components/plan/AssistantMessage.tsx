@@ -146,7 +146,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   showThinking = true,
   showVerboseToolOutput = true,
 }: AssistantMessageProps) {
-  const criteria = useSessionStore((state) => state.currentSession?.criteria)
+  const criteria = useSessionStore((state) => state.currentSession?.metadataEntries?.['criteria'])
   const agentDefaults = useAgentsStore((state) => state.defaults)
   const agentUserItems = useAgentsStore((state) => state.userItems)
   const agents = [...agentDefaults, ...agentUserItems]

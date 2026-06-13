@@ -515,7 +515,8 @@ export class EventStore {
           'mode.changed',
           'phase.changed',
           'todo.updated',
-          'context.state'
+          'context.state',
+          'metadata.set'
         )
       `,
       )

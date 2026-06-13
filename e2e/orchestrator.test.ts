@@ -65,15 +65,15 @@ describe.skip('Runner/Orchestrator', () => {
     })
 
     it('starts runner with pending criteria', async () => {
-      // Use chat.send with add_criterion tool (works reliably)
+      // Use chat.send with session_metadata tool (works reliably)
       await client.send('chat.send', {
-        content: 'Add criterion ID "func-exists": "Function add exists in src/math.ts". Use add_criterion tool.',
+        content: 'Add criterion ID "func-exists": "Function add exists in src/math.ts". Use session_metadata tool.',
       })
       await client.waitForChatDone()
 
       // Verify criterion was added
       const session = client.getSession()!
-      expect(session.criteria.length).toBeGreaterThan(0)
+      expect(session.metadataEntries?.['criteria']?.length ?? 0).toBeGreaterThan(0)
 
       // Switch to builder
       const sessionId = client.getSession()!.id
@@ -95,7 +95,7 @@ describe.skip('Runner/Orchestrator', () => {
   describe('Build → Verify Cycle', () => {
     it.skip('runs builder then verifier', async () => {
       await client.send('chat.send', {
-        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use add_criterion.',
+        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
       const sessionId = client.getSession()!.id
@@ -119,7 +119,7 @@ describe.skip('Runner/Orchestrator', () => {
   describe('Done State', () => {
     it.skip('reaches done when all criteria pass', async () => {
       await client.send('chat.send', {
-        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use add_criterion.',
+        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
       const sessionId = client.getSession()!.id
@@ -131,14 +131,16 @@ describe.skip('Runner/Orchestrator', () => {
       const session = client.getSession()!
       expect(session.phase).toBe('done')
       expect(session.isRunning).toBe(false)
-      expect(session.criteria[0]?.status.type).toBe('passed')
+      const criteria = session.metadataEntries?.['criteria'] ?? []
+      const c0 = criteria[0] as { status: string } | undefined
+      expect(c0?.status).toBe('passed')
     })
   })
 
   describe('Blocked State', () => {
     it.skip('reaches blocked after repeated failures', async () => {
       await client.send('chat.send', {
-        content: 'Add criterion ID "verify-fail": "Verifier should fail this criterion". Use add_criterion.',
+        content: 'Add criterion ID "verify-fail": "Verifier should fail this criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
 
@@ -157,7 +159,7 @@ describe.skip('Runner/Orchestrator', () => {
 
       // Add criterion
       await client.send('chat.send', {
-        content: 'Add criterion: "Something happens". Use add_criterion.',
+        content: 'Add criterion: "Something happens". Use session_metadata.',
       })
       await client.waitForChatDone()
 
@@ -229,7 +231,7 @@ describe.skip('Runner/Orchestrator', () => {
   describe('Reset Blocked', () => {
     it.skip('resets from blocked state on user intervention', async () => {
       await client.send('chat.send', {
-        content: 'Add criterion ID "verify-fail": "Verifier should fail this criterion". Use add_criterion.',
+        content: 'Add criterion ID "verify-fail": "Verifier should fail this criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
       await client.send('mode.accept', {})
@@ -259,7 +261,7 @@ describe.skip('Runner/Orchestrator', () => {
   describe('Stats and Notifications', () => {
     it('emits chat.done with complete at end of runner execution', async () => {
       await client.send('chat.send', {
-        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use add_criterion.',
+        content: 'Add criterion ID "trivial-pass": "Trivial pass criterion". Use session_metadata.',
       })
       await client.waitForChatDone()
       const sessionId = client.getSession()!.id
@@ -289,7 +291,7 @@ describe.skip('Runner/Orchestrator', () => {
 
     it.skip('emits chat.done with complete at end of multi-iteration run', { timeout: 10_000 }, async () => {
       await client.send('chat.send', {
-        content: 'Add criterion ID "file-created": "A new file utils.ts exists". Use add_criterion.',
+        content: 'Add criterion ID "file-created": "A new file utils.ts exists". Use session_metadata.',
       })
       await client.waitForChatDone()
       const sessionId = client.getSession()!.id

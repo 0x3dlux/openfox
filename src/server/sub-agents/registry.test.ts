@@ -19,7 +19,12 @@ describe('SubAgentRegistry (via agent registry)', () => {
     expect(verifier?.metadata.name).toBe('Verifier')
     expect(typeof verifier?.metadata.description).toBe('string')
     expect(typeof verifier?.prompt).toBe('string')
-    expect(verifier?.metadata.allowedTools).toEqual(['read_file', 'run_command', 'criterion:pass,fail', 'web_fetch'])
+    expect(verifier?.metadata.allowedTools).toEqual([
+      'read_file',
+      'run_command',
+      'session_metadata:get,add,update,remove',
+      'web_fetch',
+    ])
     expect(verifier?.metadata.subagent).toBe(true)
   })
 

@@ -264,7 +264,7 @@ export function FlowDiagram({
           className="cursor-pointer"
           onClick={(ev) => {
             ev.stopPropagation()
-            onSelectEdge(isSelected ? null : e.edgeKey)
+            if (!isReadOnly) onSelectEdge(isSelected ? null : e.edgeKey)
           }}
         />
         <path

@@ -839,10 +839,9 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId }: WorkflowsModa
             items={defaults}
             renderActions={(wf) => (
               <>
-                <EditButton onClick={() => handleView(wf.id)}>
+                <EditButton onClick={() => handleDuplicate(wf.id)}>
                   <EyeIcon />
                 </EditButton>
-                <DuplicateIcon onClick={() => handleDuplicate(wf.id)} />
               </>
             )}
           />

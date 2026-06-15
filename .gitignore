@@ -3,6 +3,10 @@ node_modules/
 
 # Build outputs
 dist/
+dist-sea/
+dist-sea-bundle/
+out/
+launcher/
 *.tsbuildinfo
 
 # Database

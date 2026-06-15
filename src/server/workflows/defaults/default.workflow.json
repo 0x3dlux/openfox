@@ -72,10 +72,19 @@
             "field": "status",
             "values": ["resolved", "dismissed"]
           },
-          "goto": "$done"
+          "goto": "summarize"
         },
         { "when": { "type": "always" }, "goto": "finalize" }
       ]
+    },
+    {
+      "id": "summarize",
+      "name": "Summarize",
+      "type": "agent",
+      "phase": "verification",
+      "toolMode": "builder",
+      "prompt": "Produce a concise summary of what was accomplished in this session. Include:\n- What was implemented or fixed\n- Key files modified\n- Any notable decisions or tradeoffs\n\nCall step_done() when done.",
+      "transitions": [{ "when": { "type": "always" }, "goto": "$done" }]
     }
   ],
   "startCondition": {

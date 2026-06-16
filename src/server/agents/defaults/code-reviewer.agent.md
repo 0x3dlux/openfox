@@ -6,6 +6,7 @@ subagent: true
 color: '#ef4444'
 allowedTools:
   - read_file
+  - run_command
   - web_fetch
   - session_metadata:get,add,update,remove
 ---

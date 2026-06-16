@@ -39,6 +39,7 @@ describe('SubAgentRegistry (via agent registry)', () => {
     expect(typeof codeReviewer?.prompt).toBe('string')
     expect(codeReviewer?.metadata.allowedTools).toEqual([
       'read_file',
+      'run_command',
       'web_fetch',
       'session_metadata:get,add,update,remove',
     ])

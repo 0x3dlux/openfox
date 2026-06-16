@@ -6,6 +6,7 @@ subagent: true
 color: '#3b82f6'
 allowedTools:
   - read_file
+  - run_command
   - web_fetch
 ---
 

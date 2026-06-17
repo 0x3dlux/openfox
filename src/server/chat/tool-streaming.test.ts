@@ -5,11 +5,13 @@ import Database from 'better-sqlite3'
 
 let db: Database.Database
 let eventStore: EventStore
+let append: (event: import('../events/types.js').TurnEvent) => void
 
 describe('tool streaming', () => {
   beforeEach(() => {
     db = new Database(':memory:')
     eventStore = new EventStore(db)
+    append = (event) => { eventStore.append('test-session', event) }
     ;(global as any).__eventStore = eventStore
   })
 
@@ -72,7 +74,7 @@ describe('tool streaming', () => {
 
   describe('createToolProgressHandler', () => {
     it('creates handler that emits tool.output events to EventStore', () => {
-      const handler = createToolProgressHandler(eventStore, 'msg-1', 'call-1', 'test-session')
+      const handler = createToolProgressHandler(append, 'msg-1', 'call-1', 'test-session')
       handler('[stdout] test output')
 
       const events = eventStore.getEvents('test-session')
@@ -88,7 +90,7 @@ describe('tool streaming', () => {
     })
 
     it('handles multiple progress calls', () => {
-      const handler = createToolProgressHandler(eventStore, 'msg-1', 'call-1', 'test-session')
+      const handler = createToolProgressHandler(append, 'msg-1', 'call-1', 'test-session')
       handler('[stdout] line1')
       handler('[stdout] line2')
       handler('[stderr] warning')
@@ -102,7 +104,7 @@ describe('tool streaming', () => {
     })
 
     it('ignores malformed progress messages', () => {
-      const handler = createToolProgressHandler(eventStore, 'msg-1', 'call-1', 'test-session')
+      const handler = createToolProgressHandler(append, 'msg-1', 'call-1', 'test-session')
       handler('not a valid progress message')
       handler('[invalid] prefix')
 
@@ -112,8 +114,8 @@ describe('tool streaming', () => {
     })
 
     it('passes correct messageId and callId for each call', () => {
-      const handler1 = createToolProgressHandler(eventStore, 'msg-A', 'call-A', 'test-session')
-      const handler2 = createToolProgressHandler(eventStore, 'msg-B', 'call-B', 'test-session')
+      const handler1 = createToolProgressHandler(append, 'msg-A', 'call-A', 'test-session')
+      const handler2 = createToolProgressHandler(append, 'msg-B', 'call-B', 'test-session')
 
       handler1('[stdout] from A')
       handler2('[stdout] from B')

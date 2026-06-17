@@ -62,6 +62,7 @@ vi.mock('../db/projects.js', () => ({
 vi.mock('../db/settings.js', () => ({
   getSetting: getSettingMock,
   setSetting: setSettingMock,
+  SETTINGS_KEYS: { LLM_DYNAMIC_SYSTEM_PROMPT: 'llm.dynamicSystemPrompt' },
 }))
 
 // db/sessions.js mock removed - messages are now stored in EventStore only
@@ -188,6 +189,10 @@ vi.mock('../chat/stream-pure.js', async (importOriginal) => {
     consumeStreamWithToolLoop: consumeStreamGeneratorMock,
   }
 })
+
+vi.mock('../chat/conversation-history.js', () => ({
+  getConversationMessages: vi.fn().mockReturnValue([]),
+}))
 
 vi.mock('../chat/orchestrator.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../chat/orchestrator.js')>()
@@ -872,6 +877,20 @@ describe('createWebSocketServer', () => {
       setRunning: vi.fn((_id, isRunning) => {
         sessionState.isRunning = isRunning
       }),
+      setCurrentContextSize: vi.fn(),
+      getContextState: vi.fn(() => ({
+        currentTokens: 10, maxTokens: 200000, compactionCount: 0,
+        dangerZone: false, canCompact: false, dynamicContextChanged: false,
+      })),
+      getCurrentModelSettings: vi.fn(() => ({})),
+      getDynamicContextChanged: vi.fn(() => false),
+      setDynamicContextChanged: vi.fn(),
+      getCachedPrompt: vi.fn(() => undefined),
+      setCachedPrompt: vi.fn(),
+      getLspManager: vi.fn(),
+      drainAsapMessages: vi.fn(() => []),
+      getCurrentWindowMessages: vi.fn(() => []),
+      updateMessage: vi.fn(),
     })
 
     getAllInstructionsMock.mockResolvedValue({ content: 'Follow instructions', files: [] })
@@ -934,11 +953,11 @@ describe('createWebSocketServer', () => {
     expect(await harness.nextMessage((message) => message.type === 'session.state')).toMatchObject({
       type: 'session.state',
     })
-    expect(sessionManager.compactContext).toHaveBeenCalledWith(
-      'session-1',
-      'Compacted summary of the session including all file modifications and current progress on tasks',
-      10,
-    )
+    // Compaction is now handled by the loop — it appends context.compacted event
+    const es = getEventStoreMock()
+    const compactEvents = es.getEvents('session-1')
+    const hasCompactedEvent = compactEvents.some((e: any) => e.type === 'context.compacted')
+    expect(hasCompactedEvent).toBe(true)
     expect(streamLLMPureMock.mock.calls[1]?.[0]?.messages).toEqual(
       expect.not.arrayContaining([
         expect.objectContaining({ content: expect.stringContaining('Plan mode ACTIVE') }),

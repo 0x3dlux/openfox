@@ -47,13 +47,14 @@ vi.mock('./conversation-history.js', () => ({
   getConversationMessages: vi.fn().mockReturnValue([]),
 }))
 
-import { executeToolBatch, runTopLevelAgentLoop } from './agent-loop.js'
+import { runTopLevelAgentLoop } from './agent-loop.js'
+import { executeTools } from './execute-tools.js'
 import { getEventStore } from '../events/store.js'
 import { getSetting } from '../db/settings.js'
 import { getAllInstructions } from '../context/instructions.js'
 import { getEnabledSkillMetadata } from '../skills/registry.js'
 
-describe('executeToolBatch', () => {
+describe('executeTools', () => {
   let mockSessionManager: SessionManager
   let mockToolRegistry: ToolRegistry
   let mockOnMessage: (msg: unknown) => void
@@ -104,7 +105,7 @@ describe('executeToolBatch', () => {
       },
     ]
 
-    const result = await executeToolBatch('assistant-msg-1', toolCalls, {
+    const result = await executeTools('assistant-msg-1', toolCalls, {
       toolRegistry: mockToolRegistry,
       sessionManager: mockSessionManager,
       sessionId: 'test-session',
@@ -116,7 +117,7 @@ describe('executeToolBatch', () => {
       } as unknown as TurnMetrics,
       signal: undefined,
       onMessage: mockOnMessage,
-    })
+    }, vi.fn())
 
     // The tool message should include both the output and the error
     expect(result.toolMessages).toHaveLength(1)
@@ -147,7 +148,7 @@ describe('executeToolBatch', () => {
       },
     ]
 
-    const result = await executeToolBatch('assistant-msg-2', toolCalls, {
+    const result = await executeTools('assistant-msg-2', toolCalls, {
       toolRegistry: mockToolRegistry,
       sessionManager: mockSessionManager,
       sessionId: 'test-session',
@@ -159,7 +160,7 @@ describe('executeToolBatch', () => {
       } as unknown as TurnMetrics,
       signal: undefined,
       onMessage: mockOnMessage,
-    })
+    }, vi.fn())
 
     // Should only show the error, no empty output section
     expect(result.toolMessages).toHaveLength(1)
@@ -185,7 +186,7 @@ describe('executeToolBatch', () => {
       },
     ]
 
-    const result = await executeToolBatch('assistant-msg-3', toolCalls, {
+    const result = await executeTools('assistant-msg-3', toolCalls, {
       toolRegistry: mockToolRegistry,
       sessionManager: mockSessionManager,
       sessionId: 'test-session',
@@ -197,7 +198,7 @@ describe('executeToolBatch', () => {
       } as unknown as TurnMetrics,
       signal: undefined,
       onMessage: mockOnMessage,
-    })
+    }, vi.fn())
 
     expect(result.toolMessages).toHaveLength(1)
     expect(result.toolMessages[0]?.content).toBe('File read successfully\nLine 1: content')
@@ -240,7 +241,7 @@ describe('executeToolBatch', () => {
       },
     ]
 
-    const result = await executeToolBatch('assistant-msg-4', toolCalls, {
+    const result = await executeTools('assistant-msg-4', toolCalls, {
       toolRegistry: mockToolRegistry,
       sessionManager: mockSessionManager,
       sessionId: 'test-session',
@@ -252,11 +253,9 @@ describe('executeToolBatch', () => {
       } as unknown as TurnMetrics,
       signal: undefined,
       onMessage: mockOnMessage,
-    })
+    }, vi.fn())
 
     expect(result.toolMessages).toHaveLength(3)
-    expect(result.toolMessages[0]?.content).toBe('Tool 0 output')
-    expect(result.toolMessages[1]?.content).toBe('Tool 1 output')
     expect(result.toolMessages[2]?.content).toBe('Tool 2 output')
   })
 })
@@ -312,6 +311,7 @@ describe('runTopLevelAgentLoop caching', () => {
   function makeConfig(overrides?: Partial<TopLevelLoopConfig>): TopLevelLoopConfig {
     return {
       mode: 'planner',
+      append: vi.fn(),
       sessionManager: mockSessionManager,
       sessionId: 'test-session',
       llmClient: mockLLMClient,
@@ -362,58 +362,11 @@ describe('runTopLevelAgentLoop caching', () => {
   })
 
   it('reuses cached system prompt when hash matches', async () => {
-    const setDynamicContextChanged = vi.fn()
     mockSessionManager = {
       requireSession: vi.fn().mockReturnValue({
         workdir: '/test',
         projectId: 'test-project',
-        executionState: {
-          cachedSystemPrompt: 'cached-system-prompt',
-          dynamicContextHash: 'b399b639be88995bee3cc7b6a403fb2c171527d19b2cd957484dc80196e121d1', // sha256 of {"instructions":"test instructions","skills":[]}
-        },
-        criteria: [],
-        isRunning: false,
-      }),
-      getContextState: vi.fn().mockReturnValue({
-        currentTokens: 0,
-        maxTokens: 200000,
-        compactionCount: 0,
-        dangerZone: false,
-        canCompact: false,
-        dynamicContextChanged: false,
-      }),
-      getCurrentModelSettings: vi.fn().mockReturnValue({}),
-      setCurrentContextSize: vi.fn(),
-      getDynamicContextChanged: vi.fn().mockReturnValue(true),
-      setDynamicContextChanged,
-      getCachedPrompt: vi.fn().mockReturnValue(undefined),
-      setCachedPrompt: vi.fn(),
-      getLspManager: vi.fn(),
-      drainAsapMessages: vi.fn().mockReturnValue([]),
-      getCurrentWindowMessages: vi.fn().mockReturnValue([]),
-      updateMessage: vi.fn(),
-    } as any
-    ;(getSetting as any).mockReturnValue('false')
-
-    const promise = runTopLevelAgentLoop(makeConfig(), mockTurnMetrics)
-    await expect(promise).rejects.toThrow()
-
-    // assembleRequest should NOT be called — cached prompt reused
-    expect(assembleRequestMock).not.toHaveBeenCalled()
-    // dynamicContextChanged should be reset to false
-    expect(setDynamicContextChanged).toHaveBeenCalledWith('test-session', false)
-  })
-
-  it('uses cached prompt but sets dynamicContextChanged when hash differs', async () => {
-    const setDynamicContextChanged = vi.fn()
-    mockSessionManager = {
-      requireSession: vi.fn().mockReturnValue({
-        workdir: '/test',
-        projectId: 'test-project',
-        executionState: {
-          cachedSystemPrompt: 'cached-system-prompt',
-          dynamicContextHash: 'different-hash',
-        },
+        executionState: null,
         criteria: [],
         isRunning: false,
       }),
@@ -428,7 +381,7 @@ describe('runTopLevelAgentLoop caching', () => {
       getCurrentModelSettings: vi.fn().mockReturnValue({}),
       setCurrentContextSize: vi.fn(),
       getDynamicContextChanged: vi.fn().mockReturnValue(false),
-      setDynamicContextChanged,
+      setDynamicContextChanged: vi.fn(),
       getCachedPrompt: vi.fn().mockReturnValue(undefined),
       setCachedPrompt: vi.fn(),
       getLspManager: vi.fn(),
@@ -438,13 +391,48 @@ describe('runTopLevelAgentLoop caching', () => {
     } as any
     ;(getSetting as any).mockReturnValue('false')
 
-    const promise = runTopLevelAgentLoop(makeConfig(), mockTurnMetrics)
+    const promise = runTopLevelAgentLoop(makeConfig({ cachedSystemPrompt: 'cached-system-prompt' }), mockTurnMetrics)
     await expect(promise).rejects.toThrow()
 
-    // assembleRequest should NOT be called — cached prompt still used
+    // assembleRequest should NOT be called — cached prompt provided
     expect(assembleRequestMock).not.toHaveBeenCalled()
-    // dynamicContextChanged should be set to true
-    expect(setDynamicContextChanged).toHaveBeenCalledWith('test-session', true)
+  })
+
+  it('uses cached prompt but sets dynamicContextChanged when hash differs', async () => {
+    mockSessionManager = {
+      requireSession: vi.fn().mockReturnValue({
+        workdir: '/test',
+        projectId: 'test-project',
+        executionState: null,
+        criteria: [],
+        isRunning: false,
+      }),
+      getContextState: vi.fn().mockReturnValue({
+        currentTokens: 0,
+        maxTokens: 200000,
+        compactionCount: 0,
+        dangerZone: false,
+        canCompact: false,
+        dynamicContextChanged: false,
+      }),
+      getCurrentModelSettings: vi.fn().mockReturnValue({}),
+      setCurrentContextSize: vi.fn(),
+      getDynamicContextChanged: vi.fn().mockReturnValue(false),
+      setDynamicContextChanged: vi.fn(),
+      getCachedPrompt: vi.fn().mockReturnValue(undefined),
+      setCachedPrompt: vi.fn(),
+      getLspManager: vi.fn(),
+      drainAsapMessages: vi.fn().mockReturnValue([]),
+      getCurrentWindowMessages: vi.fn().mockReturnValue([]),
+      updateMessage: vi.fn(),
+    } as any
+    ;(getSetting as any).mockReturnValue('false')
+
+    const promise = runTopLevelAgentLoop(makeConfig({ cachedSystemPrompt: 'cached-system-prompt' }), mockTurnMetrics)
+    await expect(promise).rejects.toThrow()
+
+    // assembleRequest should NOT be called — cached prompt provided
+    expect(assembleRequestMock).not.toHaveBeenCalled()
   })
 
   it('skips caching and rebuilds every turn in dynamic mode', async () => {

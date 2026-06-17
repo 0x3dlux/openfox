@@ -642,6 +642,62 @@ describe('EventStore', () => {
       )
     })
   })
+
+  // ============================================================================
+  // Tombstoning
+  // ============================================================================
+
+  describe('tombstoneEvents', () => {
+    it('should hide tombstoned events from getEvents', () => {
+      const e1 = store.append('session-1', { type: 'message.start', data: { messageId: 'msg-1', role: 'user', content: 'Hello' } })
+      const e2 = store.append('session-1', { type: 'message.done', data: { messageId: 'msg-1' } })
+      const e3 = store.append('session-1', { type: 'message.start', data: { messageId: 'msg-2', role: 'user', content: 'World' } })
+
+      store.tombstoneEvents('session-1', [e2.seq])
+
+      const events = store.getEvents('session-1')
+      expect(events).toHaveLength(2)
+      expect(events[0]!.seq).toBe(e1.seq)
+      expect(events[1]!.seq).toBe(e3.seq)
+    })
+
+    it('should not affect other sessions', () => {
+      const e1 = store.append('session-1', { type: 'message.start', data: { messageId: 'msg-1', role: 'user', content: 'Hello' } })
+      const e2 = store.append('session-2', { type: 'message.start', data: { messageId: 'msg-2', role: 'user', content: 'World' } })
+
+      store.tombstoneEvents('session-1', [e1.seq])
+
+      const events1 = store.getEvents('session-1')
+      expect(events1).toHaveLength(0)
+
+      const events2 = store.getEvents('session-2')
+      expect(events2).toHaveLength(1)
+      expect(events2[0]!.seq).toBe(e2.seq)
+    })
+
+    it('should handle tombstoning non-existent seqs gracefully', () => {
+      store.append('session-1', { type: 'message.start', data: { messageId: 'msg-1', role: 'user', content: 'Hello' } })
+
+      expect(() => store.tombstoneEvents('session-1', [999])).not.toThrow()
+    })
+
+    it('should return the number of events tombstoned', () => {
+      const e1 = store.append('session-1', { type: 'message.start', data: { messageId: 'msg-1', role: 'user', content: 'Hello' } })
+      store.append('session-1', { type: 'message.done', data: { messageId: 'msg-1' } })
+
+      const count = store.tombstoneEvents('session-1', [e1.seq])
+      expect(count).toBe(1)
+    })
+
+    it('should not tombstone already tombstoned events', () => {
+      const e1 = store.append('session-1', { type: 'message.start', data: { messageId: 'msg-1', role: 'user', content: 'Hello' } })
+
+      store.tombstoneEvents('session-1', [e1.seq])
+      const count = store.tombstoneEvents('session-1', [e1.seq])
+
+      expect(count).toBe(0)
+    })
+  })
 })
 
 describe('initEventStore', () => {

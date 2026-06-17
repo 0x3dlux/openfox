@@ -13,20 +13,15 @@ import type { ServerMessage } from '../../shared/protocol.js'
 import type { LLMClientWithModel } from '../llm/client.js'
 import type { LLMToolDefinition } from '../llm/types.js'
 import type { SessionManager } from '../session/index.js'
-import type { ToolContext, ToolRegistry } from '../tools/types.js'
+import type { ToolRegistry } from '../tools/types.js'
 import type { RequestContextMessage, MinimalMessage, AssemblyResult } from './request-context.js'
 import { createAssemblyResult } from './request-context.js'
-import { PathAccessDeniedError, AskUserInterrupt } from '../tools/index.js'
-import { createToolProgressHandler } from './tool-streaming.js'
-import { getEventStore } from '../events/index.js'
 import {
   streamLLMPure,
   consumeStreamGenerator,
   TurnMetrics,
   createMessageStartEvent,
   createMessageDoneEvent,
-  createToolCallEvent,
-  createToolResultEvent,
   createChatDoneEvent,
   createFormatRetryEvent,
 } from './stream-pure.js'
@@ -44,60 +39,42 @@ import {
   createChatDoneMessage,
   createChatMessageUpdatedMessage,
 } from '../ws/protocol.js'
-import type { DangerLevel } from '../../shared/types.js'
-import { computeDynamicContextHash } from './dynamic-context.js'
-import stripAnsi from 'strip-ansi'
 import { getConversationMessages } from './conversation-history.js'
+import { executeTools, type ToolBatchContext } from './execute-tools.js'
+import { matchAutoPatterns, type AutoPattern } from './auto-patterns.js'
 
 function emitPartialDoneEvents(
-  sessionId: string,
+  _sessionId: string,
   assistantMsgId: string,
   statsIdentity: import('../../shared/types.js').StatsIdentity,
   mode: import('../../shared/types.js').ToolMode,
   turnMetrics: TurnMetrics,
   promptContext: PromptContext,
-  eventStore: ReturnType<typeof getEventStore>,
+  append: (event: import('../events/types.js').TurnEvent) => void,
 ): void {
   const stats = turnMetrics.buildStats(statsIdentity, mode)
-  eventStore.append(
-    sessionId,
+  append(
     createMessageDoneEvent(assistantMsgId, {
       stats,
       partial: true,
       promptContext,
     }),
   )
-  eventStore.append(sessionId, createChatDoneEvent(assistantMsgId, 'stopped', stats))
+  append(createChatDoneEvent(assistantMsgId, 'stopped', stats))
 }
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export interface ToolBatchContext {
-  toolRegistry: ToolRegistry
-  sessionManager: SessionManager
-  sessionId: string
-  workdir: string
-  dangerLevel?: DangerLevel
-  turnMetrics: TurnMetrics
-  signal?: AbortSignal | undefined
-  onMessage?: ((msg: ServerMessage) => void) | undefined
-  llmClient?: LLMClientWithModel | undefined
-  statsIdentity?: StatsIdentity | undefined
-  onToolExecuted?: ((toolCall: ToolCall, result: ToolResult) => void) | undefined
-  agentTimeout?: number
-}
-
-export interface ToolBatchResult {
-  toolMessages: RequestContextMessage[]
-  criteriaChanged: boolean
-  returnValueContent?: string | undefined
-  returnValueResult?: string | undefined
-}
-
 export interface TopLevelLoopConfig {
   mode: ToolMode
+  loopMode?: 'normal' | 'compaction'
+  autoPatterns?: AutoPattern[]
+  /** Function to append events (provided by orchestrator) */
+  append: (event: import('../events/types.js').TurnEvent) => void
+  /** If provided, use this cached system prompt instead of assembling fresh */
+  cachedSystemPrompt?: string
   sessionManager: SessionManager
   sessionId: string
   llmClient: LLMClientWithModel
@@ -131,163 +108,6 @@ function getCurrentWindowMessageOptions(sessionId: string): { contextWindowId: s
   return contextWindowId ? { contextWindowId } : undefined
 }
 
-export async function executeToolBatch(
-  assistantMsgId: string,
-  toolCalls: ToolCall[],
-  ctx: ToolBatchContext,
-): Promise<ToolBatchResult> {
-  const eventStore = getEventStore()
-  const toolMessages: RequestContextMessage[] = []
-  let returnValueContent: string | undefined
-  let returnValueResult: string | undefined
-
-  if (ctx.signal?.aborted) {
-    throw new Error('Aborted')
-  }
-
-  for (const toolCall of toolCalls) {
-    eventStore.append(ctx.sessionId, createToolCallEvent(assistantMsgId, toolCall))
-  }
-
-  const handleToolExecutionError = async (
-    error: unknown,
-    sessionId: string,
-    startTime: number,
-  ): Promise<ToolResult> => {
-    if (error instanceof PathAccessDeniedError) {
-      return {
-        success: false,
-        error: `User denied access to ${error.paths.join(', ')}. If you need this file, explain why and ask for permission.`,
-        durationMs: Date.now() - startTime,
-        truncated: false,
-      }
-    } else if (error instanceof AskUserInterrupt) {
-      eventStore.append(sessionId, {
-        type: 'chat.ask_user',
-        data: { callId: error.callId, question: error.question },
-      })
-
-      const { awaitAnswer } = await import('../tools/ask.js')
-      const answerPromise = awaitAnswer(error.callId)
-      if (!answerPromise) {
-        throw new Error(`No pending question found for callId: ${error.callId}`)
-      }
-      const answer = await answerPromise
-      return {
-        success: true,
-        output: answer,
-        durationMs: Date.now() - startTime,
-        truncated: false,
-      }
-    } else {
-      throw error
-    }
-  }
-
-  const executeTool = async (
-    toolCall: ToolCall,
-    index: number,
-  ): Promise<{
-    toolCall: ToolCall
-    toolResult: ToolResult
-    content: string
-    index: number
-  }> => {
-    if (ctx.signal?.aborted) {
-      throw new Error('Aborted')
-    }
-
-    if (toolCall.parseError) {
-      const toolResult: ToolResult = {
-        success: false,
-        error: `Failed to parse tool call arguments: ${toolCall.parseError}. Please ensure your JSON function call arguments are valid.`,
-        durationMs: 0,
-        truncated: false,
-      }
-      ctx.turnMetrics.addToolTime(toolResult.durationMs)
-      eventStore.append(ctx.sessionId, createToolResultEvent(assistantMsgId, toolCall.id, toolResult))
-      return {
-        toolCall,
-        toolResult,
-        content: `Error: ${toolResult.error}`,
-        index,
-      }
-    }
-
-    const onProgress = ctx.onMessage
-      ? createToolProgressHandler(eventStore, assistantMsgId, toolCall.id, ctx.sessionId)
-      : undefined
-
-    const toolContext: ToolContext = {
-      sessionManager: ctx.sessionManager,
-      workdir: ctx.workdir,
-      sessionId: ctx.sessionId,
-      signal: ctx.signal,
-      llmClient: ctx.llmClient,
-      statsIdentity: ctx.statsIdentity,
-      lspManager: ctx.sessionManager.getLspManager(ctx.sessionId),
-      onEvent: ctx.onMessage,
-      onProgress,
-      toolCallId: toolCall.id,
-    }
-    if (ctx.dangerLevel) {
-      toolContext.dangerLevel = ctx.dangerLevel
-    }
-
-    const startTime = Date.now()
-    let toolResult: ToolResult
-    try {
-      toolResult = await ctx.toolRegistry.execute(toolCall.name, toolCall.arguments, toolContext)
-    } catch (error) {
-      toolResult = await handleToolExecutionError(error, ctx.sessionId, startTime)
-    }
-
-    ctx.turnMetrics.addToolTime(toolResult.durationMs)
-
-    ctx.onToolExecuted?.(toolCall, toolResult)
-
-    if (toolCall.name === 'return_value' && !toolCall.parseError) {
-      returnValueContent = (toolCall.arguments as Record<string, unknown>)['content'] as string
-      returnValueResult = (toolCall.arguments as Record<string, unknown>)['result'] as string | undefined
-    }
-
-    const content = stripAnsi(
-      toolResult.success
-        ? (toolResult.output ?? 'Success')
-        : toolResult.output
-          ? `${toolResult.output}\n\nError: ${toolResult.error}`
-          : `Error: ${toolResult.error}`,
-    )
-
-    eventStore.append(ctx.sessionId, createToolResultEvent(assistantMsgId, toolCall.id, toolResult))
-
-    return {
-      toolCall,
-      toolResult,
-      content,
-      index,
-    }
-  }
-
-  const executionPromises = toolCalls.map((toolCall, index) => executeTool(toolCall, index))
-  const results = await Promise.all(executionPromises)
-
-  // Sort results by original index to maintain call order
-  results.sort((a, b) => a.index - b.index)
-
-  // Build tool messages in index order
-  for (const result of results) {
-    toolMessages.push({
-      role: 'tool',
-      content: result.content,
-      source: 'history',
-      toolCallId: result.toolCall.id,
-    })
-  }
-
-  return { toolMessages, criteriaChanged: false, returnValueContent, returnValueResult }
-}
-
 // ============================================================================
 // Top-Level Agent Loop (replaces runPlannerTurn / runBuilderTurn)
 // ============================================================================
@@ -301,7 +121,7 @@ export async function runTopLevelAgentLoop(
   turnMetrics: TurnMetrics,
 ): Promise<{ returnValueContent?: string; returnValueResult?: string }> {
   const { mode, sessionManager, sessionId, llmClient, signal, onMessage, statsIdentity } = config
-  const eventStore = getEventStore()
+  const append = config.append
 
   let formatRetryCount = 0
   let truncationRetryCount = 0
@@ -310,13 +130,15 @@ export async function runTopLevelAgentLoop(
   let currentMaxTokensOverride: number | undefined
 
   for (;;) {
-    await maybeAutoCompactContext({
-      sessionManager,
-      sessionId,
-      llmClient,
-      statsIdentity,
-      ...(signal ? { signal } : {}),
-    })
+    if (config.loopMode !== 'compaction') {
+      await maybeAutoCompactContext({
+        sessionManager,
+        sessionId,
+        llmClient,
+        statsIdentity,
+        ...(signal ? { signal } : {}),
+      })
+    }
 
     if (signal?.aborted) throw new Error('Aborted')
 
@@ -343,15 +165,14 @@ export async function runTopLevelAgentLoop(
 
     if (formatRetryCount > 0) {
       const correctionMsgId = crypto.randomUUID()
-      eventStore.append(
-        sessionId,
+      append(
         createMessageStartEvent(correctionMsgId, 'user', FORMAT_CORRECTION_PROMPT, {
           ...(currentWindowMessageOptions ?? {}),
           isSystemGenerated: true,
           messageKind: 'correction',
         }),
       )
-      eventStore.append(sessionId, createFormatRetryEvent(formatRetryCount, MAX_FORMAT_RETRIES))
+      append(createFormatRetryEvent(formatRetryCount, MAX_FORMAT_RETRIES))
       // Add correction directly so the LLM sees it this iteration.
       // It's also emitted to the event store, so it appears in history on subsequent iterations.
       requestMessages.push({ role: 'user', content: FORMAT_CORRECTION_PROMPT, source: 'history' })
@@ -377,48 +198,21 @@ export async function runTopLevelAgentLoop(
 
     let assembledRequest: AssemblyResult
 
-    if (isDynamicMode) {
-      assembledRequest = assembleFreshRequest()
+    if (config.cachedSystemPrompt && !isDynamicMode) {
+      assembledRequest = createAssemblyResult({
+        systemPrompt: config.cachedSystemPrompt,
+        messages: requestMessages,
+        injectedFiles,
+        requestTools: toolRegistry.definitions,
+        toolChoice: 'auto',
+        disableThinking: false,
+      })
     } else {
-      const dynamicHash = computeDynamicContextHash(instructionContent, skills)
-      const execState = session.executionState
-      const hashMatch = execState?.dynamicContextHash === dynamicHash
-      const hasCached = !!execState?.cachedSystemPrompt
-
-      if (hasCached && hashMatch) {
-        assembledRequest = createAssemblyResult({
-          systemPrompt: execState!.cachedSystemPrompt!,
-          messages: requestMessages,
-          injectedFiles,
-          requestTools: toolRegistry.definitions,
-          toolChoice: 'auto',
-          disableThinking: false,
-        })
-        if (sessionManager.getDynamicContextChanged(sessionId)) {
-          sessionManager.setDynamicContextChanged(sessionId, false)
-        }
-      } else if (hasCached) {
-        assembledRequest = createAssemblyResult({
-          systemPrompt: execState!.cachedSystemPrompt!,
-          messages: requestMessages,
-          injectedFiles,
-          requestTools: toolRegistry.definitions,
-          toolChoice: 'auto',
-          disableThinking: false,
-        })
-        if (!sessionManager.getDynamicContextChanged(sessionId)) {
-          sessionManager.setDynamicContextChanged(sessionId, true)
-        }
-      } else {
-        assembledRequest = assembleFreshRequest()
-        sessionManager.setCachedPrompt(sessionId, assembledRequest.systemPrompt, dynamicHash)
-        sessionManager.setDynamicContextChanged(sessionId, false)
-      }
+      assembledRequest = assembleFreshRequest()
     }
 
     const assistantMsgId = crypto.randomUUID()
-    eventStore.append(
-      sessionId,
+    append(
       createMessageStartEvent(assistantMsgId, 'assistant', undefined, currentWindowMessageOptions),
     )
 
@@ -434,7 +228,7 @@ export async function runTopLevelAgentLoop(
       if (filename !== undefined) {
         eventData.filename = filename
       }
-      eventStore.append(sessionId, {
+      append({
         type: 'vision_fallback.start',
         data: eventData,
       })
@@ -449,7 +243,7 @@ export async function runTopLevelAgentLoop(
       doOnMessage(createChatVisionFallbackMessage(payload))
     }
     const onVisionFallbackDone = (attachmentId: string, description: string) => {
-      eventStore.append(sessionId, {
+      append({
         type: 'vision_fallback.done',
         data: { messageId: assistantMsgId, attachmentId, description },
       })
@@ -482,7 +276,7 @@ export async function runTopLevelAgentLoop(
     })
 
     const result = await consumeStreamGenerator(streamGen, (event) => {
-      eventStore.append(sessionId, event)
+      append(event)
     })
 
     if (result.xmlFormatError) {
@@ -490,12 +284,33 @@ export async function runTopLevelAgentLoop(
         formatRetryCount += 1
         continue
       } else {
-        eventStore.append(sessionId, {
+        append({
           type: 'chat.error',
           data: { error: 'Model repeatedly used XML tool format after 10 retries', recoverable: false },
         })
-        eventStore.append(sessionId, createChatDoneEvent(assistantMsgId, 'error'))
+        append(createChatDoneEvent(assistantMsgId, 'error'))
         throw new Error('XML tool format retry limit exceeded')
+      }
+    }
+
+    // Check auto-loop patterns (configurable, e.g., XML protection)
+    const autoPatterns: AutoPattern[] = config.autoPatterns ?? []
+    if (autoPatterns.length > 0) {
+      const matches = matchAutoPatterns(result.content, result.thinkingContent, autoPatterns)
+      for (const match of matches) {
+        const autoMsgId = crypto.randomUUID()
+        append(
+          createMessageStartEvent(autoMsgId, 'user', match.response, {
+            ...(currentWindowMessageOptions ?? {}),
+            isSystemGenerated: true,
+            messageKind: 'correction',
+          }),
+        )
+        append({ type: 'message.done', data: { messageId: autoMsgId } })
+      }
+      if (matches.length > 0) {
+        formatRetryCount = 0
+        continue
       }
     }
 
@@ -507,7 +322,7 @@ export async function runTopLevelAgentLoop(
         mode,
         turnMetrics,
         assembledRequest.promptContext,
-        eventStore,
+        append,
       )
       throw new Error('Aborted')
     }
@@ -521,6 +336,23 @@ export async function runTopLevelAgentLoop(
     )
     sessionManager.setCurrentContextSize(sessionId, result.usage.promptTokens)
 
+    // Check compaction threshold with fresh promptTokens from LLM
+    if (config.loopMode !== 'compaction') {
+      const contextState = sessionManager.getContextState(sessionId)
+      const runtimeConfig = getRuntimeConfig()
+      const { shouldCompact } = await import('../context/compactor.js')
+      if (shouldCompact(contextState.currentTokens, contextState.maxTokens, runtimeConfig.context.compactionThreshold)) {
+        const { maybeAutoCompactContext } = await import('../context/auto-compaction.js')
+        await maybeAutoCompactContext({
+          sessionManager,
+          sessionId,
+          llmClient,
+          statsIdentity,
+          ...(signal ? { signal } : {}),
+        })
+      }
+    }
+
     if (result.finishReason === 'length' && result.toolCalls.length === 0) {
       if (truncationRetryCount < MAX_TRUNCATION_RETRIES) {
         truncationRetryCount += 1
@@ -531,8 +363,7 @@ export async function runTopLevelAgentLoop(
         currentMaxTokensOverride = newMaxTokens
         // Finalize the truncated assistant message so the frontend properly closes it
         const interimStats = turnMetrics.buildStats(statsIdentity, mode)
-        eventStore.append(
-          sessionId,
+        append(
           createMessageDoneEvent(assistantMsgId, {
             segments: result.segments,
             stats: interimStats,
@@ -544,8 +375,7 @@ export async function runTopLevelAgentLoop(
         // Emit continue message to event store so getConversationMessages picks it up next iteration
         // We don't broadcast it via WebSocket, so the frontend won't see it
         const continueMsgId = crypto.randomUUID()
-        eventStore.append(
-          sessionId,
+        append(
           createMessageStartEvent(
             continueMsgId,
             'user',
@@ -556,13 +386,12 @@ export async function runTopLevelAgentLoop(
             },
           ),
         )
-        eventStore.append(sessionId, { type: 'message.done', data: { messageId: continueMsgId } })
+        append({ type: 'message.done', data: { messageId: continueMsgId } })
         continue
       } else {
         // Exhausted retries, emit truncated
         const stats = turnMetrics.buildStats(statsIdentity, mode)
-        eventStore.append(
-          sessionId,
+        append(
           createMessageDoneEvent(assistantMsgId, {
             segments: result.segments,
             stats,
@@ -570,14 +399,27 @@ export async function runTopLevelAgentLoop(
             promptContext: assembledRequest.promptContext,
           }),
         )
-        eventStore.append(sessionId, createChatDoneEvent(assistantMsgId, 'truncated', stats))
+        append(createChatDoneEvent(assistantMsgId, 'truncated', stats))
         break
       }
     }
 
     if (result.toolCalls.length > 0) {
-      eventStore.append(
-        sessionId,
+      if (config.loopMode === 'compaction') {
+        const rejectionMsgId = crypto.randomUUID()
+        append(
+          createMessageStartEvent(rejectionMsgId, 'user', 'Compaction in progress — tool calls are not possible at this stage. Only produce a summary for compaction purposes.', {
+            ...(currentWindowMessageOptions ?? {}),
+            isSystemGenerated: true,
+            messageKind: 'correction',
+          }),
+        )
+        append({ type: 'message.done', data: { messageId: rejectionMsgId } })
+        formatRetryCount = 0
+        continue
+      }
+
+      append(
         createMessageDoneEvent(assistantMsgId, {
           segments: result.segments,
           promptContext: assembledRequest.promptContext,
@@ -601,7 +443,7 @@ export async function runTopLevelAgentLoop(
           batchContext.dangerLevel = session.dangerLevel
         }
         batchContext.agentTimeout = getRuntimeConfig().agent.toolTimeout
-        const batchResult = await executeToolBatch(assistantMsgId, result.toolCalls, batchContext)
+        const batchResult = await executeTools(assistantMsgId, result.toolCalls, batchContext, append)
         if (batchResult.returnValueContent) {
           returnValueContent = batchResult.returnValueContent
         }
@@ -617,7 +459,7 @@ export async function runTopLevelAgentLoop(
             mode,
             turnMetrics,
             assembledRequest.promptContext,
-            eventStore,
+            append,
           )
           throw error
         }
@@ -632,7 +474,7 @@ export async function runTopLevelAgentLoop(
           mode,
           turnMetrics,
           assembledRequest.promptContext,
-          eventStore,
+          append,
         )
         throw new Error('Aborted')
       }
@@ -640,14 +482,13 @@ export async function runTopLevelAgentLoop(
       const asapMessages = sessionManager.drainAsapMessages(sessionId)
       for (const asap of asapMessages) {
         const asapMsgId = crypto.randomUUID()
-        eventStore.append(
-          sessionId,
+        append(
           createMessageStartEvent(asapMsgId, 'user', asap.content, {
             ...getCurrentWindowMessageOptions(sessionId),
             ...(asap.attachments ? { attachments: asap.attachments } : {}),
           }),
         )
-        eventStore.append(sessionId, { type: 'message.done', data: { messageId: asapMsgId } })
+        append({ type: 'message.done', data: { messageId: asapMsgId } })
 
         // Broadcast message events to frontend so it knows about the user message
         // before tool.preparing events arrive for the assistant response
@@ -669,16 +510,44 @@ export async function runTopLevelAgentLoop(
       continue
     }
 
+    if (config.loopMode === 'compaction') {
+      const summary = result.content?.trim() || result.thinkingContent?.trim() || ''
+      if (!summary) {
+        append({
+          type: 'chat.error',
+          data: { error: 'Compaction produced empty summary', recoverable: false },
+        })
+        append(createChatDoneEvent(assistantMsgId, 'error'))
+        throw new Error('Compaction produced empty summary')
+      }
+
+      const closedWindowId = getCurrentContextWindowId(sessionId) ?? ''
+      const newWindowId = crypto.randomUUID()
+      const tokenCountAtClose = result.usage.promptTokens
+
+      append({
+        type: 'context.compacted',
+        data: { closedWindowId, newWindowId, beforeTokens: tokenCountAtClose, afterTokens: 0, summary },
+      })
+
+      append(
+        createMessageStartEvent(assistantMsgId, 'assistant', summary, currentWindowMessageOptions),
+      )
+      append(createMessageDoneEvent(assistantMsgId, { stats: turnMetrics.buildStats(statsIdentity, mode) }))
+      append(createChatDoneEvent(assistantMsgId, 'complete'))
+
+      break
+    }
+
     const stats = turnMetrics.buildStats(statsIdentity, mode)
-    eventStore.append(
-      sessionId,
+    append(
       createMessageDoneEvent(assistantMsgId, {
         segments: result.segments,
         stats,
         promptContext: assembledRequest.promptContext,
       }),
     )
-    eventStore.append(sessionId, createChatDoneEvent(assistantMsgId, 'complete', stats))
+    append(createChatDoneEvent(assistantMsgId, 'complete', stats))
 
     const currentWindowMessages = sessionManager.getCurrentWindowMessages(sessionId)
     const lastUserMessage = [...currentWindowMessages].reverse().find((m) => m.role === 'user')

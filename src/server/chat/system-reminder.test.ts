@@ -58,6 +58,7 @@ function createSessionManager(state: any) {
     addTokensUsed: vi.fn(),
     compactContext: vi.fn(),
     getLspManager: vi.fn(() => ({ name: 'lsp' })),
+    setRunning: vi.fn(),
     updateExecutionState: vi.fn((_: string, updates: Record<string, unknown>) => {
       state['current'].executionState = { ...(state['current'].executionState ?? {}), ...updates }
     }),

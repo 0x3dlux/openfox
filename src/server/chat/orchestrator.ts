@@ -29,10 +29,15 @@ import {
   createChatDoneEvent,
 } from './stream-pure.js'
 import { assembleAgentRequest } from './request-context.js'
+import { resolveCachedAssembly } from './system-prompt-cache.js'
 import { runTopLevelAgentLoop } from './agent-loop.js'
 import { executeSubAgent } from '../sub-agents/manager.js'
 import { createVerifierNudgeConfig } from '../sub-agents/verifier-helpers.js'
 import { loadAllAgentsDefault, findAgentById, getSubAgents } from '../agents/registry.js'
+import { getAllInstructions } from '../context/instructions.js'
+import { getEnabledSkillMetadata } from '../skills/registry.js'
+import { getRuntimeConfig } from '../runtime-config.js'
+import { getGlobalConfigDir } from '../../cli/paths.js'
 import { logger } from '../utils/logger.js'
 
 // Re-export for runner orchestrator
@@ -101,15 +106,21 @@ export async function runChatTurn(options: OrchestratorOptions): Promise<void> {
 
   logger.debug('Starting chat turn', { sessionId, mode })
 
+  // Mark session as running (cleared in finally)
+  sessionManager.setRunning(sessionId, true)
+
+  // Create append closure — the only write path to EventStore from the loop
+  const append = (event: import('../events/types.js').TurnEvent) => eventStore.append(sessionId, event)
+
   // Track metrics across the turn
   const turnMetrics = new TurnMetrics()
 
   try {
     // Run the appropriate handler based on mode (agent ID)
     if (mode === 'builder') {
-      await runBuilderTurn(options, turnMetrics)
+      await runBuilderTurn(options, turnMetrics, append)
     } else {
-      await runGenericAgentTurn(options, turnMetrics, mode)
+      await runGenericAgentTurn(options, turnMetrics, mode, append)
     }
 
     // Create end-of-turn snapshot
@@ -255,6 +266,7 @@ async function runGenericAgentTurn(
   options: OrchestratorOptions,
   turnMetrics: TurnMetrics,
   agentId: string,
+  append: (event: import('../events/types.js').TurnEvent) => void,
 ): Promise<void> {
   const statsIdentity = resolveStatsIdentity(options)
   const allAgents = await loadAllAgentsDefault()
@@ -264,10 +276,46 @@ async function runGenericAgentTurn(
 
   const agentDef = findAgentById(agentId, allAgents) ?? findAgentById('planner', allAgents)!
   const subAgentDefs = getSubAgents(allAgents)
+  const toolRegistry = getToolRegistryForAgent(agentDef)
+
+  const { content: instructionContent } = await getAllInstructions(
+    options.sessionManager.requireSession(options.sessionId).workdir,
+    options.sessionManager.requireSession(options.sessionId).projectId,
+  )
+  const runtimeConfig = getRuntimeConfig()
+  const configDir = getGlobalConfigDir(runtimeConfig.mode ?? 'production')
+  const skills = await getEnabledSkillMetadata(configDir, runtimeConfig.workdir)
+
+  const { assembledRequest: cachedResult } = resolveCachedAssembly({
+    sessionManager: options.sessionManager,
+    sessionId: options.sessionId,
+    workdir: options.sessionManager.requireSession(options.sessionId).workdir,
+    messages: [],
+    injectedFiles: [],
+    promptTools: toolRegistry.definitions,
+    instructionContent,
+    skills,
+    assembleFreshRequest: () =>
+      assembleAgentRequest({
+        agentDef,
+        subAgentDefs,
+        workdir: options.sessionManager.requireSession(options.sessionId).workdir,
+        messages: [],
+        injectedFiles: [],
+        promptTools: toolRegistry.definitions,
+        requestTools: toolRegistry.definitions,
+        toolChoice: 'auto',
+        ...(instructionContent ? { customInstructions: instructionContent } : {}),
+        ...(skills.length > 0 ? { skills } : {}),
+        modelName: options.llmClient.getModel(),
+      }),
+  })
 
   await runTopLevelAgentLoop(
     {
       mode: agentId,
+      append,
+      cachedSystemPrompt: cachedResult.systemPrompt,
       sessionManager: options.sessionManager,
       sessionId: options.sessionId,
       llmClient: options.llmClient,
@@ -305,6 +353,7 @@ export function filterToolRegistryForStepDone(baseRegistry: ToolRegistry, _injec
 export async function runBuilderTurn(
   options: BuilderTurnOptions,
   turnMetrics: TurnMetrics,
+  append: (event: import('../events/types.js').TurnEvent) => void,
 ): Promise<{ returnValueContent?: string; returnValueResult?: string; stepDoneCalled?: boolean }> {
   const { sessionManager, sessionId } = options
   const statsIdentity = resolveStatsIdentity(options)
@@ -323,6 +372,7 @@ export async function runBuilderTurn(
     ...(await runTopLevelAgentLoop(
       {
         mode: 'builder',
+        append,
         sessionManager,
         sessionId,
         llmClient: options.llmClient,

@@ -1,20 +1,16 @@
-import type { InjectedFile, Provider, StatsIdentity } from '../../shared/types.js'
+import type { Provider, StatsIdentity } from '../../shared/types.js'
 import type { LLMClientWithModel } from '../llm/client.js'
 import type { SessionManager } from '../session/index.js'
 import { getEventStore, getCurrentContextWindowId } from '../events/index.js'
-import { getAllInstructions, toInjectedFiles } from './instructions.js'
 import { shouldCompact } from './compactor.js'
 import { COMPACTION_PROMPT } from '../chat/prompts.js'
 import { assembleAgentRequest } from '../chat/request-context.js'
-import { TurnMetrics, createMessageStartEvent, createChatDoneEvent } from '../chat/stream-pure.js'
-import { consumeStreamWithToolLoop } from '../chat/stream-pure.js'
+import { TurnMetrics, createMessageStartEvent } from '../chat/stream-pure.js'
+import { runTopLevelAgentLoop } from '../chat/agent-loop.js'
 import { loadAllAgentsDefault, findAgentById, getSubAgents } from '../agents/registry.js'
 import { getToolRegistryForAgent } from '../tools/index.js'
-import { getEnabledSkillMetadata } from '../skills/registry.js'
-import { getGlobalConfigDir } from '../../cli/paths.js'
 import { getRuntimeConfig } from '../runtime-config.js'
 import { logger } from '../utils/logger.js'
-import { getConversationMessages } from '../chat/conversation-history.js'
 
 function getCurrentWindowMessageOptions(sessionId: string): { contextWindowId: string } | undefined {
   const contextWindowId = getCurrentContextWindowId(sessionId)
@@ -87,41 +83,10 @@ async function performContextCompaction(
     trigger: 'auto' | 'manual'
   },
 ): Promise<void> {
-  const { sessionManager, sessionId, llmClient, statsIdentity, signal, tokenCountAtClose, trigger } = options
+  const { sessionManager, sessionId, llmClient, statsIdentity, signal } = options
   const eventStore = getEventStore()
-  const session = sessionManager.requireSession(sessionId)
-  const { content: instructions, files } = await getAllInstructions(session.workdir, session.projectId)
-  const injectedFiles: InjectedFile[] = toInjectedFiles(files)
-  const requestMessages = getConversationMessages({ type: 'toplevel', sessionId })
 
-  const config = getRuntimeConfig()
-  const allAgents = await loadAllAgentsDefault()
-  const plannerDef = findAgentById('planner', allAgents)!
-  const subAgentDefs = getSubAgents(allAgents)
-  const toolRegistry = getToolRegistryForAgent(plannerDef)
-  const configDir = getGlobalConfigDir(config.mode ?? 'production')
-  const skills = await getEnabledSkillMetadata(configDir, config.workdir)
-
-  const assembledRequest = assembleAgentRequest({
-    agentDef: plannerDef,
-    subAgentDefs,
-    workdir: session.workdir,
-    messages: requestMessages,
-    injectedFiles,
-    promptTools: toolRegistry.definitions,
-    requestTools: toolRegistry.definitions,
-    toolChoice: 'none',
-    disableThinking: true,
-    ...(instructions ? { customInstructions: instructions } : {}),
-    ...(skills.length > 0 ? { skills } : {}),
-    modelName: options.llmClient.getModel(),
-  })
-
-  // Append compaction instruction as a system-reminder user message
-  // (same pattern as planner/builder mode transitions — preserves cache prefix)
-  const compactionReminder = `<system-reminder>\n${COMPACTION_PROMPT}\n</system-reminder>`
-  const llmMessages = [...assembledRequest.messages, { role: 'user' as const, content: compactionReminder }]
-
+  // Append compaction prompt to EventStore so getConversationMessages picks it up
   const compactPromptMsgId = crypto.randomUUID()
   eventStore.append(
     sessionId,
@@ -134,79 +99,40 @@ async function performContextCompaction(
   )
   eventStore.append(sessionId, { type: 'message.done', data: { messageId: compactPromptMsgId } })
 
-  const assistantMsgId = crypto.randomUUID()
-  eventStore.append(
-    sessionId,
-    createMessageStartEvent(assistantMsgId, 'assistant', undefined, getCurrentWindowMessageOptions(sessionId)),
-  )
-
   const turnMetrics = new TurnMetrics()
 
-  const compactionToolRegistry = {
-    execute: async (
-      name: string,
-      args: Record<string, unknown>,
-      ctx: {
-        sessionId: string
-        workdir: string
-        signal?: AbortSignal
-        llmClient: LLMClientWithModel
-        statsIdentity: StatsIdentity
-        dangerLevel?: 'normal' | 'dangerous'
-        toolCallId: string
-      },
-    ) => {
-      return toolRegistry.execute(name, args, {
-        ...ctx,
-        sessionManager,
-      })
+  const allAgents = await loadAllAgentsDefault()
+  const plannerDef = findAgentById('planner', allAgents)!
+  const subAgentDefs = getSubAgents(allAgents)
+  const toolRegistry = getToolRegistryForAgent(plannerDef)
+
+  await runTopLevelAgentLoop(
+    {
+      mode: 'planner',
+      loopMode: 'compaction',
+      append: (event) => eventStore.append(sessionId, event),
+      sessionManager,
+      sessionId,
+      llmClient,
+      statsIdentity,
+      signal,
+      assembleRequest: (input) =>
+        assembleAgentRequest({
+          ...input,
+          agentDef: plannerDef,
+          subAgentDefs,
+          modelName: llmClient.getModel(),
+          disableThinking: true,
+        }),
+      getToolRegistry: () => toolRegistry,
     },
-  }
-
-  const result = await consumeStreamWithToolLoop({
-    messageId: assistantMsgId,
-    systemPrompt: assembledRequest.systemPrompt,
-    llmClient,
-    messages: llmMessages,
-    tools: toolRegistry.definitions,
-    toolChoice: 'auto',
-    disableThinking: true,
     turnMetrics,
-    toolRegistry: compactionToolRegistry,
+  )
+
+  logger.info(`${options.trigger === 'auto' ? 'Auto' : 'Manual'} compaction complete`, {
     sessionId,
-    workdir: session.workdir,
-    onEvent: (event) => eventStore.append(sessionId, event),
-    statsIdentity,
-    sessionManager,
-    ...(session.dangerLevel ? { dangerLevel: session.dangerLevel } : {}),
-    ...(signal ? { signal } : {}),
-  })
-
-  if (result.aborted) {
-    throw new Error('Aborted')
-  }
-
-  const compactionStats = turnMetrics.buildStats(statsIdentity, 'compaction')
-  eventStore.append(sessionId, createChatDoneEvent(assistantMsgId, 'complete', compactionStats))
-
-  let summary = (result.content ?? '').trim()
-  if (!summary && result.thinkingContent != null) {
-    logger.info('Using thinking content as compaction summary (text content was empty)', { sessionId })
-    summary = (result.thinkingContent ?? '').trim()
-  }
-
-  if (!summary) {
-    throw new Error('Compaction produced empty summary')
-  }
-
-  sessionManager.compactContext(sessionId, summary, tokenCountAtClose)
-
-  logger.info(`${trigger === 'auto' ? 'Auto' : 'Manual'} compaction complete`, {
-    sessionId,
-    trigger,
-    tokensBefore: tokenCountAtClose,
-    summaryLength: summary.length,
-    summaryTokens: result.usage.completionTokens,
+    trigger: options.trigger,
+    tokensBefore: options.tokenCountAtClose,
   })
 }
 

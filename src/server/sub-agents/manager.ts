@@ -22,7 +22,7 @@ import {
   createMessageDoneEvent,
   createChatDoneEvent,
 } from '../chat/stream-pure.js'
-import { executeToolBatch } from '../chat/agent-loop.js'
+import { executeTools } from '../chat/execute-tools.js'
 import { assembleAgentRequest } from '../chat/request-context.js'
 import { getAllInstructions, toInjectedFiles } from '../context/instructions.js'
 import { getEnabledSkillMetadata } from '../skills/registry.js'
@@ -398,7 +398,8 @@ export async function executeSubAgent(options: SubAgentExecutionOptions): Promis
     )
 
     // Execute tool calls using shared helper
-    const batchResult = await executeToolBatch(assistantMsgId, result.toolCalls, {
+    const append = (event: import('../events/types.js').TurnEvent) => eventStore.append(sessionId, event)
+    const batchResult = await executeTools(assistantMsgId, result.toolCalls, {
       toolRegistry,
       sessionManager,
       sessionId,
@@ -407,7 +408,7 @@ export async function executeSubAgent(options: SubAgentExecutionOptions): Promis
       signal,
       onMessage,
       agentTimeout: getRuntimeConfig().agent.toolTimeout,
-    })
+    }, append)
 
     // Capture return_value content and result
     if (batchResult.returnValueContent) {
@@ -433,7 +434,7 @@ export async function executeSubAgent(options: SubAgentExecutionOptions): Promis
       break
     }
 
-    // Tool results are in the event store (written by executeToolBatch);
+    // Tool results are in the event store (written by executeTools);
     // next iteration reads them from there via getConversationMessages
 
     session = sessionManager.requireSession(sessionId)

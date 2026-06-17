@@ -167,6 +167,20 @@ export class EventStore {
       CREATE INDEX IF NOT EXISTS idx_events_session_type 
       ON events(session_id, event_type)
     `)
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS tombstones (
+        session_id TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL,
+        UNIQUE(session_id, seq)
+      )
+    `)
+
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_tombstones_session_seq 
+      ON tombstones(session_id, seq)
+    `)
   }
 
   // --------------------------------------------------------------------------
@@ -271,8 +285,14 @@ export class EventStore {
   getEvents(sessionId: string, fromSeq?: number): StoredEvent[] {
     const query =
       fromSeq !== undefined
-        ? `SELECT * FROM events WHERE session_id = ? AND seq >= ? ORDER BY seq`
-        : `SELECT * FROM events WHERE session_id = ? ORDER BY seq`
+        ? `SELECT e.* FROM events e
+           LEFT JOIN tombstones t ON e.session_id = t.session_id AND e.seq = t.seq
+           WHERE e.session_id = ? AND e.seq >= ? AND t.seq IS NULL
+           ORDER BY e.seq`
+        : `SELECT e.* FROM events e
+           LEFT JOIN tombstones t ON e.session_id = t.session_id AND e.seq = t.seq
+           WHERE e.session_id = ? AND t.seq IS NULL
+           ORDER BY e.seq`
 
     const rows =
       fromSeq !== undefined
@@ -280,6 +300,35 @@ export class EventStore {
         : (this.db.prepare(query).all(sessionId) as EventRow[])
 
     return rows.map((row) => this.rowToStoredEvent(row))
+  }
+
+  /**
+   * Soft-delete (tombstone) events by sequence number.
+   * Tombstoned events are hidden from getEvents but remain in the database.
+   *
+   * @param sessionId - The session ID
+   * @param seqs - Array of sequence numbers to tombstone
+   * @returns The number of events tombstoned
+   */
+  tombstoneEvents(sessionId: string, seqs: number[]): number {
+    if (seqs.length === 0) return 0
+
+    const timestamp = Date.now()
+    const insert = this.db.prepare(
+      `INSERT OR IGNORE INTO tombstones (session_id, seq, timestamp)
+       VALUES (?, ?, ?)`,
+    )
+
+    let count = 0
+    const transaction = this.db.transaction(() => {
+      for (const seq of seqs) {
+        const result = insert.run(sessionId, seq, timestamp)
+        count += result.changes as number
+      }
+    })
+
+    transaction()
+    return count
   }
 
   /**

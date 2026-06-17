@@ -388,6 +388,8 @@ export async function executeWorkflow(
         }
 
         const turnMetrics = new TurnMetrics()
+        const es = getEventStore()
+        const append = (event: import('../events/types.js').TurnEvent) => es.append(sessionId, event)
         const agentResult = await runBuilderTurn(
           {
             sessionManager,
@@ -402,6 +404,7 @@ export async function executeWorkflow(
             ...(onMessage ? { onMessage } : {}),
           } as BuilderTurnOptions,
           turnMetrics,
+          append,
         )
 
         firstEntryForStep.add(step.id)

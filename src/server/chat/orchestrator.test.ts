@@ -58,6 +58,11 @@ vi.mock('./conversation-history.js', () => ({
   getConversationMessages: getConversationMessagesMock,
 }))
 
+vi.mock('../db/settings.js', () => ({
+  getSetting: vi.fn().mockReturnValue('false'),
+  SETTINGS_KEYS: { LLM_DYNAMIC_SYSTEM_PROMPT: 'llm.dynamicSystemPrompt' },
+}))
+
 vi.mock('../context/instructions.js', () => ({
   getAllInstructions: getAllInstructionsMock,
   toInjectedFiles: (files: unknown[]) => files as unknown,
@@ -232,6 +237,11 @@ function createSessionManager(state: Record<string, any>) {
     compactContext: vi.fn(),
     getCurrentModelSettings: vi.fn(() => undefined),
     getLspManager: vi.fn(() => ({ name: 'lsp' })),
+    setRunning: vi.fn(),
+    getCachedPrompt: vi.fn(() => undefined),
+    setCachedPrompt: vi.fn(),
+    getDynamicContextChanged: vi.fn(() => false),
+    setDynamicContextChanged: vi.fn(),
     updateCriterionStatus: vi.fn((_: string, criterionId: string, status: Record<string, unknown>) => {
       state['current'].criteria = state['current'].criteria.map((criterion: any) =>
         criterion.id === criterionId ? { ...criterion, status } : criterion,
@@ -264,10 +274,6 @@ function createSessionManager(state: Record<string, any>) {
     updateExecutionState: vi.fn((_: string, updates: Record<string, unknown>) => {
       state['current'].executionState = { ...(state['current'].executionState ?? {}), ...updates }
     }),
-    getCachedPrompt: vi.fn(() => undefined),
-    setCachedPrompt: vi.fn(),
-    getDynamicContextChanged: vi.fn(() => false),
-    setDynamicContextChanged: vi.fn(),
   }
 }
 
@@ -411,11 +417,9 @@ describe('chat orchestrator', () => {
     expect(consumeStreamGeneratorMock).toHaveBeenCalled()
     const callArgs = consumeStreamGeneratorMock.mock.calls[0]?.[0] ?? {}
     expect(callArgs.toolChoice ?? 'auto').toBe('auto')
-    expect(sessionManager.compactContext).toHaveBeenCalledWith(
-      'session-1',
-      'Compacted summary of the session including all file modifications and current progress on tasks',
-      190000,
-    )
+    // Compaction now emits context.compacted event instead of calling compactContext
+    const compactEvents = eventStore.getEvents('session-1').filter((e: any) => e.type === 'context.compacted')
+    expect(compactEvents.length).toBeGreaterThanOrEqual(1)
   })
 
   it('persists provider and model identity in emitted stats', async () => {
@@ -800,17 +804,18 @@ describe('chat orchestrator', () => {
         xmlFormatError: false,
       })
 
+    const appendMock = vi.fn()
     await runBuilderTurn(
-      {
-        sessionManager: sessionManager as never,
+      { sessionManager: sessionManager as never,
         sessionId: 'session-1',
         llmClient: { getModel: () => 'qwen3-32b' } as never,
         onMessage: vi.fn(),
       },
       new TurnMetrics(),
+      appendMock,
     )
 
-    const appendedTypes = eventStore.append.mock.calls.map(([, event]) => event.type)
+    const appendedTypes = appendMock.mock.calls.map(([event]) => event.type)
     expect(appendedTypes).toContain('format.retry')
     expect(appendedTypes).toContain('tool.call')
     expect(appendedTypes).toContain('tool.result')
@@ -877,16 +882,17 @@ describe('chat orchestrator', () => {
         xmlFormatError: false,
       })
 
+    const appendMock = vi.fn()
     await runBuilderTurn(
-      {
-        sessionManager: deniedManager as never,
+      { sessionManager: deniedManager as never,
         sessionId: 'session-1',
         llmClient: { getModel: () => 'qwen3-32b' } as never,
         onMessage: vi.fn(),
       },
       new TurnMetrics(),
+      appendMock,
     )
-    expect(deniedStore.append.mock.calls.find(([, event]) => event.type === 'tool.result')?.[1]).toMatchObject({
+    expect(appendMock.mock.calls.find(([event]) => event.type === 'tool.result')?.[0]).toMatchObject({
       data: {
         result: {
           success: false,
@@ -944,13 +950,13 @@ describe('chat orchestrator', () => {
 
     await expect(
       runBuilderTurn(
-        {
-          sessionManager: errorManager as never,
+        {   sessionManager: errorManager as never,
           sessionId: 'session-1',
           llmClient: { getModel: () => 'qwen3-32b' } as never,
           onMessage: vi.fn(),
         },
         new TurnMetrics(),
+        vi.fn(),
       ),
     ).rejects.toThrow('unexpected builder failure')
   })
@@ -1018,23 +1024,24 @@ describe('chat orchestrator', () => {
       },
     })
 
+    const appendMock = vi.fn()
     await runBuilderTurn(
-      {
-        sessionManager: sessionManager as never,
+      { sessionManager: sessionManager as never,
         sessionId: 'session-1',
         llmClient: { getModel: () => 'qwen3-32b' } as never,
         onMessage: vi.fn(),
       },
       new TurnMetrics(),
+      appendMock,
     )
 
     // Verify tool execution was NOT called
     expect(execute).not.toHaveBeenCalled()
 
     // Verify tool.result event was emitted with error
-    const toolResultEvent = eventStore.append.mock.calls.find(([, event]) => event.type === 'tool.result')
+    const toolResultEvent = appendMock.mock.calls.find(([event]) => event.type === 'tool.result')
     expect(toolResultEvent).toBeDefined()
-    const toolResultData = toolResultEvent![1].data as {
+    const toolResultData = toolResultEvent![0].data as {
       toolCallId: string
       result: { success: boolean; error: string }
     }
@@ -1101,14 +1108,15 @@ describe('chat orchestrator', () => {
       },
     })
 
+    const appendMock = vi.fn()
     await runBuilderTurn(
-      {
-        sessionManager: sessionManager as never,
+      { sessionManager: sessionManager as never,
         sessionId: 'session-1',
         llmClient: { getModel: () => 'qwen3-32b' } as never,
         onMessage: vi.fn(),
       },
       new TurnMetrics(),
+      appendMock,
     )
 
     // step_done is now ALWAYS included to maintain stable tools hash for LLM caching
@@ -1172,14 +1180,14 @@ describe('chat orchestrator', () => {
     })
 
     await runBuilderTurn(
-      {
-        sessionManager: sessionManager as never,
+      { sessionManager: sessionManager as never,
         sessionId: 'session-1',
         llmClient: { getModel: () => 'qwen3-32b' } as never,
         onMessage: vi.fn(),
         injectStepDone: true,
       },
       new TurnMetrics(),
+      vi.fn(),
     )
 
     expect(capturedTools).toContain('step_done')
@@ -1221,12 +1229,12 @@ describe('chat orchestrator', () => {
     })
 
     await runBuilderTurn(
-      {
-        sessionManager: sessionManager as never,
+      { sessionManager: sessionManager as never,
         sessionId: 'session-1',
         llmClient: { getModel: () => 'qwen3-32b' } as never,
       },
       new TurnMetrics(),
+      vi.fn(),
     )
 
     const kickoffEvent = eventStore.append.mock.calls.find(([, event]) => {
@@ -1274,13 +1282,13 @@ describe('chat orchestrator', () => {
     })
 
     await runBuilderTurn(
-      {
-        sessionManager: sessionManager as never,
+      { sessionManager: sessionManager as never,
         sessionId: 'session-1',
         llmClient: { getModel: () => 'qwen3-32b' } as never,
         injectBuilderKickoff: true,
       },
       new TurnMetrics(),
+      vi.fn(),
     )
 
     const kickoffEvent = eventStore.append.mock.calls.find(([, event]) => {
@@ -2552,13 +2560,13 @@ describe('chat orchestrator', () => {
       })
 
       await runBuilderTurn(
-        {
-          sessionManager: sessionManager as never,
+        {   sessionManager: sessionManager as never,
           sessionId: 'session-1',
           llmClient: { getModel: () => 'qwen3-32b' } as never,
         },
         new TurnMetrics(),
-      )
+      vi.fn(),
+    )
 
       // Verify getConversationMessages (the unified method) was called with session ID
       expect(getConversationMessagesMock).toHaveBeenCalledWith({ type: 'toplevel', sessionId: 'session-1' })
@@ -2615,13 +2623,13 @@ describe('chat orchestrator', () => {
       })
 
       await runBuilderTurn(
-        {
-          sessionManager: sessionManager as never,
+        {   sessionManager: sessionManager as never,
           sessionId: 'session-1',
           llmClient: { getModel: () => 'qwen3-32b' } as never,
         },
         new TurnMetrics(),
-      )
+      vi.fn(),
+    )
 
       expect(getToolRegistryForModeMock).toHaveBeenCalled()
       expect(streamLLMPureMock).toHaveBeenCalledWith(
@@ -2691,14 +2699,14 @@ describe('chat orchestrator', () => {
       })
 
       await runBuilderTurn(
-        {
-          sessionManager: sessionManager as never,
+        {   sessionManager: sessionManager as never,
           sessionId: 'session-1',
           llmClient: { getModel: () => 'qwen3-32b' } as never,
           injectStepDone: true,
         },
         new TurnMetrics(),
-      )
+      vi.fn(),
+    )
 
       expect(streamLLMPureMock).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -2769,24 +2777,17 @@ describe('chat orchestrator', () => {
       }))
 
       await runBuilderTurn(
-        {
-          sessionManager: sessionManager as never,
+        {   sessionManager: sessionManager as never,
           sessionId: 'session-1',
           llmClient: { getModel: () => 'qwen3-32b' } as never,
         },
         new TurnMetrics(),
-      )
+      vi.fn(),
+    )
 
-      expect(sessionManager.compactContext).toHaveBeenCalledWith(
-        'session-1',
-        'Compacted summary of the session including all file modifications and current progress on tasks',
-        190000,
-      )
-      expect(sessionManager.compactContext).toHaveBeenCalledWith(
-        'session-1',
-        'Compacted summary of the session including all file modifications and current progress on tasks',
-        190000,
-      )
+      // Compaction now emits context.compacted event instead of calling compactContext
+      const compactEvents = eventStore.getEvents('session-1').filter((e: any) => e.type === 'context.compacted')
+      expect(compactEvents.length).toBeGreaterThanOrEqual(1)
     })
 
     it('assistant messages include contextWindowId', async () => {

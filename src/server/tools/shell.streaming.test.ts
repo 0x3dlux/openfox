@@ -6,11 +6,13 @@ import { createToolProgressHandler } from '../chat/tool-streaming.js'
 describe('run_command output streaming', () => {
   let db: Database.Database
   let eventStore: EventStore
+  let append: (event: import('../events/types.js').TurnEvent) => void
   const sessionId = 'test-session-streaming'
 
   beforeEach(() => {
     db = new Database(':memory:')
     eventStore = new EventStore(db)
+    append = (event) => { eventStore.append(sessionId, event) }
   })
 
   afterEach(() => {
@@ -18,7 +20,7 @@ describe('run_command output streaming', () => {
   })
 
   it('should stream output chunks as they arrive, not all at once', () => {
-    const handler = createToolProgressHandler(eventStore, 'msg-1', 'call-1', sessionId)
+    const handler = createToolProgressHandler(append, 'msg-1', 'call-1', sessionId)
 
     handler('[stdout] first line\n')
     handler('[stdout] second line\n')
@@ -49,7 +51,7 @@ describe('run_command output streaming', () => {
   })
 
   it('should stream stdout and stderr separately in order', () => {
-    const handler = createToolProgressHandler(eventStore, 'msg-1', 'call-1', sessionId)
+    const handler = createToolProgressHandler(append, 'msg-1', 'call-1', sessionId)
 
     handler('[stdout] stdout chunk 1\n')
     handler('[stderr] stderr chunk 1\n')
@@ -73,7 +75,7 @@ describe('run_command output streaming', () => {
   })
 
   it('should preserve message ordering with sequence numbers', () => {
-    const handler = createToolProgressHandler(eventStore, 'msg-1', 'call-1', sessionId)
+    const handler = createToolProgressHandler(append, 'msg-1', 'call-1', sessionId)
 
     handler('[stdout] chunk 1\n')
     handler('[stdout] chunk 2\n')
@@ -89,8 +91,8 @@ describe('run_command output streaming', () => {
   })
 
   it('should handle multiple tool calls with different callIds', () => {
-    const handler1 = createToolProgressHandler(eventStore, 'msg-1', 'call-1', sessionId)
-    const handler2 = createToolProgressHandler(eventStore, 'msg-1', 'call-2', sessionId)
+    const handler1 = createToolProgressHandler(append, 'msg-1', 'call-1', sessionId)
+    const handler2 = createToolProgressHandler(append, 'msg-1', 'call-2', sessionId)
 
     handler1('[stdout] from call 1\n')
     handler2('[stdout] from call 2\n')
@@ -105,7 +107,7 @@ describe('run_command output streaming', () => {
   })
 
   it('should ignore malformed progress messages', () => {
-    const handler = createToolProgressHandler(eventStore, 'msg-1', 'call-1', sessionId)
+    const handler = createToolProgressHandler(append, 'msg-1', 'call-1', sessionId)
 
     handler('not a valid format')
     handler('[stdout] valid output\n')
@@ -118,7 +120,7 @@ describe('run_command output streaming', () => {
   })
 
   it('should stream output before tool result in correct order', () => {
-    const handler = createToolProgressHandler(eventStore, 'msg-1', 'call-1', sessionId)
+    const handler = createToolProgressHandler(append, 'msg-1', 'call-1', sessionId)
 
     handler('[stdout] streaming output 1\n')
     handler('[stdout] streaming output 2\n')

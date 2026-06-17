@@ -33,7 +33,7 @@ describe('convertMessages - sub-agent tool result filtering', () => {
       },
     ]
 
-    const result = convertMessages(messages, { modelSupportsVision: false, visionFallbackEnabled: false })
+    const result = convertMessages(messages, false)
 
     // The assistant with toolCalls should NOT be filtered (has non-empty toolCalls)
     // The tool result should be preserved
@@ -57,7 +57,7 @@ describe('convertMessages - sub-agent tool result filtering', () => {
       { role: 'tool' as const, content: 'file content', toolCallId: 'call-1' },
     ]
 
-    const result = convertMessages(messages, { modelSupportsVision: false, visionFallbackEnabled: false })
+    const result = convertMessages(messages, false)
 
     // First assistant filtered, second preserved with its tool result
     expect(result).toHaveLength(2)
@@ -83,7 +83,7 @@ describe('convertMessages - sub-agent tool result filtering', () => {
       },
     ]
 
-    const result = convertMessages(messages, { modelSupportsVision: false, visionFallbackEnabled: false })
+    const result = convertMessages(messages, false)
 
     const toolMessages = result.filter((m) => m.role === 'tool')
     expect(toolMessages).toHaveLength(1)
@@ -109,7 +109,7 @@ describe('convertMessages - sub-agent tool result filtering', () => {
       },
     ]
 
-    const result = convertMessages(messages, { modelSupportsVision: false, visionFallbackEnabled: false })
+    const result = convertMessages(messages, false)
 
     // Both should be present
     expect(result).toHaveLength(2)

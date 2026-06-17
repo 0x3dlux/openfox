@@ -258,7 +258,7 @@ describe('buildContextMessages', () => {
       expect(newResult).toEqual(oldResult)
     })
 
-    it('strips attachments when stripAttachments is true', () => {
+    it('preserves attachments in context messages', () => {
       const events: StoredEvent[] = [
         makeEvent({
           seq: nextSeq(),
@@ -284,10 +284,10 @@ describe('buildContextMessages', () => {
       ]
 
       const scope: TopLevelScope = { type: 'toplevel', sessionId: 'session-1' }
-      const result = buildContextMessages(events, scope, { stripAttachments: true })
+      const result = buildContextMessages(events, scope)
       expect(result).toHaveLength(1)
       expect(result[0]!.content).toBe('Hello with image')
-      expect(result[0]!.attachments).toBeUndefined()
+      expect(result[0]!.attachments).toBeDefined()
     })
   })
 

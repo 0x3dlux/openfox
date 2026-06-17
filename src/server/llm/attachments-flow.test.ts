@@ -1,18 +1,11 @@
-/**
- * Integration tests for full attachment flow from EventStore to LLM
- */
-
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { buildContextMessagesFromStoredEvents } from '../events/folding.js'
-import { convertMessages, convertMessagesWithFallback } from './client-pure.js'
+import { convertMessages } from './client-pure.js'
 import type { StoredEvent } from '../events/types.js'
 import type { Attachment } from '../../shared/types.js'
 
 vi.mock('./vision-fallback.js', () => ({
   describeImageFromDataUrl: vi.fn().mockResolvedValue('A test image description'),
-  ensureVisionFallbackConfigLoaded: vi.fn(),
-  isVisionFallbackEnabled: vi.fn().mockReturnValue(true),
-  clearDescriptionCache: vi.fn(),
 }))
 
 describe('Full Attachment Flow Integration', () => {
@@ -29,7 +22,6 @@ describe('Full Attachment Flow Integration', () => {
   })
 
   it('should preserve attachments through the entire flow from EventStore to LLM format', () => {
-    // Step 1: Create events with attachments (simulating EventStore)
     const events: StoredEvent[] = [
       {
         seq: 1,
@@ -53,25 +45,22 @@ describe('Full Attachment Flow Integration', () => {
       },
     ]
 
-    // Step 2: Build context messages (as done in orchestrator)
     const contextMessages = buildContextMessagesFromStoredEvents(events, 'window-1')
 
     expect(contextMessages).toHaveLength(1)
     expect(contextMessages[0]?.attachments).toHaveLength(1)
     expect(contextMessages[0]?.attachments?.[0]).toEqual(testAttachment)
 
-    // Step 3: Convert to LLM format (as done in client-pure)
-    const llmMessages = convertMessages(contextMessages, { modelSupportsVision: true, visionFallbackEnabled: false })
+    const llmMessages = convertMessages(contextMessages, true)
 
     expect(llmMessages).toHaveLength(1)
     const llmMsg = llmMessages[0]
 
-    // Verify the LLM message has the expected structure with image_url
     expect(llmMsg?.role).toBe('user')
     expect(llmMsg?.content).toBeInstanceOf(Array)
 
     const content = llmMsg?.content as Array<{ type: string; text?: string; image_url?: { url: string } }>
-    expect(content).toHaveLength(2) // 1 text + 1 image
+    expect(content).toHaveLength(2)
     expect(content[0]).toEqual({ type: 'text', text: 'What is in this image?' })
     expect(content[1]).toEqual({
       type: 'image_url',
@@ -121,11 +110,11 @@ describe('Full Attachment Flow Integration', () => {
     ]
 
     const contextMessages = buildContextMessagesFromStoredEvents(events, 'window-1')
-    const llmMessages = convertMessages(contextMessages, { modelSupportsVision: true, visionFallbackEnabled: false })
+    const llmMessages = convertMessages(contextMessages, true)
 
     expect(llmMessages).toHaveLength(1)
     const content = llmMessages[0]?.content as Array<{ type: string; text?: string; image_url?: { url: string } }>
-    expect(content).toHaveLength(3) // 1 text + 2 images
+    expect(content).toHaveLength(3)
     expect(content[0]).toEqual({ type: 'text', text: 'Compare these' })
     expect(content[1]).toEqual({
       type: 'image_url',
@@ -161,7 +150,7 @@ describe('Full Attachment Flow Integration', () => {
     ]
 
     const contextMessages = buildContextMessagesFromStoredEvents(events, 'window-1')
-    const llmMessages = convertMessages(contextMessages, { modelSupportsVision: true, visionFallbackEnabled: false })
+    const llmMessages = convertMessages(contextMessages, true)
 
     expect(llmMessages).toHaveLength(1)
     expect(llmMessages[0]?.content).toBe('Hello')
@@ -192,18 +181,18 @@ describe('Full Attachment Flow Integration', () => {
     ]
 
     const contextMessages = buildContextMessagesFromStoredEvents(events, 'window-1')
-    const llmMessages = convertMessages(contextMessages, { modelSupportsVision: true, visionFallbackEnabled: false })
+    const llmMessages = convertMessages(contextMessages, true)
 
     expect(llmMessages).toHaveLength(1)
     const content = llmMessages[0]?.content as Array<{ type: string; text?: string; image_url?: { url: string } }>
-    expect(content).toHaveLength(1) // Only image, no text
+    expect(content).toHaveLength(1)
     expect(content[0]).toEqual({
       type: 'image_url',
       image_url: { url: 'data:image/png;base64,base64data' },
     })
   })
 
-  it('calls vision fallback callbacks when model lacks vision and fallback is enabled', async () => {
+  it('converts images to text placeholder when model lacks vision', () => {
     const events: StoredEvent[] = [
       {
         seq: 1,
@@ -228,58 +217,13 @@ describe('Full Attachment Flow Integration', () => {
     ]
 
     const contextMessages = buildContextMessagesFromStoredEvents(events, 'window-1')
+    const llmMessages = convertMessages(contextMessages, false)
 
-    const onStart = vi.fn()
-    const onDone = vi.fn()
-
-    await convertMessagesWithFallback(contextMessages, {
-      modelSupportsVision: false,
-      visionFallbackEnabled: true,
-      onVisionFallbackStart: onStart,
-      onVisionFallbackDone: onDone,
-    })
-
-    expect(onStart).toHaveBeenCalledWith('test-1', 'test.png')
-    expect(onDone).toHaveBeenCalledWith('test-1', expect.any(String))
-  })
-
-  it('does not call vision fallback callbacks when model supports vision', async () => {
-    const events: StoredEvent[] = [
-      {
-        seq: 1,
-        timestamp: Date.now(),
-        sessionId: 'test-session',
-        type: 'message.start',
-        data: {
-          messageId: 'msg-1',
-          role: 'user',
-          content: 'What is in this image?',
-          attachments: [testAttachment],
-          contextWindowId: 'window-1',
-        },
-      },
-      {
-        seq: 2,
-        timestamp: Date.now(),
-        sessionId: 'test-session',
-        type: 'message.done',
-        data: { messageId: 'msg-1' },
-      },
-    ]
-
-    const contextMessages = buildContextMessagesFromStoredEvents(events, 'window-1')
-
-    const onStart = vi.fn()
-    const onDone = vi.fn()
-
-    await convertMessagesWithFallback(contextMessages, {
-      modelSupportsVision: true,
-      visionFallbackEnabled: true,
-      onVisionFallbackStart: onStart,
-      onVisionFallbackDone: onDone,
-    })
-
-    expect(onStart).not.toHaveBeenCalled()
-    expect(onDone).not.toHaveBeenCalled()
+    expect(llmMessages).toHaveLength(1)
+    const content = llmMessages[0]?.content as Array<{ type: string; text?: string }>
+    expect(content).toHaveLength(2)
+    expect(content[0]).toEqual({ type: 'text', text: 'What is in this image?' })
+    expect(content[1]?.type).toBe('text')
+    expect((content[1] as { text: string }).text).toContain('[Image: test.png]')
   })
 })

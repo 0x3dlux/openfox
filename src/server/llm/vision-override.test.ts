@@ -25,10 +25,7 @@ describe('user vision override', () => {
   }
 
   it('profile says no vision -> image replaced with placeholder', () => {
-    const result = convertMessages(makeMessagesWithImage(), {
-      modelSupportsVision: false,
-      visionFallbackEnabled: false,
-    })
+    const result = convertMessages(makeMessagesWithImage(), false)
     expect(result[0]).toEqual({
       role: 'user',
       content: [
@@ -39,7 +36,7 @@ describe('user vision override', () => {
   })
 
   it('profile says vision -> image sent as image_url', () => {
-    const result = convertMessages(makeMessagesWithImage(), { modelSupportsVision: true, visionFallbackEnabled: false })
+    const result = convertMessages(makeMessagesWithImage(), true)
     expect(result[0]).toEqual({
       role: 'user',
       content: [

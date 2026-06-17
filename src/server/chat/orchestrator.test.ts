@@ -76,6 +76,13 @@ vi.mock('../runtime-config.js', () => ({
     mode: 'development',
     context: { maxTokens: 200000, compactionThreshold: 0.85, compactionTarget: 0.6 },
     agent: { toolTimeout: 120000 },
+    llm: {
+      baseUrl: 'http://localhost:11434',
+      model: 'test-model',
+      timeout: 30000,
+      idleTimeout: 30000,
+      backend: 'ollama',
+    },
   })),
   setRuntimeConfig: vi.fn(),
 }))

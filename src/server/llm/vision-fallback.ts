@@ -1,83 +1,9 @@
 import { logger } from '../utils/logger.js'
 
-export interface VisionFallbackConfig {
-  enabled: boolean
-  url: string
+export interface VisionModelConfig {
+  baseUrl: string
   model: string
   timeout: number
-}
-
-const DEFAULT_CONFIG: VisionFallbackConfig = {
-  enabled: false,
-  url: 'http://localhost:11434',
-  model: 'qwen3.5:0.8b',
-  timeout: 120000,
-}
-
-let config: VisionFallbackConfig = { ...DEFAULT_CONFIG }
-let configLoaded = false
-
-const descriptionCache = new Map<string, string>()
-
-export { descriptionCache }
-
-export function clearDescriptionCache(): void {
-  descriptionCache.clear()
-}
-
-export function setVisionFallbackConfig(newConfig: Partial<VisionFallbackConfig>): void {
-  config = { ...config, ...newConfig }
-  configLoaded = true
-  logger.debug('Vision fallback config updated', { config })
-}
-
-export function getVisionFallbackConfig(): VisionFallbackConfig {
-  return { ...config }
-}
-
-export function isVisionFallbackEnabled(): boolean {
-  return config.enabled
-}
-
-export async function ensureVisionFallbackConfigLoaded(): Promise<void> {
-  if (configLoaded) return
-
-  try {
-    const { loadGlobalConfig, getVisionFallback } = await import('../../cli/config.js')
-    const { getRuntimeConfig } = await import('../runtime-config.js')
-
-    const runtimeConfig = getRuntimeConfig()
-    const mode = runtimeConfig.mode ?? 'production'
-
-    // Check runtime config for vision model first
-    if (runtimeConfig.llm?.visionModel) {
-      config = {
-        enabled: true,
-        url: runtimeConfig.llm.baseUrl,
-        model: runtimeConfig.llm.visionModel,
-        timeout: runtimeConfig.llm.timeout,
-      }
-      configLoaded = true
-      logger.debug('Vision fallback config loaded from runtime config', { config })
-      return
-    }
-
-    const globalConfig = await loadGlobalConfig(mode)
-
-    const fallback = getVisionFallback(globalConfig)
-    config = {
-      enabled: fallback.enabled ?? false,
-      url: fallback.url ?? 'http://localhost:11434',
-      model: fallback.model ?? 'qwen3.5:0.8b',
-      timeout: (fallback.timeout ?? 120) * 1000,
-    }
-    configLoaded = true
-    logger.debug('Vision fallback config loaded from global config', { config })
-  } catch (error) {
-    logger.warn('Failed to load vision fallback config from global config', {
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
 }
 
 interface OllamaChatMessage {
@@ -110,28 +36,16 @@ Provide a concise but comprehensive description.`
 
 export async function describeImage(
   base64Data: string,
-  options?: { timeout?: number; context?: string | undefined; signal?: AbortSignal | undefined },
+  visionModel: VisionModelConfig,
+  options?: { context?: string | undefined; signal?: AbortSignal | undefined },
 ): Promise<string> {
-  await ensureVisionFallbackConfigLoaded()
-
-  if (!config.enabled) {
-    return '[Image - vision fallback not enabled]'
-  }
-
-  const cacheKey = `${base64Data.slice(0, 100)}:${options?.context ?? ''}`
-  const cached = descriptionCache.get(cacheKey)
-  if (cached) {
-    logger.debug('Using cached image description')
-    return cached
-  }
-
-  const timeout = options?.timeout ?? config.timeout
+  const timeout = visionModel.timeout
 
   try {
-    const url = `${config.url}/api/chat`
+    const url = `${visionModel.baseUrl}/api/chat`
 
     const requestBody: OllamaChatRequest = {
-      model: config.model,
+      model: visionModel.model,
       messages: [
         {
           role: 'user',
@@ -175,9 +89,6 @@ export async function describeImage(
       return '[Image - could not describe]'
     }
 
-    descriptionCache.set(cacheKey, description)
-    logger.debug('Cached image description', { cacheKey: cacheKey.slice(0, 20) })
-
     return description
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
@@ -193,12 +104,13 @@ export async function describeImage(
 
 export async function describeImageFromDataUrl(
   dataUrl: string,
-  options?: { timeout?: number; context?: string | undefined; signal?: AbortSignal | undefined },
+  visionModel: VisionModelConfig,
+  options?: { context?: string | undefined; signal?: AbortSignal | undefined },
 ): Promise<string> {
   const base64Match = dataUrl.match(/^data:image\/[^;]+;base64,(.+)$/)
   if (!base64Match || !base64Match[1]) {
     return '[Invalid image data URL]'
   }
 
-  return describeImage(base64Match[1], options)
+  return describeImage(base64Match[1], visionModel, options)
 }

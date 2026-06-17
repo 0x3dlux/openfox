@@ -29,7 +29,17 @@ vi.mock('../skills/registry.js', () => ({
 
 // Mock runtime config
 vi.mock('../runtime-config.js', () => ({
-  getRuntimeConfig: vi.fn().mockReturnValue({ mode: 'test', workdir: '/test' }),
+  getRuntimeConfig: vi.fn().mockReturnValue({
+    mode: 'test',
+    workdir: '/test',
+    llm: {
+      baseUrl: 'http://localhost:11434',
+      model: 'test-model',
+      timeout: 30000,
+      idleTimeout: 30000,
+      backend: 'ollama',
+    },
+  }),
 }))
 
 // Mock paths
@@ -105,19 +115,24 @@ describe('executeTools', () => {
       },
     ]
 
-    const result = await executeTools('assistant-msg-1', toolCalls, {
-      toolRegistry: mockToolRegistry,
-      sessionManager: mockSessionManager,
-      sessionId: 'test-session',
-      workdir: '/test',
-      turnMetrics: {
-        addToolTime: vi.fn(),
-        addLLMCall: vi.fn(),
-        buildStats: vi.fn(),
-      } as unknown as TurnMetrics,
-      signal: undefined,
-      onMessage: mockOnMessage,
-    }, vi.fn())
+    const result = await executeTools(
+      'assistant-msg-1',
+      toolCalls,
+      {
+        toolRegistry: mockToolRegistry,
+        sessionManager: mockSessionManager,
+        sessionId: 'test-session',
+        workdir: '/test',
+        turnMetrics: {
+          addToolTime: vi.fn(),
+          addLLMCall: vi.fn(),
+          buildStats: vi.fn(),
+        } as unknown as TurnMetrics,
+        signal: undefined,
+        onMessage: mockOnMessage,
+      },
+      vi.fn(),
+    )
 
     // The tool message should include both the output and the error
     expect(result.toolMessages).toHaveLength(1)
@@ -148,19 +163,24 @@ describe('executeTools', () => {
       },
     ]
 
-    const result = await executeTools('assistant-msg-2', toolCalls, {
-      toolRegistry: mockToolRegistry,
-      sessionManager: mockSessionManager,
-      sessionId: 'test-session',
-      workdir: '/test',
-      turnMetrics: {
-        addToolTime: vi.fn(),
-        addLLMCall: vi.fn(),
-        buildStats: vi.fn(),
-      } as unknown as TurnMetrics,
-      signal: undefined,
-      onMessage: mockOnMessage,
-    }, vi.fn())
+    const result = await executeTools(
+      'assistant-msg-2',
+      toolCalls,
+      {
+        toolRegistry: mockToolRegistry,
+        sessionManager: mockSessionManager,
+        sessionId: 'test-session',
+        workdir: '/test',
+        turnMetrics: {
+          addToolTime: vi.fn(),
+          addLLMCall: vi.fn(),
+          buildStats: vi.fn(),
+        } as unknown as TurnMetrics,
+        signal: undefined,
+        onMessage: mockOnMessage,
+      },
+      vi.fn(),
+    )
 
     // Should only show the error, no empty output section
     expect(result.toolMessages).toHaveLength(1)
@@ -186,19 +206,24 @@ describe('executeTools', () => {
       },
     ]
 
-    const result = await executeTools('assistant-msg-3', toolCalls, {
-      toolRegistry: mockToolRegistry,
-      sessionManager: mockSessionManager,
-      sessionId: 'test-session',
-      workdir: '/test',
-      turnMetrics: {
-        addToolTime: vi.fn(),
-        addLLMCall: vi.fn(),
-        buildStats: vi.fn(),
-      } as unknown as TurnMetrics,
-      signal: undefined,
-      onMessage: mockOnMessage,
-    }, vi.fn())
+    const result = await executeTools(
+      'assistant-msg-3',
+      toolCalls,
+      {
+        toolRegistry: mockToolRegistry,
+        sessionManager: mockSessionManager,
+        sessionId: 'test-session',
+        workdir: '/test',
+        turnMetrics: {
+          addToolTime: vi.fn(),
+          addLLMCall: vi.fn(),
+          buildStats: vi.fn(),
+        } as unknown as TurnMetrics,
+        signal: undefined,
+        onMessage: mockOnMessage,
+      },
+      vi.fn(),
+    )
 
     expect(result.toolMessages).toHaveLength(1)
     expect(result.toolMessages[0]?.content).toBe('File read successfully\nLine 1: content')
@@ -241,19 +266,24 @@ describe('executeTools', () => {
       },
     ]
 
-    const result = await executeTools('assistant-msg-4', toolCalls, {
-      toolRegistry: mockToolRegistry,
-      sessionManager: mockSessionManager,
-      sessionId: 'test-session',
-      workdir: '/test',
-      turnMetrics: {
-        addToolTime: vi.fn(),
-        addLLMCall: vi.fn(),
-        buildStats: vi.fn(),
-      } as unknown as TurnMetrics,
-      signal: undefined,
-      onMessage: mockOnMessage,
-    }, vi.fn())
+    const result = await executeTools(
+      'assistant-msg-4',
+      toolCalls,
+      {
+        toolRegistry: mockToolRegistry,
+        sessionManager: mockSessionManager,
+        sessionId: 'test-session',
+        workdir: '/test',
+        turnMetrics: {
+          addToolTime: vi.fn(),
+          addLLMCall: vi.fn(),
+          buildStats: vi.fn(),
+        } as unknown as TurnMetrics,
+        signal: undefined,
+        onMessage: mockOnMessage,
+      },
+      vi.fn(),
+    )
 
     expect(result.toolMessages).toHaveLength(3)
     expect(result.toolMessages[2]?.content).toBe('Tool 2 output')

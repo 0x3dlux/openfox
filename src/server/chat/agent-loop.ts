@@ -34,15 +34,34 @@ import { getRuntimeConfig } from '../runtime-config.js'
 import { getGlobalConfigDir } from '../../cli/paths.js'
 import {
   createQueueStateMessage,
-  createChatVisionFallbackMessage,
   createChatMessageMessage,
   createChatDoneMessage,
   createChatMessageUpdatedMessage,
 } from '../ws/protocol.js'
 import { getConversationMessages } from './conversation-history.js'
+import { getEventStore } from '../events/index.js'
+import { processContextImages } from '../context/image-processor.js'
 import { modelSupportsVision } from '../llm/profiles.js'
 import { executeTools, type ToolBatchContext } from './execute-tools.js'
 import { matchAutoPatterns, type AutoPattern } from './auto-patterns.js'
+
+async function loadVisionModelFromGlobalConfig(): Promise<
+  { baseUrl: string; model: string; timeout: number } | undefined
+> {
+  try {
+    const { loadGlobalConfig, getVisionFallback } = await import('../../cli/config.js')
+    const runtimeConfig = getRuntimeConfig()
+    const mode = runtimeConfig.mode ?? 'production'
+    const globalConfig = await loadGlobalConfig(mode)
+    const fallback = getVisionFallback(globalConfig)
+    if (fallback?.enabled && fallback.model) {
+      return { baseUrl: fallback.url, model: fallback.model, timeout: fallback.timeout * 1000 }
+    }
+  } catch {
+    // Global config not available
+  }
+  return undefined
+}
 
 function emitPartialDoneEvents(
   _sessionId: string,
@@ -163,11 +182,22 @@ export async function runTopLevelAgentLoop(
     const currentWindowMessageOptions = getCurrentWindowMessageOptions(sessionId)
 
     const modelName = llmClient.getModel()
-    const stripAttachments = !modelSupportsVision(modelName)
-    const requestMessages = getConversationMessages(
-      { type: 'toplevel', sessionId },
-      stripAttachments ? { stripAttachments: true } : undefined,
-    )
+    const modelVision = modelSupportsVision(modelName)
+
+    // Process images in context: describe via vision model or replace with placeholder
+    const eventStore = getEventStore()
+    const rawEvents = eventStore.getEvents(sessionId)
+    const runtimeConfig = getRuntimeConfig()
+    const visionModel = runtimeConfig.llm.visionModel
+      ? { baseUrl: runtimeConfig.llm.baseUrl, model: runtimeConfig.llm.visionModel, timeout: runtimeConfig.llm.timeout }
+      : await loadVisionModelFromGlobalConfig()
+    const { events: processedEvents } = await processContextImages(rawEvents, {
+      modelSupportsVision: modelVision,
+      ...(visionModel ? { visionModel } : {}),
+      onEvent: (event) => append(event),
+    })
+
+    const requestMessages = getConversationMessages({ type: 'toplevel', sessionId }, { events: processedEvents })
 
     if (formatRetryCount > 0) {
       const correctionMsgId = crypto.randomUUID()
@@ -184,7 +214,6 @@ export async function runTopLevelAgentLoop(
       requestMessages.push({ role: 'user', content: FORMAT_CORRECTION_PROMPT, source: 'history' })
     }
 
-    const runtimeConfig = getRuntimeConfig()
     const configDir = getGlobalConfigDir(runtimeConfig.mode ?? 'production')
     const skills = await getEnabledSkillMetadata(configDir, runtimeConfig.workdir)
     if (signal?.aborted) throw new Error('Aborted')
@@ -220,42 +249,6 @@ export async function runTopLevelAgentLoop(
     const assistantMsgId = crypto.randomUUID()
     append(createMessageStartEvent(assistantMsgId, 'assistant', undefined, currentWindowMessageOptions))
 
-    const doOnMessage = (msg: ServerMessage) => {
-      onMessage?.(msg)
-    }
-
-    const onVisionFallbackStart = (attachmentId: string, filename?: string) => {
-      const eventData: { messageId: string; attachmentId: string; filename?: string } = {
-        messageId: assistantMsgId,
-        attachmentId,
-      }
-      if (filename !== undefined) {
-        eventData.filename = filename
-      }
-      append({
-        type: 'vision_fallback.start',
-        data: eventData,
-      })
-      const payload: { type: 'start'; messageId: string; attachmentId: string; filename?: string } = {
-        type: 'start',
-        messageId: assistantMsgId,
-        attachmentId,
-      }
-      if (filename !== undefined) {
-        payload.filename = filename
-      }
-      doOnMessage(createChatVisionFallbackMessage(payload))
-    }
-    const onVisionFallbackDone = (attachmentId: string, description: string) => {
-      append({
-        type: 'vision_fallback.done',
-        data: { messageId: assistantMsgId, attachmentId, description },
-      })
-      doOnMessage(
-        createChatVisionFallbackMessage({ type: 'done', messageId: assistantMsgId, attachmentId, description }),
-      )
-    }
-
     const previousContextTokens = sessionManager.getContextState(sessionId).currentTokens
 
     const modelSettings =
@@ -274,8 +267,6 @@ export async function runTopLevelAgentLoop(
       toolChoice: 'auto',
       signal,
       disableXmlProtection,
-      onVisionFallbackStart,
-      onVisionFallbackDone,
       ...(modelSettings && { modelSettings }),
     })
 

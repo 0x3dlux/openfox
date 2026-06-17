@@ -6,7 +6,6 @@ import { logger } from '../utils/logger.js'
 import { LLMError } from '../utils/errors.js'
 import { getModelProfile, type ModelProfile } from './profiles.js'
 import { type Backend, getBackendCapabilities } from './backend.js'
-import { ensureVisionFallbackConfigLoaded } from './vision-fallback.js'
 import {
   buildNonStreamingCreateParams,
   buildStreamingCreateParams,
@@ -81,33 +80,13 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
       try {
         const shouldDisableThinking = disableThinking || request.disableThinking === true
 
-        await ensureVisionFallbackConfigLoaded()
-        const { isVisionFallbackEnabled } = await import('./vision-fallback.js')
-
-        const paramsOptions: {
-          model: string
-          request: typeof request
-          profile: typeof profile
-          capabilities: typeof capabilities
-          disableThinking: boolean
-          visionFallbackEnabled: boolean
-          onVisionFallbackStart?: typeof request.onVisionFallbackStart
-          onVisionFallbackDone?: typeof request.onVisionFallbackDone
-        } = {
+        const { params: createParams } = await buildNonStreamingCreateParams({
           model,
           request,
           profile,
           capabilities,
           disableThinking: shouldDisableThinking,
-          visionFallbackEnabled: isVisionFallbackEnabled(),
-        }
-        if (request.onVisionFallbackStart) {
-          paramsOptions.onVisionFallbackStart = request.onVisionFallbackStart
-        }
-        if (request.onVisionFallbackDone) {
-          paramsOptions.onVisionFallbackDone = request.onVisionFallbackDone
-        }
-        const { params: createParams } = await buildNonStreamingCreateParams(paramsOptions)
+        })
         const response = await openai.chat.completions.create(createParams, {
           signal: request.signal,
         })
@@ -189,9 +168,6 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
       })
 
       try {
-        await ensureVisionFallbackConfigLoaded()
-        const { isVisionFallbackEnabled } = await import('./vision-fallback.js')
-
         const shouldDisableThinking = disableThinking || request.disableThinking === true
         const createParams = await buildStreamingCreateParams({
           model,
@@ -199,9 +175,6 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
           profile,
           capabilities,
           disableThinking: shouldDisableThinking,
-          visionFallbackEnabled: isVisionFallbackEnabled(),
-          onVisionFallbackStart: request.onVisionFallbackStart,
-          onVisionFallbackDone: request.onVisionFallbackDone,
         })
 
         const { params: streamingParams } = createParams

@@ -51,8 +51,6 @@ export interface PureStreamOptions {
   toolChoice?: 'auto' | 'none' | 'required'
   signal?: AbortSignal | undefined
   disableThinking?: boolean
-  onVisionFallbackStart?: (attachmentId: string, filename?: string) => void
-  onVisionFallbackDone?: (attachmentId: string, description: string) => void
   /** User-configured model settings (temperature, topP, topK, maxTokens, supportsVision) */
   modelSettings?: ModelParams & { supportsVision?: boolean }
   disableXmlProtection?: boolean
@@ -164,8 +162,6 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
     toolChoice,
     signal,
     disableThinking,
-    onVisionFallbackStart,
-    onVisionFallbackDone,
     disableXmlProtection,
   } = options
 
@@ -211,8 +207,6 @@ export async function* streamLLMPure(options: PureStreamOptions): AsyncGenerator
     signal,
     modelSettings: options.modelSettings,
     ...(disableXmlProtection !== undefined && { disableXmlProtection }),
-    onVisionFallbackStart,
-    onVisionFallbackDone,
   })
 
   // Track tool call indices we've emitted preparing events for
@@ -638,6 +632,3 @@ export async function consumeStreamGenerator(
     onEvent(result.value)
   }
 }
-
-
-

@@ -62,29 +62,11 @@ interface InternalMessage extends MessageWithId {
  * For toplevel scope: filters by current context window, excludes sub-agent messages.
  * For subagent scope: filters by subAgentId, handles compaction boundaries.
  */
-export function buildContextMessages(
-  events: StoredEvent[],
-  scope: ConversationScope,
-  options?: { stripAttachments?: boolean },
-): ContextMessage[] {
-  let messages: ContextMessage[]
+export function buildContextMessages(events: StoredEvent[], scope: ConversationScope): ContextMessage[] {
   if (scope.type === 'toplevel') {
-    messages = buildTopLevelContextMessages(events, scope)
-  } else {
-    messages = buildSubAgentContextMessages(events, scope)
+    return buildTopLevelContextMessages(events, scope)
   }
-
-  if (options?.stripAttachments) {
-    messages = messages.map((msg) => {
-      if (msg.attachments) {
-        const { attachments: _a, ...rest } = msg
-        return rest
-      }
-      return msg
-    })
-  }
-
-  return messages
+  return buildSubAgentContextMessages(events, scope)
 }
 
 // ============================================================================
@@ -211,13 +193,13 @@ function buildSubAgentContextMessages(events: StoredEvent[], scope: SubAgentScop
  */
 export function getConversationMessages(
   scope: ConversationScope,
-  options?: { stripAttachments?: boolean },
+  options?: { events?: StoredEvent[] },
 ): RequestContextMessage[] {
   const eventStore = getEventStore()
-  const events = eventStore.getEvents(scope.sessionId)
+  const events = options?.events ?? eventStore.getEvents(scope.sessionId)
   if (events.length === 0) return []
 
-  const contextMessages = buildContextMessages(events, scope, options)
+  const contextMessages = buildContextMessages(events, scope)
 
   return minimalMessagesToRequestContextMessages(contextMessages, 'history')
 }

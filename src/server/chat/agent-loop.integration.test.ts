@@ -60,9 +60,19 @@ vi.mock('../skills/registry.js', () => ({
 }))
 
 vi.mock('../runtime-config.js', () => ({
-  getRuntimeConfig: vi
-    .fn()
-    .mockReturnValue({ mode: 'test', workdir: '/test', agent: {}, context: { compactionThreshold: 0.8 } }),
+  getRuntimeConfig: vi.fn().mockReturnValue({
+    mode: 'test',
+    workdir: '/test',
+    agent: {},
+    context: { compactionThreshold: 0.8 },
+    llm: {
+      baseUrl: 'http://localhost:11434',
+      model: 'test-model',
+      timeout: 30000,
+      idleTimeout: 30000,
+      backend: 'ollama',
+    },
+  }),
 }))
 
 vi.mock('../../cli/paths.js', () => ({

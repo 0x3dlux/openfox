@@ -1,43 +1,34 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import {
-  describeImage,
-  describeImageFromDataUrl,
-  setVisionFallbackConfig,
-  getVisionFallbackConfig,
-  isVisionFallbackEnabled,
-  clearDescriptionCache,
-} from './vision-fallback.js'
+import { describeImage, describeImageFromDataUrl } from './vision-fallback.js'
+import type { VisionModelConfig } from './vision-fallback.js'
 
 global.fetch = vi.fn()
+
+const testVisionModel: VisionModelConfig = {
+  baseUrl: 'http://localhost:11434',
+  model: 'qwen3.5:0.8b',
+  timeout: 120000,
+}
 
 describe('vision-fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(fetch).mockReset()
-    clearDescriptionCache()
-    setVisionFallbackConfig({ enabled: false, url: 'http://localhost:11434', model: 'qwen3.5:0.8b' })
   })
 
   describe('describeImage', () => {
-    it('returns fallback message when disabled', async () => {
-      const result = await describeImage('dGVzdA==')
-      expect(result).toBe('[Image - vision fallback not enabled]')
-    })
-
-    it('returns description from API when enabled', async () => {
-      setVisionFallbackConfig({ enabled: true })
+    it('returns description from API', async () => {
       const mockResponse = {
         ok: true,
         json: async () => ({ message: { content: 'A test image showing a cat' } }),
       }
       vi.mocked(fetch).mockResolvedValue(mockResponse as unknown as Response)
 
-      const result = await describeImage('dGVzdA==')
+      const result = await describeImage('dGVzdA==', testVisionModel)
       expect(result).toBe('A test image showing a cat')
     })
 
     it('returns error message on API failure', async () => {
-      setVisionFallbackConfig({ enabled: true })
       const mockResponse = {
         ok: false,
         status: 500,
@@ -45,12 +36,11 @@ describe('vision-fallback', () => {
       }
       vi.mocked(fetch).mockResolvedValue(mockResponse as unknown as Response)
 
-      const result = await describeImage('dGVzdA==')
+      const result = await describeImage('dGVzdA==', testVisionModel)
       expect(result).toContain('HTTP 500')
     })
 
     it('is interrupted by external AbortSignal', async () => {
-      setVisionFallbackConfig({ enabled: true })
       const abortController = new AbortController()
 
       vi.mocked(fetch).mockImplementation(async (_url, init) => {
@@ -65,18 +55,32 @@ describe('vision-fallback', () => {
         })
       })
 
-      const resultPromise = describeImage('dGVzdA==', { signal: abortController.signal })
+      const resultPromise = describeImage('dGVzdA==', testVisionModel, { signal: abortController.signal })
 
       abortController.abort()
 
       const result = await resultPromise
       expect(result).toContain('timed out')
     })
+
+    it('includes context in the prompt when provided', async () => {
+      const mockResponse = {
+        ok: true,
+        json: async () => ({ message: { content: 'A test image' } }),
+      }
+      vi.mocked(fetch).mockResolvedValue(mockResponse as unknown as Response)
+
+      await describeImage('dGVzdA==', testVisionModel, { context: 'File: screenshot.png' })
+
+      expect(fetch).toHaveBeenCalled()
+      const callArgs = vi.mocked(fetch).mock.calls[0]!
+      const body = JSON.parse(callArgs[1]?.body as string)
+      expect(body.messages[0].content).toContain('File: screenshot.png')
+    })
   })
 
   describe('describeImageFromDataUrl', () => {
     it('extracts base64 from data URL', async () => {
-      setVisionFallbackConfig({ enabled: true })
       const mockResponse = {
         ok: true,
         json: async () => ({ message: { content: 'A test image' } }),
@@ -84,70 +88,13 @@ describe('vision-fallback', () => {
       vi.mocked(fetch).mockResolvedValue(mockResponse as unknown as Response)
 
       const dataUrl = 'data:image/png;base64,dGVzdA=='
-      const result = await describeImageFromDataUrl(dataUrl)
+      const result = await describeImageFromDataUrl(dataUrl, testVisionModel)
       expect(result).toBe('A test image')
     })
 
     it('returns error for invalid data URL', async () => {
-      const result = await describeImageFromDataUrl('not-a-data-url')
+      const result = await describeImageFromDataUrl('not-a-data-url', testVisionModel)
       expect(result).toBe('[Invalid image data URL]')
     })
-  })
-
-  describe('config management', () => {
-    it('sets and gets config', () => {
-      setVisionFallbackConfig({ enabled: true, url: 'http://custom:11434', model: 'custom-model' })
-      const config = getVisionFallbackConfig()
-      expect(config.enabled).toBe(true)
-      expect(config.url).toBe('http://custom:11434')
-      expect(config.model).toBe('custom-model')
-    })
-
-    it('isVisionFallbackEnabled returns correct state', () => {
-      expect(isVisionFallbackEnabled()).toBe(false)
-      setVisionFallbackConfig({ enabled: true })
-      expect(isVisionFallbackEnabled()).toBe(true)
-    })
-  })
-})
-
-describe('ensureVisionFallbackConfigLoaded', () => {
-  beforeEach(() => {
-    clearDescriptionCache()
-  })
-
-  it('uses runtime config visionModel when set', async () => {
-    // Directly test the config wiring by setting config and checking
-    const { setVisionFallbackConfig: setConfig, getVisionFallbackConfig: getConfig } =
-      await import('./vision-fallback.js')
-
-    setConfig({
-      enabled: true,
-      url: 'http://localhost:11434',
-      model: 'vision-model',
-      timeout: 30000,
-    })
-
-    const config = getConfig()
-    expect(config.enabled).toBe(true)
-    expect(config.model).toBe('vision-model')
-    expect(config.url).toBe('http://localhost:11434')
-  })
-
-  it('falls back to global config when no visionModel in runtime config', async () => {
-    const { setVisionFallbackConfig: setConfig, getVisionFallbackConfig: getConfig } =
-      await import('./vision-fallback.js')
-
-    setConfig({
-      enabled: true,
-      url: 'http://ollama:11434',
-      model: 'llava',
-      timeout: 120000,
-    })
-
-    const config = getConfig()
-    expect(config.enabled).toBe(true)
-    expect(config.model).toBe('llava')
-    expect(config.url).toBe('http://ollama:11434')
   })
 })

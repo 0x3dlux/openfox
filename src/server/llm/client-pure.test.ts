@@ -22,7 +22,7 @@ describe('llm client pure helpers', () => {
           },
           { role: 'tool', content: 'ok', toolCallId: 'call-1' },
         ],
-        { modelSupportsVision: false, visionFallbackEnabled: false },
+        false,
       ),
     ).toEqual([
       { role: 'system', content: 'system' },
@@ -47,7 +47,7 @@ describe('llm client pure helpers', () => {
         { role: 'tool', content: 'file contents', toolCallId: 'call-1' },
         { role: 'assistant', content: 'Here is the file.', thinkingContent: 'Summarizing the result' },
       ],
-      { modelSupportsVision: false, visionFallbackEnabled: false },
+      false,
     )
 
     // First assistant message with tool calls includes reasoning_content

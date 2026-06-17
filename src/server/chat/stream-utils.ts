@@ -12,21 +12,9 @@ function buildStreamRequestObject(params: {
     | { temperature?: number; topP?: number; topK?: number; maxTokens?: number; supportsVision?: boolean }
     | undefined
   disableXmlProtection?: boolean
-  onVisionFallbackStart?: ((attachmentId: string, filename?: string) => void) | undefined
-  onVisionFallbackDone?: ((attachmentId: string, description: string) => void) | undefined
 }): LLMCompletionRequest {
-  const {
-    messages,
-    tools,
-    toolChoice,
-    disableThinking,
-    signal,
-    modelSettings,
-    disableXmlProtection,
-    onVisionFallbackStart,
-    onVisionFallbackDone,
-  } = params
-  const streamRequest: LLMCompletionRequest = {
+  const { messages, tools, toolChoice, disableThinking, signal, modelSettings, disableXmlProtection } = params
+  return {
     messages,
     ...(tools && { tools }),
     ...(toolChoice && { toolChoice }),
@@ -35,25 +23,6 @@ function buildStreamRequestObject(params: {
     ...(modelSettings && { modelSettings }),
     ...(disableXmlProtection !== undefined && { disableXmlProtection }),
   }
-  if (onVisionFallbackStart) streamRequest.onVisionFallbackStart = onVisionFallbackStart
-  if (onVisionFallbackDone) streamRequest.onVisionFallbackDone = onVisionFallbackDone
-  return streamRequest
-}
-
-export function createStreamRequest(client: LLMClient, request: LLMCompletionRequest) {
-  const { messages, tools, toolChoice, disableThinking, signal, onVisionFallbackStart, onVisionFallbackDone } = request
-  return streamWithSegments(
-    client,
-    buildStreamRequestObject({
-      messages,
-      tools,
-      toolChoice,
-      disableThinking,
-      signal,
-      onVisionFallbackStart,
-      onVisionFallbackDone,
-    }),
-  )
 }
 
 export type BuildStreamRequestOptions = Parameters<typeof buildStreamRequestObject>[0]

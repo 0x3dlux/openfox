@@ -54,10 +54,6 @@ export interface StreamOptions {
   disableThinking?: boolean
   /** Optional: reuse an existing message ID instead of creating a new one */
   existingMessageId?: string
-  /** Optional: callback when vision fallback starts describing an image */
-  onVisionFallbackStart?: (attachmentId: string, filename?: string) => void
-  /** Optional: callback when vision fallback completes describing an image */
-  onVisionFallbackDone?: (attachmentId: string, description: string) => void
 }
 
 export interface StreamResult {
@@ -98,8 +94,6 @@ async function streamLLMResponseInternal(
     subAgentId,
     subAgentType,
     disableThinking,
-    onVisionFallbackStart,
-    onVisionFallbackDone,
   } = options
 
   // If retrying due to XML format error, inject correction prompt
@@ -195,8 +189,6 @@ async function streamLLMResponseInternal(
     toolChoice,
     disableThinking: disableThinking ?? false,
     signal,
-    onVisionFallbackStart,
-    onVisionFallbackDone,
   })
 
   let result: Awaited<ReturnType<typeof stream.next>>['value']

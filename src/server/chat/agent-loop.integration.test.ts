@@ -223,7 +223,8 @@ describe('agentLoop integration', () => {
     // Should have appended a rejection message
     const startEvents = append.mock.calls.filter(
       (args: unknown[]) =>
-        (args[0] as any).type === 'message.start' && (args[0] as any).data?.content?.includes('Compaction in progress'),
+        (args[0] as any).type === 'message.start' &&
+        (args[0] as any).data?.content?.includes('Tool calls are not possible'),
     )
     expect(startEvents.length).toBeGreaterThanOrEqual(1)
   })
@@ -292,5 +293,33 @@ describe('agentLoop integration', () => {
       (args: unknown[]) => (args[0] as any).type === 'chat.done' && (args[0] as any).data?.reason === 'truncated',
     )
     expect(truncatedEvents.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('places compaction summary in the new context window, not the closed one', async () => {
+    const append = vi.fn()
+
+    ;(consumeStreamGenerator as any).mockResolvedValue(
+      makeStreamResult({ content: 'Compacted summary', finishReason: 'stop' }),
+    )
+
+    await runTopLevelAgentLoop(makeConfig({ append, loopMode: 'compaction' }), turnMetrics)
+
+    // Find the context.compacted event to get the newWindowId
+    const compactedEvents = append.mock.calls
+      .map((args: unknown[]) => args[0] as any)
+      .filter((e: any) => e.type === 'context.compacted')
+    expect(compactedEvents.length).toBe(1)
+    const newWindowId = compactedEvents[0]!.data.newWindowId
+    expect(newWindowId).toBeTruthy()
+
+    // Find the compaction summary message.start event
+    const summaryEvents = append.mock.calls
+      .map((args: unknown[]) => args[0] as any)
+      .filter((e: any) => e.type === 'message.start' && e.data?.isCompactionSummary)
+    expect(summaryEvents.length).toBe(1)
+    const summaryEvent = summaryEvents[0]!
+
+    // The summary MUST be placed in the new window so the loop restart finds it
+    expect(summaryEvent.data.contextWindowId).toBe(newWindowId)
   })
 })

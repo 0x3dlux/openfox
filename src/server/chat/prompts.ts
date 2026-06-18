@@ -306,7 +306,7 @@ Summarize the conversation history concisely, preserving:
 3. All errors encountered and how they were resolved
 4. Current progress on each task
 5. Important technical decisions and WHY they were made
-6. User constraints, preferences, or requirements that should persist
+6. Requirements that should persist
 7. Next steps or pending actions that should be continued after compaction
 8. The user's current question, prompt, or active request
 

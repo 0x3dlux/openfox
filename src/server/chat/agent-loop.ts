@@ -35,6 +35,8 @@ import { createChatMessageUpdatedMessage } from '../ws/protocol.js'
 import { executeTools, type ToolBatchContext } from './execute-tools.js'
 import { createRetryLimiter, type RetryLimiter } from './retry-limiter.js'
 import { drainQueue } from './drain-queue.js'
+import { COMPACTION_PROMPT } from './prompts.js'
+import { maybeAutoCompactContext } from '../context/auto-compaction.js'
 
 function emitPartialDoneEvents(
   _sessionId: string,
@@ -284,25 +286,21 @@ export async function runTopLevelAgentLoop(
     sessionManager.setCurrentContextSize(sessionId, result.usage.promptTokens)
 
     // Check compaction threshold with fresh promptTokens from LLM.
-    // Dynamic import avoids circular dependency: auto-compaction.ts imports agent-loop.ts.
     if (config.loopMode !== 'compaction') {
       const contextState = sessionManager.getContextState(sessionId)
       const { shouldCompact } = await import('../context/compactor.js')
       if (
         shouldCompact(contextState.currentTokens, contextState.maxTokens, runtimeConfig.context.compactionThreshold)
       ) {
-        const { maybeAutoCompactContext } = await import('../context/auto-compaction.js')
-        const compacted = await maybeAutoCompactContext({
+        // Post-check: compact if this single LLM response pushed us over the threshold.
+        await maybeAutoCompactContext({
           sessionManager,
           sessionId,
           llmClient,
           statsIdentity,
           ...(signal ? { signal } : {}),
         })
-        if (compacted) {
-          // Context was compacted — restart loop with new context window
-          continue
-        }
+        continue
       }
     }
 
@@ -364,7 +362,9 @@ export async function runTopLevelAgentLoop(
           createMessageStartEvent(
             rejectionMsgId,
             'user',
-            'Compaction in progress — tool calls are not possible at this stage. Only produce a summary for compaction purposes.',
+            `Tool calls are not possible at this stage. STOP and produce a summary for compaction purposes NOW:
+
+${COMPACTION_PROMPT}`,
             {
               ...(currentWindowMessageOptions ?? {}),
               isSystemGenerated: true,
@@ -469,7 +469,7 @@ export async function runTopLevelAgentLoop(
           messageId: assistantMsgId,
           role: 'assistant',
           content: summary,
-          contextWindowId: closedWindowId,
+          contextWindowId: newWindowId,
           isCompactionSummary: true,
         },
       })

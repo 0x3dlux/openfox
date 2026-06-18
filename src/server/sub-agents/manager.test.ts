@@ -20,6 +20,7 @@ const { getEventStoreMock, getAllInstructionsMock } = vi.hoisted(() => ({
 vi.mock('../events/index.js', () => ({
   getEventStore: getEventStoreMock,
   getCurrentContextWindowId: vi.fn(() => undefined),
+  getCurrentWindowMessageOptions: vi.fn(() => undefined),
 }))
 
 vi.mock('../context/instructions.js', () => ({

@@ -71,6 +71,7 @@ export {
   getCurrentWindowMessages,
   getContextMessages,
   getCurrentContextWindowId,
+  getCurrentWindowMessageOptions,
   getReadFilesCache,
   isFileInCache,
   emitSessionInitialized,

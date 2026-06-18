@@ -15,7 +15,7 @@ import type { ServerMessage } from '../../shared/protocol.js'
 import type { LLMClientWithModel } from '../llm/client.js'
 import type { SessionSnapshot } from '../events/types.js'
 import type { AgentDefinition } from '../agents/types.js'
-import { getEventStore, getCurrentContextWindowId } from '../events/index.js'
+import { getEventStore, getCurrentContextWindowId, getCurrentWindowMessageOptions } from '../events/index.js'
 import { buildSnapshotFromSessionState } from '../events/folding.js'
 import type { SessionManager } from '../session/index.js'
 import { getToolRegistryForAgent, PathAccessDeniedError, type ToolRegistry } from '../tools/index.js'
@@ -29,6 +29,7 @@ import {
   createChatDoneEvent,
 } from './stream-pure.js'
 import { assembleAgentRequest } from './request-context.js'
+import type { RequestContextMessage } from './request-context.js'
 import { resolveCachedAssembly } from './system-prompt-cache.js'
 import { runTopLevelAgentLoop } from './agent-loop.js'
 import { executeSubAgent } from '../sub-agents/manager.js'
@@ -40,6 +41,9 @@ import { getRuntimeConfig } from '../runtime-config.js'
 import { getGlobalConfigDir } from '../../cli/paths.js'
 import { logger } from '../utils/logger.js'
 import type { RetryPatternConfig } from './auto-patterns.js'
+import { processContextImages, loadVisionModelFromGlobalConfig } from '../context/image-processor.js'
+import { modelSupportsVision } from '../llm/profiles.js'
+import { getConversationMessages } from './conversation-history.js'
 
 // Re-export for runner orchestrator
 export {
@@ -49,11 +53,6 @@ export {
   createToolCallEvent,
   createToolResultEvent,
   createChatDoneEvent,
-}
-
-function getCurrentWindowMessageOptions(sessionId: string): { contextWindowId: string } | undefined {
-  const contextWindowId = getCurrentContextWindowId(sessionId)
-  return contextWindowId ? { contextWindowId } : undefined
 }
 
 async function buildRetryPatterns(): Promise<{ retryPatterns: RetryPatternConfig[]; maxRetriesPerTurn: number }> {
@@ -82,6 +81,28 @@ async function buildRetryPatterns(): Promise<{ retryPatterns: RetryPatternConfig
     }
   } catch {
     return { retryPatterns: [], maxRetriesPerTurn: 10 }
+  }
+}
+
+function buildGetConversationMessages(
+  sessionId: string,
+  llmClient: LLMClientWithModel,
+  append: (event: import('../events/types.js').TurnEvent) => void,
+): () => Promise<RequestContextMessage[]> {
+  return async () => {
+    const eventStore = getEventStore()
+    const rawEvents = eventStore.getEvents(sessionId)
+    const modelVision = modelSupportsVision(llmClient.getModel())
+    const runtimeConfig = getRuntimeConfig()
+    const visionModel = runtimeConfig.llm.visionModel
+      ? { baseUrl: runtimeConfig.llm.baseUrl, model: runtimeConfig.llm.visionModel, timeout: runtimeConfig.llm.timeout }
+      : await loadVisionModelFromGlobalConfig()
+    const { events: processedEvents } = await processContextImages(rawEvents, {
+      modelSupportsVision: modelVision,
+      ...(visionModel ? { visionModel } : {}),
+      onEvent: (event) => append(event),
+    })
+    return getConversationMessages({ type: 'toplevel', sessionId }, { events: processedEvents })
   }
 }
 
@@ -356,6 +377,7 @@ async function runGenericAgentTurn(
       assembleRequest: (input) =>
         assembleAgentRequest({ ...input, agentDef, subAgentDefs, modelName: options.llmClient.getModel() }),
       getToolRegistry: () => getToolRegistryForAgent(agentDef),
+      getConversationMessages: buildGetConversationMessages(options.sessionId, options.llmClient, append),
     },
     turnMetrics,
   )
@@ -422,6 +444,7 @@ export async function runBuilderTurn(
           const baseRegistry = getToolRegistryForAgent(builderDef)
           return filterToolRegistryForStepDone(baseRegistry, options.injectStepDone === true)
         },
+        getConversationMessages: buildGetConversationMessages(sessionId, options.llmClient, append),
         onToolExecuted: (toolCall: ToolCall, toolResult: ToolResult) => {
           if (toolCall.name === 'step_done' && toolResult.success) {
             stepDoneCalled = true

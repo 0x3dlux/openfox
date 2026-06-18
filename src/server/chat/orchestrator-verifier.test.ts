@@ -24,6 +24,10 @@ vi.mock('../events/index.js', () => ({
   getEventStore: getEventStoreMock,
   getContextMessages: vi.fn().mockReturnValue([]),
   getCurrentContextWindowId: getCurrentContextWindowIdMock,
+  getCurrentWindowMessageOptions: vi.fn((sessionId: string) => {
+    const id = getCurrentContextWindowIdMock(sessionId)
+    return id ? { contextWindowId: id } : undefined
+  }),
 }))
 
 vi.mock('./conversation-history.js', () => ({

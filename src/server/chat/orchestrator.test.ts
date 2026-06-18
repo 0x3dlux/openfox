@@ -51,6 +51,10 @@ vi.mock('../events/index.js', () => ({
   getEventStore: getEventStoreMock,
   getContextMessages: getContextMessagesMock,
   getCurrentContextWindowId: getCurrentContextWindowIdMock,
+  getCurrentWindowMessageOptions: vi.fn((sessionId: string) => {
+    const id = getCurrentContextWindowIdMock(sessionId)
+    return id ? { contextWindowId: id } : undefined
+  }),
 }))
 
 vi.mock('./conversation-history.js', () => ({
@@ -226,18 +230,21 @@ function createEventStore() {
 }
 
 function createSessionManager(state: Record<string, any>) {
+  const contextState = {
+    currentTokens: 0,
+    maxTokens: 200000,
+    compactionCount: 0,
+    dangerZone: false,
+    canCompact: false,
+    dynamicContextChanged: false,
+  }
   return {
     requireSession: vi.fn(() => structuredClone(state['current'])),
     getCurrentWindowMessages: vi.fn(() => state['current'].messages ?? []),
-    getContextState: vi.fn(() => ({
-      currentTokens: 0,
-      maxTokens: 200000,
-      compactionCount: 0,
-      dangerZone: false,
-      canCompact: false,
-      dynamicContextChanged: false,
-    })),
-    setCurrentContextSize: vi.fn(),
+    getContextState: vi.fn(() => ({ ...contextState })),
+    setCurrentContextSize: vi.fn((_sessionId: string, tokens: number) => {
+      contextState.currentTokens = tokens
+    }),
     addTokensUsed: vi.fn(),
     compactContext: vi.fn(),
     getCurrentModelSettings: vi.fn(() => undefined),
@@ -2712,6 +2719,14 @@ describe('chat orchestrator', () => {
           aborted: false,
         })
         .mockResolvedValueOnce({
+          content: 'Compacted summary',
+          toolCalls: [],
+          segments: [{ type: 'text', content: 'Compacted summary' }],
+          usage: { promptTokens: 500, completionTokens: 50 },
+          timing: { ttft: 1, completionTime: 1, tps: 50, prefillTps: 500 },
+          aborted: false,
+        })
+        .mockResolvedValueOnce({
           content: 'Built',
           toolCalls: [],
           segments: [{ type: 'text', content: 'Built' }],
@@ -2733,14 +2748,6 @@ describe('chat orchestrator', () => {
           messages: [],
         },
       })
-      sessionManager.getContextState = vi.fn(() => ({
-        currentTokens: 190000,
-        maxTokens: 200000,
-        compactionCount: 0,
-        dangerZone: true,
-        canCompact: true,
-        dynamicContextChanged: false,
-      }))
 
       await runBuilderTurn(
         {

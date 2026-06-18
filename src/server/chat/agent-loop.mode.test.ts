@@ -98,6 +98,7 @@ describe('agentLoop compaction mode', () => {
       statsIdentity: { providerId: 'test', providerName: 'Test', backend: 'unknown' as const, model: 'test-model' },
       assembleRequest: assembleRequestMock as any,
       getToolRegistry: () => ({ definitions: [], execute: vi.fn() }) as any,
+      getConversationMessages: vi.fn().mockResolvedValue([]),
       ...overrides,
     }
   }
@@ -112,8 +113,12 @@ describe('agentLoop compaction mode', () => {
         isRunning: false,
       }),
       getContextState: vi.fn().mockReturnValue({
-        currentTokens: 0, maxTokens: 200000, compactionCount: 0,
-        dangerZone: false, canCompact: false, dynamicContextChanged: false,
+        currentTokens: 0,
+        maxTokens: 200000,
+        compactionCount: 0,
+        dangerZone: false,
+        canCompact: false,
+        dynamicContextChanged: false,
       }),
       getCurrentModelSettings: vi.fn().mockReturnValue({}),
       setCurrentContextSize: vi.fn(),

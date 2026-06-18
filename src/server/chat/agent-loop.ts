@@ -26,42 +26,15 @@ import {
   createChatDoneEvent,
 } from './stream-pure.js'
 import { getSetting, SETTINGS_KEYS } from '../db/settings.js'
-import { getCurrentContextWindowId } from '../events/index.js'
-import { maybeAutoCompactContext } from '../context/auto-compaction.js'
+import { getCurrentContextWindowId, getCurrentWindowMessageOptions } from '../events/index.js'
 import { getAllInstructions } from '../context/instructions.js'
 import { getEnabledSkillMetadata } from '../skills/registry.js'
 import { getRuntimeConfig } from '../runtime-config.js'
 import { getGlobalConfigDir } from '../../cli/paths.js'
-import {
-  createQueueStateMessage,
-  createChatMessageMessage,
-  createChatDoneMessage,
-  createChatMessageUpdatedMessage,
-} from '../ws/protocol.js'
-import { getConversationMessages } from './conversation-history.js'
-import { getEventStore } from '../events/index.js'
-import { processContextImages } from '../context/image-processor.js'
-import { modelSupportsVision } from '../llm/profiles.js'
+import { createChatMessageUpdatedMessage } from '../ws/protocol.js'
 import { executeTools, type ToolBatchContext } from './execute-tools.js'
 import { createRetryLimiter, type RetryLimiter } from './retry-limiter.js'
-
-async function loadVisionModelFromGlobalConfig(): Promise<
-  { baseUrl: string; model: string; timeout: number } | undefined
-> {
-  try {
-    const { loadGlobalConfig, getVisionFallback } = await import('../../cli/config.js')
-    const runtimeConfig = getRuntimeConfig()
-    const mode = runtimeConfig.mode ?? 'production'
-    const globalConfig = await loadGlobalConfig(mode)
-    const fallback = getVisionFallback(globalConfig)
-    if (fallback?.enabled && fallback.model) {
-      return { baseUrl: fallback.url, model: fallback.model, timeout: fallback.timeout * 1000 }
-    }
-  } catch {
-    // Global config not available
-  }
-  return undefined
-}
+import { drainQueue } from './drain-queue.js'
 
 function emitPartialDoneEvents(
   _sessionId: string,
@@ -118,15 +91,9 @@ export interface TopLevelLoopConfig {
   getToolRegistry: () => ToolRegistry
   onToolExecuted?: ((toolCall: ToolCall, result: ToolResult) => void) | undefined
   injectKickoff?: (() => void) | undefined
-}
-
-// ============================================================================
-// Shared Tool Execution
-// ============================================================================
-
-function getCurrentWindowMessageOptions(sessionId: string): { contextWindowId: string } | undefined {
-  const contextWindowId = getCurrentContextWindowId(sessionId)
-  return contextWindowId ? { contextWindowId } : undefined
+  /** Build conversation messages for the LLM, with image processing applied.
+   *  Called each iteration to get fresh context. */
+  getConversationMessages: () => Promise<RequestContextMessage[]>
 }
 
 // ============================================================================
@@ -151,16 +118,6 @@ export async function runTopLevelAgentLoop(
   let lastPatternMatch: { pattern: string; field: string; matchedContent: string } | undefined
 
   for (;;) {
-    if (config.loopMode !== 'compaction') {
-      await maybeAutoCompactContext({
-        sessionManager,
-        sessionId,
-        llmClient,
-        statsIdentity,
-        ...(signal ? { signal } : {}),
-      })
-    }
-
     if (signal?.aborted) throw new Error('Aborted')
 
     const session = sessionManager.requireSession(sessionId)
@@ -182,23 +139,7 @@ export async function runTopLevelAgentLoop(
     const toolRegistry = config.getToolRegistry()
     const currentWindowMessageOptions = getCurrentWindowMessageOptions(sessionId)
 
-    const modelName = llmClient.getModel()
-    const modelVision = modelSupportsVision(modelName)
-
-    // Process images in context: describe via vision model or replace with placeholder
-    const eventStore = getEventStore()
-    const rawEvents = eventStore.getEvents(sessionId)
-    const runtimeConfig = getRuntimeConfig()
-    const visionModel = runtimeConfig.llm.visionModel
-      ? { baseUrl: runtimeConfig.llm.baseUrl, model: runtimeConfig.llm.visionModel, timeout: runtimeConfig.llm.timeout }
-      : await loadVisionModelFromGlobalConfig()
-    const { events: processedEvents } = await processContextImages(rawEvents, {
-      modelSupportsVision: modelVision,
-      ...(visionModel ? { visionModel } : {}),
-      onEvent: (event) => append(event),
-    })
-
-    const requestMessages = getConversationMessages({ type: 'toplevel', sessionId }, { events: processedEvents })
+    const requestMessages = await config.getConversationMessages()
 
     if (retryLimiter.count() > 0) {
       const continueMsgId = crypto.randomUUID()
@@ -216,6 +157,7 @@ export async function runTopLevelAgentLoop(
       requestMessages.push({ role: 'user', content: continueContent, source: 'history' })
     }
 
+    const runtimeConfig = getRuntimeConfig()
     const configDir = getGlobalConfigDir(runtimeConfig.mode ?? 'production')
     const skills = await getEnabledSkillMetadata(configDir, runtimeConfig.workdir)
     if (signal?.aborted) throw new Error('Aborted')
@@ -341,22 +283,26 @@ export async function runTopLevelAgentLoop(
     )
     sessionManager.setCurrentContextSize(sessionId, result.usage.promptTokens)
 
-    // Check compaction threshold with fresh promptTokens from LLM
+    // Check compaction threshold with fresh promptTokens from LLM.
+    // Dynamic import avoids circular dependency: auto-compaction.ts imports agent-loop.ts.
     if (config.loopMode !== 'compaction') {
       const contextState = sessionManager.getContextState(sessionId)
-      const runtimeConfig = getRuntimeConfig()
       const { shouldCompact } = await import('../context/compactor.js')
       if (
         shouldCompact(contextState.currentTokens, contextState.maxTokens, runtimeConfig.context.compactionThreshold)
       ) {
         const { maybeAutoCompactContext } = await import('../context/auto-compaction.js')
-        await maybeAutoCompactContext({
+        const compacted = await maybeAutoCompactContext({
           sessionManager,
           sessionId,
           llmClient,
           statsIdentity,
           ...(signal ? { signal } : {}),
         })
+        if (compacted) {
+          // Context was compacted — restart loop with new context window
+          continue
+        }
       }
     }
 
@@ -491,32 +437,7 @@ export async function runTopLevelAgentLoop(
         throw new Error('Aborted')
       }
 
-      const asapMessages = sessionManager.drainAsapMessages(sessionId)
-      for (const asap of asapMessages) {
-        const asapMsgId = crypto.randomUUID()
-        append(
-          createMessageStartEvent(asapMsgId, 'user', asap.content, {
-            ...getCurrentWindowMessageOptions(sessionId),
-            ...(asap.attachments ? { attachments: asap.attachments } : {}),
-          }),
-        )
-        append({ type: 'message.done', data: { messageId: asapMsgId } })
-
-        // Broadcast message events to frontend so it knows about the user message
-        // before tool.preparing events arrive for the assistant response
-        const message: import('../../shared/types.js').Message = {
-          id: asapMsgId,
-          role: 'user',
-          content: asap.content,
-          timestamp: new Date().toISOString(),
-          ...(asap.attachments ? { attachments: asap.attachments } : {}),
-        }
-        onMessage?.(createChatMessageMessage(message))
-        onMessage?.(createChatDoneMessage(asapMsgId, 'complete'))
-      }
-      if (asapMessages.length > 0) {
-        onMessage?.(createQueueStateMessage(sessionManager.getQueueState(sessionId)))
-      }
+      void drainQueue(sessionManager, sessionId, append, onMessage)
 
       retryLimiter.reset()
       continue

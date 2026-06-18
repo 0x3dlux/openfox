@@ -348,6 +348,7 @@ describe('runTopLevelAgentLoop caching', () => {
       statsIdentity: { providerId: 'test', providerName: 'Test', backend: 'unknown' as const, model: 'test-model' },
       assembleRequest: assembleRequestMock as any,
       getToolRegistry: () => ({ definitions: [], execute: vi.fn() }) as any,
+      getConversationMessages: vi.fn().mockResolvedValue([]),
       ...overrides,
     }
   }

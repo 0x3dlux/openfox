@@ -73,6 +73,7 @@ vi.mock('../../cli/paths.js', () => ({
 
 vi.mock('../events/index.js', () => ({
   getCurrentContextWindowId: vi.fn().mockReturnValue(undefined),
+  getCurrentWindowMessageOptions: vi.fn().mockReturnValue(undefined),
   getEventStore: vi.fn().mockReturnValue({ append: vi.fn(), getEvents: vi.fn().mockReturnValue([]) }),
 }))
 
@@ -135,6 +136,7 @@ function makeConfig(overrides?: Partial<TopLevelLoopConfig>): TopLevelLoopConfig
       },
     }),
     getToolRegistry: () => ({ definitions: [], execute: vi.fn() }) as any,
+    getConversationMessages: vi.fn().mockResolvedValue([]),
     ...overrides,
   }
 }

@@ -201,15 +201,15 @@ vi.mock('../chat/orchestrator.js', async (importOriginal) => {
   }
 })
 
-vi.mock('../events/index.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../events/index.js')>()
-  return {
-    ...actual,
-    getEventStore: getEventStoreMock,
-    getContextMessages: getContextMessagesMock,
-    getCurrentContextWindowId: getCurrentContextWindowIdMock,
-  }
-})
+vi.mock('../events/index.js', () => ({
+  getEventStore: getEventStoreMock,
+  getContextMessages: getContextMessagesMock,
+  getCurrentContextWindowId: getCurrentContextWindowIdMock,
+  getCurrentWindowMessageOptions: vi.fn((sessionId: string) => {
+    const id = getCurrentContextWindowIdMock(sessionId)
+    return id ? { contextWindowId: id } : undefined
+  }),
+}))
 
 vi.mock('../llm/index.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../llm/index.js')>()

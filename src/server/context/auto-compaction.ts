@@ -1,7 +1,7 @@
 import type { Provider, StatsIdentity } from '../../shared/types.js'
 import type { LLMClientWithModel } from '../llm/client.js'
 import type { SessionManager } from '../session/index.js'
-import { getEventStore, getCurrentContextWindowId } from '../events/index.js'
+import { getEventStore, getCurrentWindowMessageOptions } from '../events/index.js'
 import { shouldCompact } from './compactor.js'
 import { COMPACTION_PROMPT } from '../chat/prompts.js'
 import { assembleAgentRequest } from '../chat/request-context.js'
@@ -11,11 +11,9 @@ import { loadAllAgentsDefault, findAgentById, getSubAgents } from '../agents/reg
 import { getToolRegistryForAgent } from '../tools/index.js'
 import { getRuntimeConfig } from '../runtime-config.js'
 import { logger } from '../utils/logger.js'
-
-function getCurrentWindowMessageOptions(sessionId: string): { contextWindowId: string } | undefined {
-  const contextWindowId = getCurrentContextWindowId(sessionId)
-  return contextWindowId ? { contextWindowId } : undefined
-}
+import { getConversationMessages } from '../chat/conversation-history.js'
+import { processContextImages, loadVisionModelFromGlobalConfig } from '../context/image-processor.js'
+import { modelSupportsVision } from '../llm/profiles.js'
 
 interface ContextCompactionOptions {
   sessionManager: SessionManager
@@ -125,6 +123,24 @@ async function performContextCompaction(
           disableThinking: true,
         }),
       getToolRegistry: () => toolRegistry,
+      getConversationMessages: async () => {
+        const rawEvents = eventStore.getEvents(sessionId)
+        const modelVision = modelSupportsVision(llmClient.getModel())
+        const runtimeConfig = getRuntimeConfig()
+        const visionModel = runtimeConfig.llm.visionModel
+          ? {
+              baseUrl: runtimeConfig.llm.baseUrl,
+              model: runtimeConfig.llm.visionModel,
+              timeout: runtimeConfig.llm.timeout,
+            }
+          : await loadVisionModelFromGlobalConfig()
+        const { events: processedEvents } = await processContextImages(rawEvents, {
+          modelSupportsVision: modelVision,
+          ...(visionModel ? { visionModel } : {}),
+          onEvent: (event) => eventStore.append(sessionId, event),
+        })
+        return getConversationMessages({ type: 'toplevel', sessionId }, { events: processedEvents })
+      },
     },
     turnMetrics,
   )

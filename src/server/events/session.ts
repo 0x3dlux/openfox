@@ -190,6 +190,11 @@ export function getCurrentContextWindowId(sessionId: string): string | undefined
   return contextResult.currentContextWindowId || undefined
 }
 
+export function getCurrentWindowMessageOptions(sessionId: string): { contextWindowId: string } | undefined {
+  const contextWindowId = getCurrentContextWindowId(sessionId)
+  return contextWindowId ? { contextWindowId } : undefined
+}
+
 /**
  * Get read files cache for current window
  */

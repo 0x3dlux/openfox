@@ -514,7 +514,6 @@ export class SessionManager {
         if (m.isSystemGenerated !== undefined) msg.isSystemGenerated = m.isSystemGenerated
         if (m.messageKind !== undefined) msg.messageKind = m.messageKind
         if (m.isCompactionSummary !== undefined) msg.isCompactionSummary = m.isCompactionSummary
-        if (m.promptContext !== undefined) msg.promptContext = m.promptContext
         return msg
       })
   }
@@ -1034,7 +1033,6 @@ export class SessionManager {
       if (m.messageKind !== undefined) msg.messageKind = m.messageKind
       if (m.contextWindowId !== undefined) msg.contextWindowId = m.contextWindowId
       if (m.isCompactionSummary !== undefined) msg.isCompactionSummary = m.isCompactionSummary
-      if (m.promptContext !== undefined) msg.promptContext = m.promptContext
       return msg
     })
 

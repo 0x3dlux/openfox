@@ -253,9 +253,7 @@ export interface ChatMessagePayload {
 
 export interface ChatMessageUpdatedPayload {
   messageId: string
-  updates: Partial<
-    Pick<Message, 'content' | 'thinkingContent' | 'toolCalls' | 'isStreaming' | 'stats' | 'promptContext' | 'partial'>
-  >
+  updates: Partial<Pick<Message, 'content' | 'thinkingContent' | 'toolCalls' | 'isStreaming' | 'stats' | 'partial'>>
 }
 
 export interface ChatDonePayload {

@@ -8,7 +8,7 @@
  * - runTopLevelAgentLoop(): replaces duplicated planner/builder turns
  */
 
-import type { InjectedFile, PromptContext, StatsIdentity, ToolCall, ToolMode, ToolResult } from '../../shared/types.js'
+import type { InjectedFile, StatsIdentity, ToolCall, ToolMode, ToolResult } from '../../shared/types.js'
 import type { ServerMessage } from '../../shared/protocol.js'
 import type { LLMClientWithModel } from '../llm/client.js'
 import type { LLMToolDefinition } from '../llm/types.js'
@@ -42,7 +42,6 @@ function emitPartialDoneEvents(
   statsIdentity: import('../../shared/types.js').StatsIdentity,
   mode: import('../../shared/types.js').ToolMode,
   turnMetrics: TurnMetrics,
-  promptContext: PromptContext,
   append: (event: import('../events/types.js').TurnEvent) => void,
 ): void {
   const stats = turnMetrics.buildStats(statsIdentity, mode)
@@ -50,7 +49,6 @@ function emitPartialDoneEvents(
     createMessageDoneEvent(assistantMsgId, {
       stats,
       partial: true,
-      promptContext,
     }),
   )
   append(createChatDoneEvent(assistantMsgId, 'stopped', stats))
@@ -83,7 +81,6 @@ export interface TopLevelLoopConfig {
   }) => {
     systemPrompt: string
     messages: MinimalMessage[]
-    promptContext: PromptContext
   }
   getToolRegistry: () => ToolRegistry
   onToolExecuted?: ((toolCall: ToolCall, result: ToolResult) => void) | undefined
@@ -263,15 +260,7 @@ export async function runTopLevelAgentLoop(
     }
 
     if (result.aborted) {
-      emitPartialDoneEvents(
-        sessionId,
-        assistantMsgId,
-        statsIdentity,
-        mode,
-        turnMetrics,
-        assembledRequest.promptContext,
-        append,
-      )
+      emitPartialDoneEvents(sessionId, assistantMsgId, statsIdentity, mode, turnMetrics, append)
       throw new Error('Aborted')
     }
 
@@ -322,7 +311,6 @@ export async function runTopLevelAgentLoop(
           createMessageDoneEvent(assistantMsgId, {
             segments: result.segments,
             stats: interimStats,
-            promptContext: assembledRequest.promptContext,
           }),
         )
         // Tell the frontend to fold the streaming message back into messages
@@ -351,7 +339,6 @@ export async function runTopLevelAgentLoop(
             segments: result.segments,
             stats,
             partial: true,
-            promptContext: assembledRequest.promptContext,
           }),
         )
         append(createChatDoneEvent(assistantMsgId, 'truncated', stats))
@@ -384,7 +371,6 @@ ${COMPACTION_PROMPT}`,
       append(
         createMessageDoneEvent(assistantMsgId, {
           segments: result.segments,
-          promptContext: assembledRequest.promptContext,
         }),
       )
 
@@ -415,7 +401,6 @@ ${COMPACTION_PROMPT}`,
               createMessageDoneEvent(assistantMsgId, {
                 segments: result.segments,
                 stats,
-                promptContext: assembledRequest.promptContext,
               }),
             )
             append(createChatDoneEvent(assistantMsgId, 'complete', stats))
@@ -424,7 +409,6 @@ ${COMPACTION_PROMPT}`,
                 createChatMessageUpdatedMessage(assistantMsgId, {
                   isStreaming: false,
                   stats,
-                  promptContext: assembledRequest.promptContext,
                 }),
               )
               const { createChatDoneMessage } = await import('../ws/protocol.js')
@@ -438,30 +422,14 @@ ${COMPACTION_PROMPT}`,
         }
       } catch (error) {
         if (error instanceof Error && error.message === 'Aborted') {
-          emitPartialDoneEvents(
-            sessionId,
-            assistantMsgId,
-            statsIdentity,
-            mode,
-            turnMetrics,
-            assembledRequest.promptContext,
-            append,
-          )
+          emitPartialDoneEvents(sessionId, assistantMsgId, statsIdentity, mode, turnMetrics, append)
           throw error
         }
         throw error
       }
 
       if (signal?.aborted) {
-        emitPartialDoneEvents(
-          sessionId,
-          assistantMsgId,
-          statsIdentity,
-          mode,
-          turnMetrics,
-          assembledRequest.promptContext,
-          append,
-        )
+        emitPartialDoneEvents(sessionId, assistantMsgId, statsIdentity, mode, turnMetrics, append)
         throw new Error('Aborted')
       }
 
@@ -542,16 +510,9 @@ ${COMPACTION_PROMPT}`,
       createMessageDoneEvent(assistantMsgId, {
         segments: result.segments,
         stats,
-        promptContext: assembledRequest.promptContext,
       }),
     )
     append(createChatDoneEvent(assistantMsgId, 'complete', stats))
-
-    const currentWindowMessages = sessionManager.getCurrentWindowMessages(sessionId)
-    const lastUserMessage = [...currentWindowMessages].reverse().find((m) => m.role === 'user')
-    if (lastUserMessage) {
-      sessionManager.updateMessage(sessionId, lastUserMessage.id, { promptContext: assembledRequest.promptContext })
-    }
 
     break
   }

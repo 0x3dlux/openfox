@@ -28,7 +28,6 @@ import type {
   MessageStats,
   Todo,
   MessageSegment,
-  PromptContext,
   Attachment,
 } from '../../shared/types.js'
 import type { SessionSnapshot, SnapshotMessage, ReadFileEntry } from './types.js'
@@ -349,7 +348,6 @@ export function emitMessageDone(
     stats?: MessageStats
     segments?: MessageSegment[]
     partial?: boolean
-    promptContext?: PromptContext
     tokenCount?: number
   },
 ): void {
@@ -361,7 +359,6 @@ export function emitMessageDone(
       ...(options?.stats !== undefined && { stats: options.stats }),
       ...(options?.segments !== undefined && { segments: options.segments }),
       ...(options?.partial !== undefined && { partial: options.partial }),
-      ...(options?.promptContext !== undefined && { promptContext: options.promptContext }),
       ...(options?.tokenCount !== undefined && { tokenCount: options.tokenCount }),
     },
   })

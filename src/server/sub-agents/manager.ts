@@ -15,7 +15,7 @@ import type { ToolRegistry } from '../tools/types.js'
 import type { ServerMessage } from '../../shared/protocol.js'
 import type { AgentDefinition } from '../agents/types.js'
 import { loadAllAgentsDefault, findAgentById } from '../agents/registry.js'
-import { buildSubAgentSystemPrompt } from '../chat/prompts.js'
+import { buildBasePrompt } from '../chat/prompts.js'
 import { TurnMetrics, createMessageStartEvent } from '../chat/stream-pure.js'
 import { runTopLevelAgentLoop } from '../chat/agent-loop.js'
 import { createAssemblyResult } from '../chat/request-context.js'
@@ -168,7 +168,9 @@ export async function executeSubAgent(options: SubAgentExecutionOptions): Promis
   const skills = await getEnabledSkillMetadata(configDir, config.workdir)
 
   const systemPrompt =
-    buildSubAgentSystemPrompt(session.workdir, agentDef, skills.length > 0 ? skills : undefined, llmClient.getModel()) +
+    buildBasePrompt(session.workdir, undefined, skills.length > 0 ? skills : undefined, llmClient.getModel()) +
+    '\n\n' +
+    agentDef.prompt +
     RETURN_VALUE_INSTRUCTION
 
   // --- Delegate to the shared agent loop ---

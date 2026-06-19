@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useRef, type RefObject } from 'react'
+import { memo, useState, useRef, type RefObject } from 'react'
 import { useSessionStore, useIsRunning } from '../../stores/session'
 import { useWorkflowsStore } from '../../stores/workflows'
 import { useDisplaySettings } from '../../stores/settings'
@@ -7,7 +7,6 @@ import { AssistantMessage } from './AssistantMessage'
 import { SubAgentContainer } from './SubAgentContainer'
 import { CriteriaGroupDisplay } from '../shared/CriteriaGroupDisplay'
 import { CloseButton } from '../shared/CloseButton'
-import { buildPromptContextByUserMessageId } from './prompt-context-linking.js'
 import { useClickOutside } from '../../hooks/useClickOutside'
 import type { DisplayItem } from './groupMessages.js'
 import type { MetadataEntry } from '@shared/types.js'
@@ -29,7 +28,6 @@ export const MessageList = memo(function MessageList({
   const sessionId = useSessionStore((state) => state.currentSession?.id)
   const sessionMode = useSessionStore((state) => state.currentSession?.mode)
   const sessionPhase = useSessionStore((state) => state.currentSession?.phase)
-  const rawMessages = useSessionStore((state) => state.messages)
   const error = useSessionStore((state) => state.error)
   const clearError = useSessionStore((state) => state.clearError)
   const acceptAndBuild = useSessionStore((state) => state.acceptAndBuild)
@@ -40,8 +38,6 @@ export const MessageList = memo(function MessageList({
   const workflowDefaults = useWorkflowsStore((state) => state.defaults)
   const workflowUserItems = useWorkflowsStore((state) => state.userItems)
   const workflows = [...workflowDefaults, ...workflowUserItems]
-
-  const promptContextByUserMessageId = useMemo(() => buildPromptContextByUserMessageId(rawMessages), [rawMessages])
 
   const isPlanning = sessionMode === 'planner'
   const hasCriteria = criteria.length > 0
@@ -122,7 +118,6 @@ export const MessageList = memo(function MessageList({
                   messageIndex={index}
                   sessionId={sessionId}
                   isLastAssistantMessage={false}
-                  promptContext={message.role === 'user' ? promptContextByUserMessageId[message.id] : undefined}
                 />
               </div>
             </div>

@@ -435,16 +435,12 @@ export function storedEventToServerMessage(event: StoredEvent): ServerMessage | 
         isStreaming: false
         partial?: true
         stats?: typeof data.stats
-        promptContext?: typeof data.promptContext
       } = { isStreaming: false }
       if (data.partial) {
         updates.partial = true
       }
       if (data.stats) {
         updates.stats = data.stats
-      }
-      if (data.promptContext) {
-        updates.promptContext = data.promptContext
       }
       return createChatMessageUpdatedMessage(data.messageId, updates)
     }

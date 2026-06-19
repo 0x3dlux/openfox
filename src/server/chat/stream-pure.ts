@@ -11,7 +11,6 @@
  */
 
 import type {
-  PromptContext,
   ToolCall,
   MessageSegment,
   MessageStats,
@@ -548,7 +547,6 @@ export function createMessageDoneEvent(
     stats?: MessageStats
     segments?: MessageSegment[]
     partial?: boolean
-    promptContext?: PromptContext
   },
 ): TurnEvent {
   return {
@@ -558,7 +556,6 @@ export function createMessageDoneEvent(
       ...(options?.stats && { stats: options.stats }),
       ...(options?.segments && { segments: options.segments }),
       ...(options?.partial && { partial: options.partial }),
-      ...(options?.promptContext && { promptContext: options.promptContext }),
     },
   }
 }

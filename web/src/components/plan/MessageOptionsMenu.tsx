@@ -1,27 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import type { PromptContext } from '@shared/types.js'
-import { PromptInspector } from '../shared/PromptInspector'
-import { CheckIcon, CopyIcon, EyeIcon, EllipsisIcon, ReloadIcon } from '../shared/icons'
+import { CheckIcon, CopyIcon, EllipsisIcon, ReloadIcon } from '../shared/icons'
 import { replayMessage } from '../../lib/api.js'
 import { useSessionStore } from '../../stores/session.js'
 
 interface MessageOptionsMenuProps {
   content: string
-  promptContext?: PromptContext
   align?: 'left' | 'right'
   messageIndex?: number
   sessionId?: string
 }
 
-export function MessageOptionsMenu({
-  content,
-  promptContext,
-  align = 'right',
-  messageIndex,
-  sessionId,
-}: MessageOptionsMenuProps) {
+export function MessageOptionsMenu({ content, align = 'right', messageIndex, sessionId }: MessageOptionsMenuProps) {
   const [showMenu, setShowMenu] = useState(false)
-  const [showInspector, setShowInspector] = useState(false)
   const [copied, setCopied] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const loadSession = useSessionStore((s) => s.loadSession)
@@ -109,26 +99,10 @@ export function MessageOptionsMenu({
                   </button>
                 </>
               )}
-              {promptContext && (
-                <button
-                  onClick={() => {
-                    setShowInspector(true)
-                    setShowMenu(false)
-                  }}
-                  className="w-full px-3 py-1.5 text-left text-sm text-text-primary hover:bg-bg-tertiary flex items-center gap-2"
-                >
-                  <EyeIcon className="w-4 h-4" />
-                  Inspect
-                </button>
-              )}
             </div>
           )}
         </div>
       </div>
-
-      {promptContext && (
-        <PromptInspector isOpen={showInspector} onClose={() => setShowInspector(false)} promptContext={promptContext} />
-      )}
     </>
   )
 }

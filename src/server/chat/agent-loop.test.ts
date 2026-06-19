@@ -313,14 +313,6 @@ describe('runTopLevelAgentLoop assembleRequest', () => {
     assembleRequestMock = vi.fn().mockReturnValue({
       systemPrompt: 'test-system-prompt',
       messages: [],
-      promptContext: {
-        systemPrompt: 'test-system-prompt',
-        injectedFiles: [],
-        userMessage: '',
-        messages: [],
-        tools: [],
-        requestOptions: { toolChoice: 'auto', disableThinking: false },
-      },
     })
     ;(getAllInstructions as any).mockResolvedValue({ content: 'test instructions', files: [] })
     ;(getEnabledSkillMetadata as any).mockResolvedValue([])

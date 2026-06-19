@@ -122,14 +122,6 @@ function makeConfig(overrides?: Partial<TopLevelLoopConfig>): TopLevelLoopConfig
     assembleRequest: vi.fn().mockReturnValue({
       systemPrompt: 'test-prompt',
       messages: [],
-      promptContext: {
-        systemPrompt: 'test-prompt',
-        injectedFiles: [],
-        userMessage: '',
-        messages: [],
-        tools: [],
-        requestOptions: { toolChoice: 'auto', disableThinking: false },
-      },
     }),
     getToolRegistry: () => ({ definitions: [], execute: vi.fn() }) as any,
     getConversationMessages: vi.fn().mockResolvedValue([]),

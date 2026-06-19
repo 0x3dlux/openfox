@@ -16,7 +16,6 @@
 
 import type Database from 'better-sqlite3'
 import type { TurnEvent, StoredEvent, SessionSnapshot, SnapshotMessage } from './types.js'
-import { stripPromptContextMessages } from './optimize-storage.js'
 import { logger } from '../utils/logger.js'
 import { foldSessionState, buildSnapshot } from './folding.js'
 
@@ -575,16 +574,10 @@ export class EventStore {
   }
 
   /**
-   * One-time storage optimization: delete old snapshots and strip
-   * promptContext.messages from remaining snapshots across all sessions.
+   * One-time storage optimization: delete old snapshots across all sessions.
    * Safe to run multiple times (idempotent).
    */
-  optimizeStorage(): { deletedSnapshots: number; strippedSnapshots: number } {
-    // eslint-disable-next-line no-useless-assignment
-    let deletedSnapshots = 0
-    let strippedSnapshots = 0
-
-    // 1. Delete all non-latest snapshots per session
+  optimizeStorage(): { deletedSnapshots: number } {
     const deleteResult = this.db
       .prepare(
         `
@@ -602,31 +595,8 @@ export class EventStore {
       `,
       )
       .run()
-    deletedSnapshots = deleteResult.changes as number
 
-    // 2. Strip promptContext.messages from all but the last assistant message
-    //    in each remaining snapshot
-    const snapshots = this.db
-      .prepare(`SELECT id, payload FROM events WHERE event_type = 'turn.snapshot'`)
-      .all() as Array<{ id: number; payload: string }>
-
-    const updateStmt = this.db.prepare(`UPDATE events SET payload = ? WHERE id = ?`)
-
-    for (const row of snapshots) {
-      const data = JSON.parse(row.payload)
-      const messages = data.messages as import('./types.js').SnapshotMessage[]
-      if (!messages) continue
-
-      // Find last assistant message with promptContext
-      const changed = stripPromptContextMessages(messages)
-
-      if (changed) {
-        updateStmt.run(JSON.stringify(data), row.id)
-        strippedSnapshots++
-      }
-    }
-
-    return { deletedSnapshots, strippedSnapshots }
+    return { deletedSnapshots: deleteResult.changes as number }
   }
 
   /**
@@ -786,10 +756,10 @@ export function initEventStore(db: Database.Database): EventStore {
   }
   resetStaleRunningSessions(eventStoreInstance, db)
 
-  // Optimize storage: remove old snapshots and strip bloated promptContext data.
+  // Optimize storage: remove old snapshots.
   // Idempotent — fast no-op on already-optimized databases.
   const result = eventStoreInstance.optimizeStorage()
-  if (result.deletedSnapshots > 0 || result.strippedSnapshots > 0) {
+  if (result.deletedSnapshots > 0) {
     logger.info('Storage optimized', result)
   }
 

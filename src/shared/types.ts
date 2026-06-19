@@ -229,37 +229,6 @@ export interface ModelSessionStats extends StatsIdentity {
   callDataPoints: CallStatsDataPoint[]
 }
 
-// Metadata about what was sent to the LLM for this response
-export interface PromptContext {
-  systemPrompt: string // Full system prompt sent to LLM
-  injectedFiles: InjectedFile[] // AGENTS.md, global/project instructions, etc.
-  userMessage: string // The user message that triggered this response
-  messages: PromptContextMessage[]
-  tools: PromptContextTool[]
-  requestOptions: PromptRequestOptions
-}
-
-export interface PromptContextMessage {
-  role: 'user' | 'assistant' | 'tool'
-  content: string
-  thinkingContent?: string
-  source: 'history' | 'runtime'
-  toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>
-  toolCallId?: string
-  attachments?: Attachment[]
-}
-
-export interface PromptContextTool {
-  name: string
-  description: string
-  parameters: Record<string, unknown>
-}
-
-export interface PromptRequestOptions {
-  toolChoice: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } }
-  disableThinking: boolean
-}
-
 export interface InjectedFile {
   path: string // File path or identifier
   content: string // File content
@@ -306,7 +275,6 @@ export interface Message {
   isCompactionSummary?: boolean // true if this is the summary message after compaction
   subAgentId?: string // If set, this message belongs to a sub-agent process
   subAgentType?: string // Sub-agent ID from agent registry
-  promptContext?: PromptContext // What was sent to LLM for this response (assistant messages only)
   attachments?: Attachment[] // Optional image attachments
   metadata?: { type: string; name: string; color: string } // For auto-prompt messages
 }

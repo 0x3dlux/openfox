@@ -30,7 +30,6 @@ import type {
 } from './types.js'
 import { applyEvents } from './apply-events.js'
 import type { FormatRetry } from './apply-events.js'
-import { stripPromptContextMessages } from './optimize-storage.js'
 import stripAnsi from 'strip-ansi'
 
 function cloneMessage(message: Message): Message {
@@ -68,7 +67,6 @@ export function spreadOptionalMessageFields(message: SnapshotMessage) {
     ...(message.messageKind !== undefined && { messageKind: message.messageKind }),
     ...(message.contextWindowId !== undefined && { contextWindowId: message.contextWindowId }),
     ...(message.isCompactionSummary !== undefined && { isCompactionSummary: message.isCompactionSummary }),
-    ...(message.promptContext !== undefined && { promptContext: message.promptContext }),
     ...(message.attachments !== undefined && { attachments: message.attachments }),
     ...(message.preparingToolCalls !== undefined &&
       message.preparingToolCalls.length > 0 && { preparingToolCalls: message.preparingToolCalls }),
@@ -991,12 +989,6 @@ export function buildSnapshotFromSessionState(input: {
         events.slice(latestSnapshotIndex + 1),
       )
     : foldedState.messages
-
-  // Strip the conversation history from promptContext on older messages.
-  // Each promptContext.messages duplicates the full conversation up to that turn,
-  // causing O(n²) growth. We keep the lightweight metadata (systemPrompt, tools,
-  // injectedFiles, requestOptions, userMessage) for the Prompt Inspector UI.
-  stripPromptContextMessages(messages)
 
   return {
     mode: session.mode,

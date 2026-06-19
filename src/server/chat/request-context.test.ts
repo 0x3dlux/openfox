@@ -189,9 +189,6 @@ describe('assembleAgentRequest', () => {
       injectedFiles,
     })
 
-    expect(assembled.promptContext.messages[0]).toMatchObject({
-      attachments: [expect.objectContaining({ filename: 'screenshot.png' })],
-    })
     expect(assembled.messages[0]).toMatchObject({
       attachments: [expect.objectContaining({ filename: 'screenshot.png' })],
     })

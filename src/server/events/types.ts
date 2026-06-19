@@ -22,7 +22,6 @@ import type {
   Todo,
   MessageSegment,
   ContextState,
-  PromptContext,
   Attachment,
 } from '../../shared/types.js'
 
@@ -99,7 +98,6 @@ export type TurnEvent =
         stats?: MessageStats
         segments?: MessageSegment[]
         partial?: boolean // True if interrupted
-        promptContext?: PromptContext // What was sent to LLM (assistant messages only)
         tokenCount?: number // Final token count for assistant messages
       }
     }
@@ -512,7 +510,6 @@ export interface SnapshotMessage {
   messageKind?: 'correction' | 'auto-prompt' | 'context-reset' | 'task-completed' | 'workflow-started' | 'command'
   contextWindowId?: string
   isCompactionSummary?: boolean
-  promptContext?: PromptContext
   attachments?: Attachment[] // Optional image attachments
   metadata?: { type: string; name: string; color: string } // For auto-prompt messages
 }

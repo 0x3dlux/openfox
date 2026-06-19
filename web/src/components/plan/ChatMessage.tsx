@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import type { Message, PromptContext } from '@shared/types.js'
+import type { Message } from '@shared/types.js'
 import type { TaskCompletedPayload } from '@shared/protocol.js'
 import { Markdown } from '../shared/Markdown'
 import { AssistantMessage } from './AssistantMessage'
@@ -12,19 +12,17 @@ import { AutoPromptCard } from './AutoPromptCard'
 interface ChatMessageProps {
   message: Message
   isLastAssistantMessage?: boolean
-  promptContext?: PromptContext
   messageIndex?: number
   sessionId?: string
 }
 
 interface UserMessageProps {
   message: Message
-  promptContext?: PromptContext
   messageIndex?: number
   sessionId?: string
 }
 
-function UserMessage({ message, promptContext, messageIndex, sessionId }: UserMessageProps) {
+function UserMessage({ message, messageIndex, sessionId }: UserMessageProps) {
   const isAutoPrompt = message.messageKind === 'auto-prompt'
   const isCommand = message.messageKind === 'command'
   const isSystemGenerated = message.isSystemGenerated
@@ -32,13 +30,7 @@ function UserMessage({ message, promptContext, messageIndex, sessionId }: UserMe
   return (
     <div className="flex justify-end items-start gap-1.5 feed-item">
       {!isSystemGenerated && (
-        <MessageOptionsMenu
-          content={message.content}
-          promptContext={promptContext}
-          align="right"
-          messageIndex={messageIndex}
-          sessionId={sessionId}
-        />
+        <MessageOptionsMenu content={message.content} align="right" messageIndex={messageIndex} sessionId={sessionId} />
       )}
 
       <div
@@ -81,7 +73,6 @@ function UserMessage({ message, promptContext, messageIndex, sessionId }: UserMe
 export const ChatMessage = memo(function ChatMessage({
   message,
   isLastAssistantMessage = false,
-  promptContext,
   messageIndex,
   sessionId,
 }: ChatMessageProps) {
@@ -168,9 +159,7 @@ export const ChatMessage = memo(function ChatMessage({
 
   // User message
   if (isUser) {
-    return (
-      <UserMessage message={message} promptContext={promptContext} messageIndex={messageIndex} sessionId={sessionId} />
-    )
+    return <UserMessage message={message} messageIndex={messageIndex} sessionId={sessionId} />
   }
 
   return (

@@ -1,18 +1,19 @@
-import type {
-  Attachment,
-  InjectedFile,
-  PromptContext,
-  PromptContextMessage,
-  PromptContextTool,
-  PromptRequestOptions,
-} from '../../shared/types.js'
+import type { Attachment, InjectedFile } from '../../shared/types.js'
 import type { ContextMessage } from '../events/folding.js'
 import type { LLMToolDefinition } from '../llm/types.js'
 import type { SkillMetadata } from '../skills/types.js'
 import type { AgentDefinition } from '../agents/types.js'
 import { buildTopLevelSystemPrompt, buildSubAgentSystemPrompt } from './prompts.js'
 
-export type RequestContextMessage = PromptContextMessage
+export interface RequestContextMessage {
+  role: 'user' | 'assistant' | 'tool'
+  content: string
+  thinkingContent?: string
+  source: 'history' | 'runtime'
+  toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>
+  toolCallId?: string
+  attachments?: Attachment[]
+}
 
 export type MinimalMessage = ContextMessage
 
@@ -67,7 +68,7 @@ export interface BaseAssemblyInput {
   skills?: SkillMetadata[]
   promptTools: LLMToolDefinition[]
   requestTools?: LLMToolDefinition[]
-  toolChoice?: PromptRequestOptions['toolChoice']
+  toolChoice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } }
   disableThinking?: boolean
   modelName?: string
 }
@@ -75,54 +76,6 @@ export interface BaseAssemblyInput {
 export interface AssemblyResult {
   systemPrompt: string
   messages: MinimalMessage[]
-  promptContext: PromptContext
-}
-
-function getTriggerUserMessage(messages: RequestContextMessage[]): string {
-  const stripRuntimeReminders = (content: string): string => {
-    return content.replace(/\n*<system-reminder>[\s\S]*<\/system-reminder>\s*/gi, '').trim()
-  }
-
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index]
-    if (message?.role === 'user' && message.source === 'history') {
-      const stripped = stripRuntimeReminders(message.content)
-      if (stripped) {
-        return stripped
-      }
-    }
-  }
-
-  return ''
-}
-
-export function createPromptContext(input: {
-  systemPrompt: string
-  messages: RequestContextMessage[]
-  injectedFiles: InjectedFile[]
-  requestTools: LLMToolDefinition[]
-  toolChoice: PromptRequestOptions['toolChoice']
-  disableThinking: boolean
-  userMessage?: string
-}): PromptContext {
-  return {
-    systemPrompt: input.systemPrompt,
-    injectedFiles: input.injectedFiles,
-    userMessage: input.userMessage ?? getTriggerUserMessage(input.messages),
-    messages: input.messages.map((message) => ({
-      ...messageToMinimal(message),
-      source: message.source,
-    })),
-    tools: input.requestTools.map<PromptContextTool>((tool) => ({
-      name: tool.function.name,
-      description: tool.function.description,
-      parameters: tool.function.parameters,
-    })),
-    requestOptions: {
-      toolChoice: input.toolChoice,
-      disableThinking: input.disableThinking,
-    },
-  }
 }
 
 export function createAssemblyResult(input: {
@@ -130,13 +83,11 @@ export function createAssemblyResult(input: {
   messages: RequestContextMessage[]
   injectedFiles: InjectedFile[]
   requestTools: LLMToolDefinition[]
-  toolChoice: PromptRequestOptions['toolChoice']
-  disableThinking: boolean
+  toolChoice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } }
+  disableThinking?: boolean
   customInstructions?: string
   skills?: SkillMetadata[]
 }): AssemblyResult {
-  const triggerUserMessage = getTriggerUserMessage(input.messages)
-
   // Filter out runtime messages (auto-prompts) from messages sent to LLM
   // These are only for internal tracking, not part of conversation history
   const messagesForLLM = input.messages.filter((m) => m.source !== 'runtime')
@@ -144,10 +95,6 @@ export function createAssemblyResult(input: {
   return {
     systemPrompt: input.systemPrompt,
     messages: messagesForLLM.map((message) => messageToMinimal(message)),
-    promptContext: createPromptContext({
-      ...input,
-      userMessage: triggerUserMessage,
-    }),
   }
 }
 

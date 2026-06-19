@@ -13,26 +13,10 @@ vi.mock('./request-context.js', () => ({
   createAssemblyResult: vi.fn((input) => ({
     systemPrompt: input.systemPrompt,
     messages: input.messages ?? [],
-    promptContext: {
-      systemPrompt: input.systemPrompt,
-      injectedFiles: [],
-      userMessage: '',
-      messages: [],
-      tools: [],
-      requestOptions: {},
-    },
   })),
   assembleAgentRequest: vi.fn((input) => ({
     systemPrompt: 'fresh-agent-prompt',
     messages: input.messages ?? [],
-    promptContext: {
-      systemPrompt: 'fresh-agent-prompt',
-      injectedFiles: [],
-      userMessage: '',
-      messages: [],
-      tools: [],
-      requestOptions: {},
-    },
   })),
 }))
 

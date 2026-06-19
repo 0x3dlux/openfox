@@ -16,7 +16,7 @@
       "name": "Builder",
       "type": "agent",
       "phase": "build",
-      "toolMode": "builder",
+      "agentId": "builder",
       "prompt": "Implement the task and make sure you fulfil the {{criteriaCount}} criteria. Mark each criterion as complete using complete_criterion when done.",
       "nudgePrompt": "Continue working on the acceptance criteria. {{reason}}.\n\n{{verifierFindings}}\nDon't forget to mark the criteria as complete with complete_criterion",
       "transitions": [

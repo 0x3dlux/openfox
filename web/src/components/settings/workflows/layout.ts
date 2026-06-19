@@ -65,8 +65,8 @@ export interface DragState {
 
 export function resolveAgent(step: WorkflowStep, agentTypes: AgentInfo[]): { name: string; color: string } {
   if (step.type === 'agent') {
-    const agent = agentTypes.find((a) => a.id === step.toolMode)
-    return { name: agent?.name ?? (step.toolMode || 'Agent'), color: agent?.color || '#3b82f6' }
+    const agent = agentTypes.find((a) => a.id === step.agentId)
+    return { name: agent?.name ?? (step.agentId || 'Agent'), color: agent?.color || '#3b82f6' }
   }
   if (step.type === 'sub_agent') {
     const agent = agentTypes.find((a) => a.id === step.subAgentType)

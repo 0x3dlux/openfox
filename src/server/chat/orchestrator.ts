@@ -19,7 +19,7 @@ import { getEventStore, getCurrentContextWindowId, getCurrentWindowMessageOption
 import { buildSnapshotFromSessionState } from '../events/folding.js'
 import type { SessionManager } from '../session/index.js'
 import { getToolRegistryForAgent, PathAccessDeniedError } from '../tools/index.js'
-import { WORKFLOW_KICKOFF_PROMPT, VERIFIER_KICKOFF_PROMPT, buildAgentReminder } from './prompts.js'
+import { WORKFLOW_KICKOFF_PROMPT, buildAgentReminder } from './prompts.js'
 import {
   TurnMetrics,
   createMessageStartEvent,
@@ -32,7 +32,6 @@ import { assembleAgentRequest, createAssemblyResult } from './request-context.js
 import type { RequestContextMessage } from './request-context.js'
 import { computeDynamicContextHash } from './dynamic-context.js'
 import { runTopLevelAgentLoop } from './agent-loop.js'
-import { executeSubAgent } from '../sub-agents/manager.js'
 import { loadAllAgentsDefault, findAgentById, getSubAgents } from '../agents/registry.js'
 import { getAllInstructions } from '../context/instructions.js'
 import { getEnabledSkillMetadata } from '../skills/registry.js'
@@ -434,62 +433,6 @@ export function injectWorkflowKickoffIfNeeded(
       }),
     )
     eventStore.append(sessionId, { type: 'message.done', data: { messageId: kickoffMsgId } })
-  }
-}
-
-// ============================================================================
-// Verifier Turn (Fresh Context)
-// ============================================================================
-
-export interface VerifierResult {
-  allPassed: boolean
-  failed: Array<{ id: string; reason: string }>
-  content?: string
-}
-
-/**
- * Run a verifier turn with fresh context.
- * Delegates to SubAgentManager for execution.
- */
-export async function runVerifierTurn(options: OrchestratorOptions, turnMetrics: TurnMetrics): Promise<VerifierResult> {
-  const { sessionManager, sessionId, llmClient, signal, onMessage } = options
-  const statsIdentity = resolveStatsIdentity(options)
-
-  const session = sessionManager.requireSession(sessionId)
-  const toVerify = session.criteria.filter((c) => c.status.type === 'completed')
-  if (toVerify.length === 0) {
-    logger.debug('Nothing to verify', { sessionId })
-    return { allPassed: true, failed: [] }
-  }
-
-  const allAgents = await loadAllAgentsDefault()
-  const verifierDef = findAgentById('verifier', allAgents)!
-  const toolRegistry = getToolRegistryForAgent(verifierDef)
-
-  const result = await executeSubAgent({
-    subAgentType: 'verifier',
-    prompt: VERIFIER_KICKOFF_PROMPT,
-    sessionManager,
-    sessionId,
-    llmClient,
-    toolRegistry,
-    turnMetrics,
-    statsIdentity,
-    ...(signal ? { signal } : {}),
-    ...(onMessage ? { onMessage } : {}),
-  })
-
-  // Compute verification result from session criteria state
-  const finalSession = sessionManager.requireSession(sessionId)
-  const failed = finalSession.criteria
-    .filter((c) => c.status.type === 'failed')
-    .map((c) => ({ id: c.id, reason: (c.status as { reason?: string | null }).reason ?? 'unknown' }))
-  const remaining = finalSession.criteria.filter((c) => c.status.type === 'completed')
-
-  return {
-    allPassed: failed.length === 0 && remaining.length === 0,
-    failed,
-    content: result.content,
   }
 }
 

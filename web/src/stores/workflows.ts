@@ -27,7 +27,7 @@ export interface WorkflowStep {
   type: 'agent' | 'sub_agent' | 'shell'
   phase: string
   transitions: Array<{ when: WorkflowCondition; goto: string; subGroup?: string }>
-  toolMode?: 'builder' | 'planner'
+  agentId?: string
   subAgentType?: string
   prompt?: string
   nudgePrompt?: string

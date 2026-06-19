@@ -95,7 +95,7 @@ export function StepPanel({
                 ...step,
                 type: newType,
                 phase,
-                toolMode: (agent?.id ?? 'builder') as 'builder' | 'planner',
+                agentId: agent?.id ?? 'builder',
                 name: agent?.name ?? 'Agent',
               })
             } else if (newType === 'sub_agent') {
@@ -125,12 +125,12 @@ export function StepPanel({
         <div>
           <label className={labelClass}>Agent Type</label>
           <select
-            value={step.toolMode ?? 'builder'}
+            value={step.agentId ?? 'builder'}
             onChange={(e) => {
               const agent = agentTypes.find((a) => a.id === e.target.value)
               onUpdate({
                 ...step,
-                toolMode: e.target.value as 'builder' | 'planner',
+                agentId: e.target.value,
                 name: agent?.name ?? e.target.value,
               })
             }}

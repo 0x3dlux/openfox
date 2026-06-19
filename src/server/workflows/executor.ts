@@ -407,7 +407,7 @@ export async function executeWorkflow(
             ...(onMessage ? { onMessage } : {}),
           },
           turnMetrics,
-          'builder',
+          agentStep.agentId ?? 'planner',
           append,
           {
             ...(!firstEntryForStep.has(step.id) && !agentStep.prompt && options.injectWorkflowKickoff === true

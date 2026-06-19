@@ -40,7 +40,7 @@ export function TransitionPanel({
 }) {
   const stepAgent =
     fromStep && (fromStep.type === 'sub_agent' || fromStep.type === 'agent')
-      ? agentTypes.find((a) => a.id === (fromStep.type === 'sub_agent' ? fromStep.subAgentType : fromStep.toolMode))
+      ? agentTypes.find((a) => a.id === (fromStep.type === 'sub_agent' ? fromStep.subAgentType : fromStep.agentId))
       : undefined
   const hasResults = stepAgent?.results && stepAgent.results.length > 0
 

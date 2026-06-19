@@ -304,7 +304,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId }: WorkflowsModa
         name: defaultAgent?.name ?? 'Agent',
         type: 'agent',
         phase: 'build',
-        toolMode: (defaultAgent?.id ?? 'builder') as 'builder' | 'planner',
+        agentId: defaultAgent?.id ?? 'builder',
         transitions: [],
       },
     ])
@@ -632,7 +632,7 @@ export function WorkflowsModal({ isOpen, onClose, initialEditId }: WorkflowsModa
                                 ? agentTypes.find(
                                     (a) =>
                                       a.id ===
-                                      (entryStep.type === 'sub_agent' ? entryStep.subAgentType : entryStep.toolMode),
+                                      (entryStep.type === 'sub_agent' ? entryStep.subAgentType : entryStep.agentId),
                                   )
                                 : undefined
                             const hasResults = stepAgent?.results && stepAgent.results.length > 0

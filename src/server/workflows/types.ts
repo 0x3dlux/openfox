@@ -56,6 +56,8 @@ interface StepBase {
 /** Full LLM call + tool execution loop */
 export interface AgentStep extends StepBase {
   type: 'agent'
+  /** Agent definition ID (defaults to 'planner' at runtime) */
+  agentId?: string
   /** Injected as user message on first entry. Supports template variables. */
   prompt?: string
   /** Injected when re-entering after a failed verify. Supports template variables. */

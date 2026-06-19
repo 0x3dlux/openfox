@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useLocation } from 'wouter'
+import { useProjectStore } from '../stores/project'
 import { Modal } from './shared/SelfContainedModal'
 import { Button } from './shared/Button'
 import { Input } from './shared/Input'
@@ -15,6 +16,7 @@ interface CreateProjectModalProps {
 
 export function CreateProjectModal({ isOpen, onClose }: CreateProjectModalProps) {
   const [, navigate] = useLocation()
+  const listProjects = useProjectStore((state) => state.listProjects)
   const [projectName, setProjectName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -95,6 +97,7 @@ export function CreateProjectModal({ isOpen, onClose }: CreateProjectModalProps)
       const project = data.project
 
       onClose()
+      await listProjects()
       navigate(`/p/${project.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create project')

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'wouter'
 
@@ -13,6 +13,7 @@ export interface DropdownMenuItem {
 
 interface DropdownMenuProps {
   items: DropdownMenuItem[]
+  footerItems?: DropdownMenuItem[]
   trigger: React.ReactNode
   minWidth?: string
   isOpen?: boolean
@@ -21,6 +22,7 @@ interface DropdownMenuProps {
 
 export function DropdownMenu({
   items,
+  footerItems = [],
   trigger,
   minWidth = '120px',
   isOpen: controlledIsOpen,
@@ -43,7 +45,8 @@ export function DropdownMenu({
   const menuRef = useRef<HTMLDivElement>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const selectedIndexRef = useRef(0)
-  const itemsRef = useRef(items)
+  const allItems = useMemo(() => [...items, ...footerItems], [items, footerItems])
+  const allItemsRef = useRef(allItems)
 
   const calculatePosition = useCallback(() => {
     if (!triggerRef.current) return
@@ -62,8 +65,8 @@ export function DropdownMenu({
   }, [])
 
   useEffect(() => {
-    itemsRef.current = items
-  }, [items])
+    allItemsRef.current = allItems
+  }, [allItems])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -98,7 +101,7 @@ export function DropdownMenu({
     }, 0)
 
     function handleKeyDown(e: KeyboardEvent) {
-      const currentItems = itemsRef.current
+      const currentItems = allItemsRef.current
       const navigableItems = currentItems.filter((item) => !isHeaderItem(item))
       const currentNavigableIndex = getNavigableIndexRef(selectedIndexRef.current, currentItems)
 
@@ -136,7 +139,7 @@ export function DropdownMenu({
 
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isOpen, items])
+  }, [isOpen, allItems])
 
   function isHeaderItem(item: DropdownMenuItem) {
     const el = item.label as React.ReactElement<{ className?: string }> | null
@@ -183,10 +186,10 @@ export function DropdownMenu({
 
   useEffect(() => {
     if (isOpen) {
-      setSelectedIndex(items.findIndex((item) => !isHeaderItem(item)))
-      selectedIndexRef.current = items.findIndex((item) => !isHeaderItem(item))
+      setSelectedIndex(allItems.findIndex((item) => !isHeaderItem(item)))
+      selectedIndexRef.current = allItems.findIndex((item) => !isHeaderItem(item))
     }
-  }, [isOpen, items])
+  }, [isOpen, allItems])
 
   const handleTriggerClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -194,6 +197,62 @@ export function DropdownMenu({
       calculatePosition()
     }
     setIsOpen(!isOpen)
+  }
+
+  function renderItem(item: DropdownMenuItem, index: number, total: number, baseIndex: number) {
+    const isHeader = isHeaderItem(item)
+    const isSelected = !isHeader && baseIndex === selectedIndex
+    const content = (
+      <>
+        {item.icon && <span className="w-4 h-4 flex-shrink-0">{item.icon}</span>}
+        {item.label}
+      </>
+    )
+    const showBorder = index !== total - 1
+
+    if (item.href) {
+      return (
+        <Link
+          key={baseIndex}
+          href={item.href}
+          onClick={(e) => {
+            item.onClick?.(e)
+            setIsOpen(false)
+          }}
+          onAuxClick={() => setIsOpen(false)}
+          className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
+            item.danger
+              ? 'text-accent-error hover:bg-accent-error/10'
+              : isSelected
+                ? 'bg-accent-primary/20 text-text-primary'
+                : 'hover:bg-bg-tertiary text-text-primary'
+          } ${showBorder ? 'border-b border-border' : ''}`}
+        >
+          {content}
+        </Link>
+      )
+    }
+
+    return (
+      <button
+        key={baseIndex}
+        onClick={(e) => {
+          item.onClick?.(e)
+          if (item.closeOnClick !== false) {
+            setIsOpen(false)
+          }
+        }}
+        className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
+          item.danger
+            ? 'text-accent-error hover:bg-accent-error/10'
+            : isSelected
+              ? 'bg-accent-primary/20 text-text-primary'
+              : 'hover:bg-bg-tertiary text-text-primary'
+        } ${showBorder ? 'border-b border-border' : ''}`}
+      >
+        {content}
+      </button>
+    )
   }
 
   const menuContent = position && (
@@ -210,60 +269,14 @@ export function DropdownMenu({
       }}
       tabIndex={-1}
     >
-      {items.map((item, index) => {
-        const isHeader = isHeaderItem(item)
-        const isSelected = !isHeader && index === selectedIndex
-        const content = (
-          <>
-            {item.icon && <span className="w-4 h-4 flex-shrink-0">{item.icon}</span>}
-            {item.label}
-          </>
-        )
-
-        if (item.href) {
-          return (
-            <Link
-              key={index}
-              href={item.href}
-              onClick={(e) => {
-                item.onClick?.(e)
-                setIsOpen(false)
-              }}
-              onAuxClick={() => setIsOpen(false)}
-              className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
-                item.danger
-                  ? 'text-accent-error hover:bg-accent-error/10'
-                  : isSelected
-                    ? 'bg-accent-primary/20 text-text-primary'
-                    : 'hover:bg-bg-tertiary text-text-primary'
-              } ${index !== items.length - 1 ? 'border-b border-border' : ''}`}
-            >
-              {content}
-            </Link>
-          )
-        }
-
-        return (
-          <button
-            key={index}
-            onClick={(e) => {
-              item.onClick?.(e)
-              if (item.closeOnClick !== false) {
-                setIsOpen(false)
-              }
-            }}
-            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
-              item.danger
-                ? 'text-accent-error hover:bg-accent-error/10'
-                : isSelected
-                  ? 'bg-accent-primary/20 text-text-primary'
-                  : 'hover:bg-bg-tertiary text-text-primary'
-            } ${index !== items.length - 1 ? 'border-b border-border' : ''}`}
-          >
-            {content}
-          </button>
-        )
-      })}
+      <div className="max-h-[60vh] overflow-y-auto">
+        {items.map((item, index) => renderItem(item, index, items.length, index))}
+      </div>
+      {footerItems.length > 0 && (
+        <div className="border-t border-border">
+          {footerItems.map((item, index) => renderItem(item, index, footerItems.length, items.length + index))}
+        </div>
+      )}
     </div>
   )
 

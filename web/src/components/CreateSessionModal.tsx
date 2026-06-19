@@ -4,12 +4,12 @@ import { useProjectStore } from '../stores/project'
 import { Modal } from './shared/Modal'
 import { Button } from './shared/Button'
 import { FolderIcon, TrashIcon } from './shared/icons'
-import { authFetch } from '../lib/api'
 import { truncateMiddle } from '../lib/path'
 import { DeleteProjectConfirmationModal } from './DeleteProjectConfirmationModal.js'
 import { CreateProjectModal } from './CreateProjectModal.js'
 import { DirectoryBrowser } from './shared/DirectoryBrowser.js'
 import { PermissionDeniedModal } from './PermissionDeniedModal.js'
+import { useWorkdir } from '../hooks/useWorkdir.js'
 
 interface OpenProjectModalProps {
   isOpen: boolean
@@ -19,7 +19,7 @@ interface OpenProjectModalProps {
 export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
   const [, navigate] = useLocation()
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [baseWorkdir, setBaseWorkdir] = useState<string | null>(null)
+  const baseWorkdir = useWorkdir()
   const [showBrowser, setShowBrowser] = useState(false)
 
   const projects = useProjectStore((state) => state.projects)
@@ -29,14 +29,6 @@ export function OpenProjectModal({ isOpen, onClose }: OpenProjectModalProps) {
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null)
   const [creatingPath, setCreatingPath] = useState<string | null>(null)
   const [permissionDeniedPath, setPermissionDeniedPath] = useState<string | null>(null)
-
-  useEffect(() => {
-    authFetch('/api/config')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.workdir) setBaseWorkdir(data.workdir)
-      })
-  }, [])
 
   useEffect(() => {
     if (isOpen) {

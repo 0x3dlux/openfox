@@ -1,7 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
+import { useLocation } from 'wouter'
 import { useProjectStore } from '../../stores/project'
 import { DropdownMenu, type DropdownMenuItem } from '../shared/DropdownMenu'
-import { ChevronDownIcon, CheckIcon, StarIcon, StarFilledIcon } from '../shared/icons'
+import { ChevronDownIcon, CheckIcon, StarIcon, StarFilledIcon, PlusMdIcon, FolderIcon } from '../shared/icons'
+import { CreateProjectModal } from '../CreateProjectModal.js'
+import { DirectoryBrowser } from '../shared/DirectoryBrowser.js'
+import { useWorkdir } from '../../hooks/useWorkdir.js'
 
 interface ProjectDropdownProps {
   projects: Array<{ id: string; name: string; workdir: string; isStarred?: boolean }>
@@ -9,8 +13,29 @@ interface ProjectDropdownProps {
 }
 
 export function ProjectDropdown({ projects, currentProject }: ProjectDropdownProps) {
+  const [, navigate] = useLocation()
   const loadProject = useProjectStore((state) => state.loadProject)
   const toggleStar = useProjectStore((state) => state.toggleStar)
+  const createProject = useProjectStore((state) => state.createProject)
+  const listProjects = useProjectStore((state) => state.listProjects)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showBrowser, setShowBrowser] = useState(false)
+  const baseWorkdir = useWorkdir()
+
+  const handleDirectorySelect = useCallback(
+    async (path: string): Promise<boolean> => {
+      const basename = path.split('/').filter(Boolean).pop() ?? ''
+      const project = await createProject(basename, path)
+      if (project && 'id' in project) {
+        await listProjects()
+        setShowBrowser(false)
+        navigate(`/p/${project.id}`)
+        return true
+      }
+      return false
+    },
+    [createProject, listProjects, navigate],
+  )
 
   const sortedProjects = useMemo(() => {
     const starred = projects.filter((p) => p.isStarred).sort((a, b) => a.name.localeCompare(b.name))
@@ -48,19 +73,51 @@ export function ProjectDropdown({ projects, currentProject }: ProjectDropdownPro
     },
   }))
 
+  const footerItems: DropdownMenuItem[] = [
+    {
+      label: (
+        <div className="flex items-center gap-2">
+          <FolderIcon className="w-4 h-4" />
+          <span>Open Project</span>
+        </div>
+      ),
+      onClick: () => setShowBrowser(true),
+    },
+    {
+      label: (
+        <div className="flex items-center gap-2 text-accent-primary">
+          <PlusMdIcon className="w-4 h-4" />
+          <span>New Project</span>
+        </div>
+      ),
+      onClick: () => setShowCreateModal(true),
+    },
+  ]
+
   return (
-    <DropdownMenu
-      items={items}
-      trigger={
-        <button
-          className="text-text-secondary hover:text-text-primary hover:underline text-sm truncate flex items-center gap-1"
-          title={currentProject.name}
-        >
-          {currentProject.name}
-          <ChevronDownIcon />
-        </button>
-      }
-      minWidth="250px"
-    />
+    <>
+      <DropdownMenu
+        items={items}
+        footerItems={footerItems}
+        trigger={
+          <button
+            className="text-text-secondary hover:text-text-primary hover:underline text-sm truncate flex items-center gap-1"
+            title={currentProject.name}
+          >
+            {currentProject.name}
+            <ChevronDownIcon />
+          </button>
+        }
+        minWidth="250px"
+      />
+      {showCreateModal && <CreateProjectModal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} />}
+      {showBrowser && (
+        <DirectoryBrowser
+          initialPath={baseWorkdir ?? undefined}
+          onSelect={handleDirectorySelect}
+          onClose={() => setShowBrowser(false)}
+        />
+      )}
+    </>
   )
 }

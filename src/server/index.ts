@@ -856,15 +856,87 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     }
   })
 
+  // Onboarding: fetch models by URL (before provider is saved)
+  app.get('/api/providers/models', async (req, res) => {
+    const url = req.query['url'] as string | undefined
+    if (!url) return res.status(400).json({ error: 'url is required' })
+    try {
+      const { fetchModelsWithContext } = await import('./provider-manager.js')
+      const models = await fetchModelsWithContext(url)
+      if (models.length === 0) {
+        return res.status(404).json({ error: `No models found at ${url}/v1/models`, url })
+      }
+      res.json({ models: models.map((m) => ({ id: m.id, contextWindow: m.contextWindow })), url })
+    } catch (error) {
+      res.status(400).json({
+        error: `Failed to fetch models from ${url}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        url,
+      })
+    }
+  })
+
+  // Onboarding: test thinking params against a provider URL
+  app.post('/api/providers/test-params', async (req, res) => {
+    const { url, params, apiKey } = req.body as { url: string; params: Record<string, unknown>; apiKey?: string }
+    if (!url) return res.status(400).json({ error: 'url is required' })
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+
+      const body = {
+        model: 'deepseek-v4-flash',
+        messages: [{ role: 'user', content: 'say hi in one word' }],
+        max_tokens: 8000,
+        ...params,
+      }
+
+      const response = await fetch(`${url}/v1/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15000),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.text()
+        return res.status(400).json({ error: `API error (${response.status}): ${errorBody.slice(0, 200)}` })
+      }
+
+      const data = (await response.json()) as { choices?: Array<{ message?: Record<string, unknown> }> }
+      const message = data.choices?.[0]?.message ?? {}
+      res.json({ success: true, message, raw: JSON.stringify(data, null, 2).slice(0, 2000) })
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Request failed' })
+    }
+  })
+
   // Onboarding: create provider
   app.post('/api/providers', async (req, res) => {
-    const { name, url, backend, apiKey, model, isLocal } = req.body as {
+    const {
+      name,
+      url,
+      backend,
+      apiKey,
+      model,
+      isLocal,
+      thinkingField,
+      models: modelConfigs,
+    } = req.body as {
       name: string
       url: string
       backend: string
       apiKey?: string
       model?: string
       isLocal?: boolean
+      thinkingField?: string
+      models?: Array<{
+        id: string
+        contextWindow: number
+        supportsVision?: boolean
+        thinkingEnabled?: boolean
+        thinkingLevel?: string
+        nonThinkingEnabled?: boolean
+      }>
     }
 
     if (!name || !url || !backend) {
@@ -892,7 +964,20 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
         backend: providerBackend,
         apiKey,
         ...(isLocal !== undefined ? { isLocal } : {}),
-        models: model ? [{ id: model, contextWindow: 200000, source: 'user' as const }] : [],
+        ...(thinkingField ? { thinkingField } : {}),
+        models: modelConfigs?.length
+          ? modelConfigs.map((m) => ({
+              id: m.id,
+              contextWindow: m.contextWindow,
+              source: 'user' as const,
+              ...(m.supportsVision !== undefined ? { supportsVision: m.supportsVision } : {}),
+              ...(m.thinkingEnabled !== undefined ? { thinkingEnabled: m.thinkingEnabled } : {}),
+              ...(m.thinkingLevel ? { thinkingLevel: m.thinkingLevel } : {}),
+              ...(m.nonThinkingEnabled !== undefined ? { nonThinkingEnabled: m.nonThinkingEnabled } : {}),
+            }))
+          : model
+            ? [{ id: model, contextWindow: 200000, source: 'user' as const }]
+            : [],
         isActive: true,
       })
 
@@ -993,6 +1078,67 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     }
   })
 
+  // PUT endpoint for full provider update (including models and thinking config)
+  app.put('/api/providers/:id', async (req, res) => {
+    const { id } = req.params
+    const {
+      name,
+      url,
+      backend,
+      apiKey,
+      isLocal,
+      thinkingField,
+      models: modelConfigs,
+    } = req.body as {
+      name?: string
+      url?: string
+      backend?: string
+      apiKey?: string | null
+      isLocal?: boolean
+      thinkingField?: string | null
+      models?: Array<{
+        id: string
+        contextWindow: number
+        supportsVision?: boolean
+        thinkingEnabled?: boolean
+        thinkingLevel?: string
+        nonThinkingEnabled?: boolean
+      }>
+    }
+    try {
+      const { loadGlobalConfig, saveGlobalConfig, updateProvider } = await import('../cli/config.js')
+      const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+      const provider = globalConfig.providers.find((p) => p.id === id)
+      if (!provider) {
+        return res.status(404).json({ error: 'Provider not found' })
+      }
+      const updates: Record<string, unknown> = {}
+      if (name !== undefined) updates['name'] = name
+      if (url !== undefined) updates['url'] = url
+      if (backend !== undefined) updates['backend'] = backend
+      if (apiKey !== undefined) updates['apiKey'] = apiKey || undefined
+      if (isLocal !== undefined) updates['isLocal'] = isLocal
+      if (thinkingField !== undefined) updates['thinkingField'] = thinkingField || undefined
+      if (modelConfigs !== undefined) {
+        updates['models'] = modelConfigs.map((m) => ({
+          id: m.id,
+          contextWindow: m.contextWindow,
+          source: 'user' as const,
+          ...(m.supportsVision !== undefined ? { supportsVision: m.supportsVision } : {}),
+          ...(m.thinkingEnabled !== undefined ? { thinkingEnabled: m.thinkingEnabled } : {}),
+          ...(m.thinkingLevel ? { thinkingLevel: m.thinkingLevel } : {}),
+          ...(m.nonThinkingEnabled !== undefined ? { nonThinkingEnabled: m.nonThinkingEnabled } : {}),
+        }))
+      }
+      const updatedConfig = updateProvider(globalConfig, id, updates)
+      await saveGlobalConfig(config.mode ?? 'production', updatedConfig)
+      providerManager.setProviders(updatedConfig.providers, updatedConfig.defaultModelSelection ?? undefined)
+      res.json({ success: true, provider: updatedConfig.providers.find((p) => p.id === id) })
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to update provider' })
+    }
+  })
+
   app.get('/api/providers/:id/models', async (req, res) => {
     const { id } = req.params
     const models = await providerManager.getProviderModels(id as string)
@@ -1031,6 +1177,9 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       topK?: number | null
       maxTokens?: number | null
       supportsVision?: boolean
+      thinkingEnabled?: boolean
+      thinkingLevel?: string
+      nonThinkingEnabled?: boolean
     }
 
     logger.info('API: POST /api/providers/:id/models/:modelId', {
@@ -1044,7 +1193,10 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       body.temperature !== undefined ||
       body.topP !== undefined ||
       body.topK !== undefined ||
-      body.maxTokens !== undefined
+      body.maxTokens !== undefined ||
+      body.thinkingEnabled !== undefined ||
+      body.thinkingLevel !== undefined ||
+      body.nonThinkingEnabled !== undefined
 
     let result: { success: boolean; error?: string; model?: import('../shared/types.js').ModelConfig }
     if (hasFullSettings) {

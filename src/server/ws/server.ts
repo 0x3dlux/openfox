@@ -375,6 +375,7 @@ export function createWebSocketServer(
         baseUrl,
         model: session.providerModel!,
         ...(provider.apiKey && { apiKey: provider.apiKey }),
+        ...(provider.thinkingField && { thinkingField: provider.thinkingField }),
       },
     }
     const client = createLLMClient(sessionConfig)

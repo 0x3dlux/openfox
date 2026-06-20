@@ -36,6 +36,7 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
   let backend = initialBackend
   let capabilities = getBackendCapabilities(backend)
   const reasoningEffort = config.llm.reasoningEffort
+  const thinkingField = config.llm.thinkingField
   const idleTimeout = config.llm.idleTimeout ?? 30_000
 
   return {
@@ -86,6 +87,7 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
           profile,
           capabilities,
           ...(resolvedEffort ? { reasoningEffort: resolvedEffort } : {}),
+          ...(thinkingField ? { thinkingField } : {}),
         })
         const response = await openai.chat.completions.create(createParams, {
           signal: request.signal,
@@ -104,7 +106,12 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
         }
 
         const content = message.content ?? ''
-        const thinkingContent = message.reasoning_content ?? message.reasoning ?? ''
+        const thinkingContent = thinkingField
+          ? ((message as Record<string, string | null>)[thinkingField] ??
+            message.reasoning_content ??
+            message.reasoning ??
+            '')
+          : (message.reasoning_content ?? message.reasoning ?? '')
 
         const toolCalls = message.tool_calls?.map((tc) => ({
           id: tc.id,
@@ -149,6 +156,7 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
           profile,
           capabilities,
           ...(resolvedEffort ? { reasoningEffort: resolvedEffort } : {}),
+          ...(thinkingField ? { thinkingField } : {}),
         })
 
         const { params: streamingParams } = createParams
@@ -219,7 +227,11 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
             }
 
             // Handle reasoning/thinking delta
-            const reasoning = delta.reasoning_content ?? delta.reasoning
+            const reasoning = thinkingField
+              ? ((delta as Record<string, string | null | undefined>)[thinkingField] ??
+                delta.reasoning_content ??
+                delta.reasoning)
+              : (delta.reasoning_content ?? delta.reasoning)
             if (reasoning) {
               fullThinking += reasoning
               yield { type: 'thinking_delta', content: reasoning }

@@ -68,7 +68,7 @@ function convertToolCalls(
   }))
 }
 
-function buildAssistantMessage(msg: LLMMessage): Record<string, unknown> {
+function buildAssistantMessage(msg: LLMMessage, thinkingField?: string): Record<string, unknown> {
   const result: Record<string, unknown> = {
     role: 'assistant',
     content: msg.content || null,
@@ -77,7 +77,7 @@ function buildAssistantMessage(msg: LLMMessage): Record<string, unknown> {
     result['tool_calls'] = convertToolCalls(msg.toolCalls)
   }
   if (msg.thinkingContent) {
-    result['reasoning_content'] = msg.thinkingContent
+    result[thinkingField ?? 'reasoning_content'] = msg.thinkingContent
   }
   return result
 }
@@ -99,7 +99,11 @@ function convertAttachmentSync(
   }
 }
 
-export function convertMessages(messages: LLMMessage[], modelSupportsVision: boolean): ChatCompletionMessageParam[] {
+export function convertMessages(
+  messages: LLMMessage[],
+  modelSupportsVision: boolean,
+  thinkingField?: string,
+): ChatCompletionMessageParam[] {
   const filtered = messages.filter((msg) => {
     return !(msg.role === 'assistant' && !msg.content?.trim() && (!msg.toolCalls || msg.toolCalls.length === 0))
   })
@@ -122,7 +126,7 @@ export function convertMessages(messages: LLMMessage[], modelSupportsVision: boo
     }
 
     if (msg.role === 'assistant') {
-      return buildAssistantMessage(msg) as unknown as ChatCompletionMessageParam
+      return buildAssistantMessage(msg, thinkingField) as unknown as ChatCompletionMessageParam
     }
 
     if (msg.role === 'user' && msg.attachments && msg.attachments.length > 0) {
@@ -158,13 +162,14 @@ async function buildChatCompletionCreateParams(
   capabilities: MinimalCapabilities,
   reasoningEffort: ReasoningEffort | undefined,
   isStreaming: boolean,
+  thinkingField?: string,
 ): Promise<{
   params: OpenAI.ChatCompletionCreateParamsNonStreaming | OpenAI.ChatCompletionCreateParamsStreaming
   modelParams: ModelParams
 }> {
   const userVisionOverride = request.modelSettings?.supportsVision
   const modelSupportsVision = userVisionOverride ?? profile.supportsVision ?? false
-  const convertedMessages = convertMessages(request.messages, modelSupportsVision)
+  const convertedMessages = convertMessages(request.messages, modelSupportsVision, thinkingField)
 
   const temperature = request.modelSettings?.temperature ?? request.temperature ?? profile.temperature
   const maxTokens = request.modelSettings?.maxTokens ?? request.maxTokens ?? profile.defaultMaxTokens
@@ -213,10 +218,11 @@ async function buildCreateParamsFromInput<
     profile: MinimalProfile
     capabilities: MinimalCapabilities
     reasoningEffort?: ReasoningEffort
+    thinkingField?: string
   },
   isStreaming: boolean,
 ): Promise<{ params: T; modelParams: ModelParams }> {
-  const { model, request, profile, capabilities, reasoningEffort } = input
+  const { model, request, profile, capabilities, reasoningEffort, thinkingField } = input
   return buildChatCompletionCreateParams(
     model,
     request,
@@ -224,6 +230,7 @@ async function buildCreateParamsFromInput<
     capabilities,
     reasoningEffort,
     isStreaming,
+    thinkingField,
   ) as Promise<{ params: T; modelParams: ModelParams }>
 }
 

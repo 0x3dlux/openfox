@@ -1,12 +1,8 @@
 import { useState, useEffect } from 'react'
 import { authFetch } from '../../../lib/api'
-import type { Backend } from '../../../stores/config'
-import { PlusLgIcon, PlusMdIcon, TrashIcon } from '../../shared/icons'
+import { PlusLgIcon, TrashIcon } from '../../shared/icons'
+import { ProviderModal, type ProviderFormData } from '../../shared/ProviderModal'
 import { getBackendDisplayName, type ProviderInfo } from '../types'
-
-const COMMON_PORTS = [8000, 11434, 8080]
-
-const PRESETS = [{ name: 'OpenCode Go', url: 'https://opencode.ai/zen/go/v1', backend: 'opencode-go' as const }]
 
 interface ConnectLLMStepProps {
   onNext: (data: { providers: ProviderInfo[] }) => void
@@ -15,17 +11,9 @@ interface ConnectLLMStepProps {
 export function ConnectLLMStep({ onNext }: ConnectLLMStepProps) {
   const [existingProviders, setExistingProviders] = useState<ProviderInfo[]>([])
   const [providers, setProviders] = useState<ProviderInfo[]>([])
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [customName, setCustomName] = useState('')
-  const [customUrl, setCustomUrl] = useState('')
-  const [customApiKey, setCustomApiKey] = useState('')
-  const [customBackend, setCustomBackend] = useState<Backend>('auto')
-  const [customIsLocal, setCustomIsLocal] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<{ success: boolean; model?: string; error?: string } | null>(null)
+  const [showModal, setShowModal] = useState(false)
+  const [editingProvider, setEditingProvider] = useState<ProviderInfo | null>(null)
   const [removing, setRemoving] = useState<string | null>(null)
-  const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
-  const [editedName, setEditedName] = useState('')
 
   useEffect(() => {
     fetchExistingProviders()
@@ -40,19 +28,30 @@ export function ConnectLLMStep({ onNext }: ConnectLLMStepProps) {
             id: string
             name: string
             url: string
-            backend: Backend
+            backend: string
             apiKey?: string
             isLocal?: boolean
+            thinkingField?: string
+            models?: Array<{
+              id: string
+              contextWindow: number
+              supportsVision?: boolean
+              thinkingEnabled?: boolean
+              thinkingLevel?: string
+              nonThinkingEnabled?: boolean
+            }>
           }>
         }
-        const mapped = data.providers.map((p) => ({
+        const mapped: ProviderInfo[] = data.providers.map((p) => ({
           id: p.id,
           name: p.name,
           url: p.url,
-          backend: p.backend,
+          backend: p.backend as ProviderInfo['backend'],
           model: null,
           apiKey: p.apiKey,
           isLocal: p.isLocal,
+          thinkingField: p.thinkingField,
+          models: p.models,
         }))
         setExistingProviders(mapped)
         setProviders(mapped)
@@ -62,65 +61,66 @@ export function ConnectLLMStep({ onNext }: ConnectLLMStepProps) {
     }
   }
 
-  async function testConnection(url: string) {
-    setTesting(true)
-    setTestResult(null)
-
-    const skipBackendDetection = customBackend !== 'auto'
-
-    try {
-      const response = await authFetch('/api/providers/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, skipBackendDetection }),
-      })
-      const data = (await response.json()) as {
-        success: boolean
-        backend?: Backend
-        model?: string | null
-        error?: string
-      }
-
-      if (data.success) {
-        if (!skipBackendDetection) {
-          setCustomBackend(data.backend ?? 'auto')
-        }
-        setTestResult({ success: true, model: data.model ?? undefined })
-      } else {
-        setTestResult({ success: false, error: data.error ?? 'Connection failed' })
-      }
-    } catch (error) {
-      setTestResult({ success: false, error: error instanceof Error ? error.message : 'Connection failed' })
+  async function handleSave(formData: ProviderFormData) {
+    const isNew = formData.id.startsWith('temp-')
+    const body = {
+      name: formData.name,
+      url: formData.url,
+      backend: formData.backend,
+      apiKey: formData.apiKey,
+      isLocal: formData.isLocal,
+      thinkingField: formData.thinkingField,
+      models: formData.models,
     }
-
-    setTesting(false)
+    try {
+      if (isNew) {
+        const res = await authFetch('/api/providers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (res.ok) {
+          const data = (await res.json()) as { provider: { id: string } }
+          const saved: ProviderInfo = { ...formData, id: data.provider.id, model: null }
+          setProviders((prev) => [...prev, saved])
+          setExistingProviders((prev) => [...prev, saved])
+        }
+      } else {
+        await authFetch(`/api/providers/${formData.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        setProviders((prev) => prev.map((p) => (p.id === formData.id ? { ...p, ...formData, model: null } : p)))
+        setExistingProviders((prev) => prev.map((p) => (p.id === formData.id ? { ...p, ...formData, model: null } : p)))
+      }
+    } catch {
+      // Save failed — provider stays in local state with temp ID, retry on Continue
+      if (isNew) {
+        const fallback: ProviderInfo = { ...formData, model: null }
+        setProviders((prev) => [...prev, fallback])
+      }
+    }
   }
 
-  function addProvider() {
-    if (!customUrl) return
+  function openAddModal() {
+    setEditingProvider(null)
+    setShowModal(true)
+  }
 
-    const name = customName || `Provider ${providers.length + 1}`
-    const newProvider: ProviderInfo = {
-      id: `temp-${Date.now()}`,
-      name,
-      url: customUrl,
-      backend: testResult?.success ? customBackend : 'auto',
-      model: testResult?.success ? (testResult.model ?? null) : null,
-      apiKey: customApiKey || undefined,
-      isLocal: customIsLocal || undefined,
-    }
+  function openEditModal(provider: ProviderInfo) {
+    setEditingProvider(provider)
+    setShowModal(true)
+  }
 
-    setProviders([...providers, newProvider])
-    setCustomName('')
-    setCustomUrl('')
-    setCustomApiKey('')
-    setTestResult(null)
+  function closeModal() {
+    setShowModal(false)
+    setEditingProvider(null)
   }
 
   function removeProvider(id: string) {
     setRemoving(id)
     const isExisting = existingProviders.some((p) => p.id === id)
-
     if (isExisting) {
       authFetch(`/api/providers/${id}`, { method: 'DELETE' })
         .then(() => {
@@ -128,36 +128,14 @@ export function ConnectLLMStep({ onNext }: ConnectLLMStepProps) {
           setExistingProviders(existingProviders.filter((p) => p.id !== id))
           setRemoving(null)
         })
-        .catch(() => {
-          setRemoving(null)
-        })
+        .catch(() => setRemoving(null))
     } else {
       setProviders(providers.filter((p) => p.id !== id))
       setRemoving(null)
     }
   }
 
-  async function handleSubmit() {
-    for (const provider of providers) {
-      if (provider.id.startsWith('temp-') || !existingProviders.some((e) => e.id === provider.id)) {
-        const response = await authFetch('/api/providers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: provider.name,
-            url: provider.url,
-            backend: provider.backend,
-            model: provider.model,
-            apiKey: provider.apiKey,
-            isLocal: provider.isLocal,
-          }),
-        })
-        if (!response.ok) {
-          console.error('Failed to add provider', provider)
-        }
-      }
-    }
-
+  function handleSubmit() {
     const validProviders = providers.filter((p) => !p.id.startsWith('temp-'))
     onNext({ providers: validProviders })
   }
@@ -182,72 +160,32 @@ export function ConnectLLMStep({ onNext }: ConnectLLMStepProps) {
                     <span className="px-2 py-0.5 bg-accent-primary/25 text-accent-primary rounded text-xs font-medium">
                       {getBackendDisplayName(provider.backend)}
                     </span>
-                    <label className="flex items-center gap-1 cursor-pointer text-xs">
-                      <input
-                        type="checkbox"
-                        checked={provider.isLocal ?? false}
-                        onChange={(e) => {
-                          const newIsLocal = e.target.checked
-                          setProviders(
-                            providers.map((p) =>
-                              p.id === provider.id ? { ...p, isLocal: newIsLocal || undefined } : p,
-                            ),
-                          )
-                          if (!provider.id.startsWith('temp-')) {
-                            authFetch(`/api/providers/${provider.id}`, {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ isLocal: newIsLocal }),
-                            }).catch(() => {})
-                          }
-                        }}
-                        className="w-3.5 h-3.5 rounded border-border bg-bg-secondary accent-accent-primary"
-                      />
-                      <span className={provider.isLocal ? 'text-accent-success' : 'text-text-muted'}>local</span>
-                    </label>
-                    {editingProviderId === provider.id ? (
-                      <input
-                        type="text"
-                        value={editedName}
-                        onChange={(e) => setEditedName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            setProviders(providers.map((p) => (p.id === provider.id ? { ...p, name: editedName } : p)))
-                            setEditingProviderId(null)
-                          }
-                          if (e.key === 'Escape') setEditingProviderId(null)
-                        }}
-                        onBlur={() => {
-                          setProviders(providers.map((p) => (p.id === provider.id ? { ...p, name: editedName } : p)))
-                          setEditingProviderId(null)
-                        }}
-                        className="px-2 py-0.5 bg-bg-primary border border-accent-primary rounded text-text-primary text-sm focus:outline-none"
-                        autoFocus
-                      />
-                    ) : (
-                      <span
-                        className="text-text-primary font-medium cursor-pointer hover:text-accent-primary"
-                        onClick={() => {
-                          setEditingProviderId(provider.id)
-                          setEditedName(provider.name)
-                        }}
-                        title="Click to edit"
-                      >
-                        {provider.name}
-                      </span>
-                    )}
+                    <span className="text-text-primary font-medium">{provider.name}</span>
+                    <span
+                      className={`text-xs px-1.5 py-0.5 rounded-full ${provider.isLocal ? 'text-accent-success bg-accent-success/10' : 'text-accent-warning bg-accent-warning/10'}`}
+                    >
+                      {provider.isLocal ? 'local' : 'api'}
+                    </span>
                   </div>
                   <p className="text-text-muted text-sm mt-1">{provider.url}</p>
                   {provider.model && <p className="text-text-secondary text-xs mt-0.5">Model: {provider.model}</p>}
                 </div>
-                <button
-                  onClick={() => removeProvider(provider.id)}
-                  disabled={removing === provider.id}
-                  className="p-2 text-text-muted hover:text-red-500 transition-colors disabled:opacity-50"
-                  title="Remove provider"
-                >
-                  <TrashIcon />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => openEditModal(provider)}
+                    className="px-2 py-1 text-xs text-text-muted hover:text-text-secondary border border-border rounded transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => removeProvider(provider.id)}
+                    disabled={removing === provider.id}
+                    className="p-2 text-text-muted hover:text-red-500 transition-colors disabled:opacity-50"
+                    title="Remove provider"
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -257,194 +195,30 @@ export function ConnectLLMStep({ onNext }: ConnectLLMStepProps) {
           </div>
         )}
 
-        {showAddForm ? (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (customUrl) addProvider()
-            }}
-            className="space-y-4 p-4 bg-bg-tertiary rounded-lg"
-          >
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">Service Presets</label>
-              <div className="grid grid-cols-2 gap-2">
-                {PRESETS.map((preset) => (
-                  <button
-                    type="button"
-                    key={preset.name}
-                    onClick={() => {
-                      setCustomName(preset.name)
-                      setCustomUrl(preset.url)
-                      setCustomBackend(preset.backend)
-                      setTestResult(null)
-                    }}
-                    className={`p-2 rounded border text-center text-sm transition-colors ${
-                      customUrl === preset.url
-                        ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
-                        : 'border-border hover:border-text-muted text-text-secondary'
-                    }`}
-                  >
-                    {preset.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">Local Presets</label>
-              <div className="grid grid-cols-3 gap-2">
-                {COMMON_PORTS.map((port) => (
-                  <button
-                    type="button"
-                    key={port}
-                    onClick={() => {
-                      setCustomName('')
-                      setCustomUrl(`http://localhost:${port}`)
-                      setCustomBackend('auto')
-                      setTestResult(null)
-                    }}
-                    className={`p-2 rounded border text-center text-sm transition-colors ${
-                      customUrl === `http://localhost:${port}`
-                        ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
-                        : 'border-border hover:border-text-muted text-text-secondary'
-                    }`}
-                  >
-                    localhost:{port}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-text-secondary mb-1">Or enter address manually</label>
-              <input
-                type="text"
-                name="url"
-                value={customUrl}
-                onChange={(e) => {
-                  setCustomUrl(e.target.value)
-                  setTestResult(null)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    testConnection(customUrl)
-                  }
-                }}
-                placeholder="http://localhost:8000"
-                data-testid="onboarding-provider-url-input"
-                className="w-full px-4 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-text-secondary mb-1">Provider name (optional)</label>
-              <input
-                type="text"
-                name="name"
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    addProvider()
-                  }
-                }}
-                placeholder="My LLM Server"
-                className="w-full px-4 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-text-secondary mb-1">API key (optional)</label>
-              <input
-                type="password"
-                name="apiKey"
-                value={customApiKey}
-                onChange={(e) => setCustomApiKey(e.target.value)}
-                placeholder="sk-..."
-                className="w-full px-4 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-primary"
-              />
-            </div>
-
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={customIsLocal}
-                onChange={(e) => setCustomIsLocal(e.target.checked)}
-                className="w-4 h-4 rounded border-border bg-bg-secondary accent-accent-primary"
-              />
-              <span className="text-sm text-text-secondary">This is a local provider</span>
-            </label>
-
-            {testResult && (
-              <div className={`p-3 rounded-lg ${testResult.success ? 'bg-accent-primary/10' : 'bg-red-500/10'}`}>
-                {testResult.success ? (
-                  <p className="text-accent-primary font-medium">
-                    ✓ Connected to {getBackendDisplayName(customBackend)}
-                    {testResult.model && ` (${testResult.model})`}
-                  </p>
-                ) : (
-                  <p className="text-red-500">{testResult.error}</p>
-                )}
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => testConnection(customUrl)}
-                disabled={!customUrl || testing}
-                data-testid="onboarding-test-connection-button"
-                className="flex-1 px-4 py-2 bg-bg-secondary border border-border rounded-lg hover:border-text-muted disabled:opacity-50"
-              >
-                {testing ? <PlusMdIcon className="w-4 h-4" /> : 'Test Connection'}
-              </button>
-              <button
-                type="submit"
-                disabled={!customUrl}
-                data-testid="onboarding-add-provider-submit-button"
-                className="flex-1 px-4 py-2 bg-accent-primary text-text-primary rounded-lg hover:bg-accent-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-              >
-                {testResult?.success ? 'Add Provider ✓' : 'Add Provider'}
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setShowAddForm(false)
-                setCustomName('')
-                setCustomUrl('')
-                setCustomApiKey('')
-                setCustomIsLocal(false)
-                setTestResult(null)
-              }}
-              className="w-full text-center text-text-muted hover:text-text-secondary text-sm"
-            >
-              Cancel
-            </button>
-          </form>
-        ) : (
-          <button
-            onClick={() => setShowAddForm(true)}
-            data-testid="onboarding-add-provider-button"
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-bg-secondary border border-dashed border-border rounded-lg text-text-secondary hover:text-text-primary hover:border-text-muted transition-colors"
-          >
-            <PlusLgIcon className="w-4 h-4" />
-            Add Provider
-          </button>
-        )}
+        <button
+          onClick={openAddModal}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-bg-secondary border border-dashed border-border rounded-lg text-text-secondary hover:text-text-primary hover:border-text-muted transition-colors"
+        >
+          <PlusLgIcon className="w-4 h-4" />
+          Add Provider
+        </button>
 
         <button
           onClick={handleSubmit}
           disabled={!hasProviders}
-          data-testid="onboarding-continue-button"
           className="w-full mt-6 px-6 py-3 bg-accent-primary text-text-primary rounded-lg font-medium hover:bg-accent-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           Continue
         </button>
       </div>
+
+      <ProviderModal
+        isOpen={showModal}
+        onClose={closeModal}
+        onSave={handleSave}
+        initialStep={1}
+        editProvider={editingProvider ?? undefined}
+      />
     </div>
   )
 }

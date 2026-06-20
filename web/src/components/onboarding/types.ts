@@ -9,4 +9,13 @@ export interface ProviderInfo {
   model: string | null
   apiKey?: string
   isLocal?: boolean
+  thinkingField?: string
+  models?: Array<{
+    id: string
+    contextWindow: number
+    supportsVision?: boolean
+    thinkingEnabled?: boolean
+    thinkingLevel?: string
+    nonThinkingEnabled?: boolean
+  }>
 }

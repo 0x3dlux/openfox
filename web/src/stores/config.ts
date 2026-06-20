@@ -14,6 +14,18 @@ type ContextState = {
   dynamicContextChanged?: boolean
 }
 
+type ModelSettings = {
+  contextWindow?: number
+  temperature?: number | null
+  topP?: number | null
+  topK?: number | null
+  maxTokens?: number | null
+  supportsVision?: boolean
+  thinkingEnabled?: boolean
+  thinkingLevel?: string
+  nonThinkingEnabled?: boolean
+}
+
 function updateSessionContextState(contextState: ContextState | null | undefined) {
   if (contextState)
     useSessionStore
@@ -63,6 +75,9 @@ interface ModelConfig {
   topK?: number
   maxTokens?: number
   supportsVision?: boolean
+  thinkingEnabled?: boolean
+  thinkingLevel?: string
+  nonThinkingEnabled?: boolean
   defaultTemperature?: number
   defaultTopP?: number
   defaultTopK?: number
@@ -80,6 +95,7 @@ interface Provider {
   createdAt: string
   status?: ProviderStatus
   isLocal?: boolean
+  thinkingField?: string
 }
 
 interface ConfigState {
@@ -109,18 +125,7 @@ interface ConfigState {
   startAutoRefresh: () => void
   stopAutoRefresh: () => void
   updateModelContext: (providerId: string, modelId: string, contextWindow: number) => Promise<boolean>
-  updateModelSettings: (
-    providerId: string,
-    modelId: string,
-    settings: {
-      contextWindow?: number
-      temperature?: number | null
-      topP?: number | null
-      topK?: number | null
-      maxTokens?: number | null
-      supportsVision?: boolean
-    },
-  ) => Promise<boolean>
+  updateModelSettings: (providerId: string, modelId: string, settings: ModelSettings) => Promise<boolean>
   refreshProviderModels: (providerId: string) => Promise<boolean>
 
   // Selectors
@@ -318,18 +323,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }
   },
 
-  updateModelSettings: async (
-    providerId: string,
-    modelId: string,
-    settings: {
-      contextWindow?: number
-      temperature?: number | null
-      topP?: number | null
-      topK?: number | null
-      maxTokens?: number | null
-      supportsVision?: boolean
-    },
-  ) => {
+  updateModelSettings: async (providerId: string, modelId: string, settings: ModelSettings) => {
     set({ activating: true, error: null })
     try {
       const data = await postModelUpdate(providerId, modelId, settings)
@@ -343,6 +337,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
           maxTokens: settings.maxTokens ?? undefined,
         }),
         ...(settings.supportsVision !== undefined && { supportsVision: settings.supportsVision }),
+        ...(settings.thinkingEnabled !== undefined && { thinkingEnabled: settings.thinkingEnabled }),
+        ...(settings.thinkingLevel !== undefined && { thinkingLevel: settings.thinkingLevel }),
+        ...(settings.nonThinkingEnabled !== undefined && { nonThinkingEnabled: settings.nonThinkingEnabled }),
       }
       set({ providers: applyModelUpdate(providers, providerId, modelId, updated), activating: false })
       updateSessionContextState(data.contextState)

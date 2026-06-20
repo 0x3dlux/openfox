@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useLocation } from 'wouter'
 import { useConfigStore, getBackendDisplayName, type Provider } from '../../stores/config'
 import { useSessionStore } from '../../stores/session'
-import { ModelPropertiesModal } from './ModelPropertiesModal'
+import { ProviderModal, type ProviderFormData } from '../shared/ProviderModal'
 import { authFetch } from '../../lib/api'
 import { ChevronDownIcon, ReloadIcon, CheckIcon, EditSmallIcon } from '../shared/icons'
 
@@ -26,6 +26,7 @@ export function ProviderSelector() {
   const [loadingModels, setLoadingModels] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [editingModel, setEditingModel] = useState<{ providerId: string; model: ModelWithConfig } | null>(null)
+  const [showProviderModal, setShowProviderModal] = useState(false)
   const loadedProvidersRef = useRef<Set<string>>(new Set())
 
   const providers = useConfigStore((state) => state.providers)
@@ -142,10 +143,37 @@ export function ProviderSelector() {
 
   const handleEditModel = (providerId: string, model: ModelWithConfig) => {
     setEditingModel({ providerId, model })
+    setShowProviderModal(true)
   }
 
   const handleCloseEditModal = () => {
     setEditingModel(null)
+    setShowProviderModal(false)
+  }
+
+  const handleProviderModalSave = async (formData: ProviderFormData) => {
+    // Send PUT to update provider on server
+    try {
+      await authFetch(`/api/providers/${formData.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          url: formData.url,
+          backend: formData.backend,
+          apiKey: formData.apiKey,
+          isLocal: formData.isLocal,
+          thinkingField: formData.thinkingField,
+          models: formData.models,
+        }),
+      })
+      // Refresh config to get updated providers
+      await useConfigStore.getState().fetchConfig()
+    } catch {
+      // Silently fail
+    }
+    setEditingModel(null)
+    setShowProviderModal(false)
   }
 
   const handleModelClick = async (providerId: string, newModel: string) => {
@@ -363,12 +391,23 @@ export function ProviderSelector() {
           </div>
         </div>
       )}
-      {editingModel && (
-        <ModelPropertiesModal
+      {editingModel && showProviderModal && (
+        <ProviderModal
           isOpen={true}
           onClose={handleCloseEditModal}
-          providerId={editingModel!.providerId}
-          model={editingModel!.model}
+          onSave={handleProviderModalSave}
+          initialStep={2}
+          editProvider={{
+            id: editingModel.providerId,
+            name: providers.find((p) => p.id === editingModel.providerId)?.name ?? '',
+            url: providers.find((p) => p.id === editingModel.providerId)?.url ?? '',
+            backend: providers.find((p) => p.id === editingModel.providerId)?.backend ?? 'auto',
+            apiKey: providers.find((p) => p.id === editingModel.providerId)?.apiKey,
+            isLocal: providers.find((p) => p.id === editingModel.providerId)?.isLocal,
+            thinkingField: providers.find((p) => p.id === editingModel.providerId)?.thinkingField,
+            models: providers.find((p) => p.id === editingModel.providerId)?.models,
+          }}
+          editModelId={editingModel.model.id}
         />
       )}
     </div>

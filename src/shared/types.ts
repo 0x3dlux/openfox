@@ -486,6 +486,10 @@ export interface ModelConfig {
   topK?: number
   maxTokens?: number
   supportsVision?: boolean
+  // Per-model thinking configuration
+  thinkingEnabled?: boolean
+  thinkingLevel?: string
+  nonThinkingEnabled?: boolean
   // Profile defaults for transparency
   defaultTemperature?: number
   defaultTopP?: number
@@ -505,6 +509,8 @@ export interface Provider {
   createdAt: string // ISO timestamp
   status?: 'connected' | 'disconnected' | 'unknown' // Connection status
   isLocal?: boolean | undefined // User-specified: true = local, false/undefined = API/cloud
+  /** Response field name that contains thinking/reasoning content (e.g., "reasoning_content") */
+  thinkingField?: string
 }
 
 export interface Config {
@@ -519,6 +525,8 @@ export interface Config {
     apiKey?: string
     /** Reasoning effort level (none, low, medium, high, etc.) */
     reasoningEffort?: string
+    /** Response field name that contains thinking/reasoning content (e.g., "reasoning_content") */
+    thinkingField?: string
     /** Vision model for image description fallback when primary model lacks vision support */
     visionModel?: string
   }

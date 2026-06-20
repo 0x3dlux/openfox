@@ -258,7 +258,17 @@ export function createProviderManager(config: Config): ProviderManager {
     providerStatus.set(p.id, 'unknown')
   }
 
+  function resolveModelThinkingConfig(provider: Provider, modelId: string): { reasoningEffort?: string } {
+    const modelConfig = provider.models.find((m) => m.id === modelId)
+    if (!modelConfig) return {}
+    if (modelConfig.thinkingEnabled && modelConfig.thinkingLevel) {
+      return { reasoningEffort: modelConfig.thinkingLevel }
+    }
+    return {}
+  }
+
   function createConfigForProvider(provider: Provider, model: string): Config {
+    const modelThinking = resolveModelThinkingConfig(provider, model)
     return {
       ...config,
       llm: {
@@ -267,6 +277,8 @@ export function createProviderManager(config: Config): ProviderManager {
         model,
         backend: provider.backend as LlmBackend | 'auto',
         ...(provider.apiKey && { apiKey: provider.apiKey }),
+        ...(provider.thinkingField && { thinkingField: provider.thinkingField }),
+        ...(modelThinking.reasoningEffort && { reasoningEffort: modelThinking.reasoningEffort }),
       },
     }
   }
@@ -564,6 +576,9 @@ export function createProviderManager(config: Config): ProviderManager {
         topK?: number | null
         maxTokens?: number | null
         supportsVision?: boolean
+        thinkingEnabled?: boolean
+        thinkingLevel?: string
+        nonThinkingEnabled?: boolean
       },
     ) {
       const provider = providers.find((p) => p.id === providerId)
@@ -609,6 +624,21 @@ export function createProviderManager(config: Config): ProviderManager {
         ...(finalTopK !== undefined && { topK: finalTopK }),
         ...(finalMaxTokens !== undefined && { maxTokens: finalMaxTokens }),
         ...(finalSupportsVision !== undefined && { supportsVision: finalSupportsVision }),
+        ...(settings.thinkingEnabled !== undefined
+          ? { thinkingEnabled: settings.thinkingEnabled }
+          : existingModel?.thinkingEnabled !== undefined
+            ? { thinkingEnabled: existingModel.thinkingEnabled }
+            : {}),
+        ...(settings.thinkingLevel !== undefined
+          ? { thinkingLevel: settings.thinkingLevel }
+          : existingModel?.thinkingLevel !== undefined
+            ? { thinkingLevel: existingModel.thinkingLevel }
+            : {}),
+        ...(settings.nonThinkingEnabled !== undefined
+          ? { nonThinkingEnabled: settings.nonThinkingEnabled }
+          : existingModel?.nonThinkingEnabled !== undefined
+            ? { nonThinkingEnabled: existingModel.nonThinkingEnabled }
+            : {}),
       })
 
       if (existingModel) {

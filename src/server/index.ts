@@ -11,6 +11,7 @@ import type { ServerHandle } from './context.js'
 import { initDatabase } from './db/index.js'
 import { initEventStore } from './events/index.js'
 import { detectModel, getLlmStatus, detectBackend, getBackendDisplayName, type Backend } from './llm/index.js'
+import { ensureVersionPrefix, buildModelsUrl } from './llm/url-utils.js'
 import { createMockLLMClient } from './llm/mock.js'
 import { createProviderManager, parseDefaultModelSelection } from './provider-manager.js'
 import { createToolRegistry } from './tools/index.js'
@@ -864,7 +865,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       const { fetchModelsWithContext } = await import('./provider-manager.js')
       const models = await fetchModelsWithContext(url)
       if (models.length === 0) {
-        return res.status(404).json({ error: `No models found at ${url}/v1/models`, url })
+        return res.status(404).json({ error: `No models found at ${buildModelsUrl(url)}`, url })
       }
       res.json({
         models: models.map((m) => ({
@@ -887,20 +888,26 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
   // Onboarding: test thinking params against a provider URL
   app.post('/api/providers/test-params', async (req, res) => {
-    const { url, params, apiKey } = req.body as { url: string; params: Record<string, unknown>; apiKey?: string }
+    const { url, model, params, apiKey } = req.body as {
+      url: string
+      model: string
+      params: Record<string, unknown>
+      apiKey?: string
+    }
     if (!url) return res.status(400).json({ error: 'url is required' })
+    if (!model) return res.status(400).json({ error: 'model is required' })
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
 
       const body = {
-        model: 'deepseek-v4-flash',
+        model,
         messages: [{ role: 'user', content: 'say hi in one word' }],
         max_tokens: 8000,
         ...params,
       }
 
-      const response = await fetch(`${url}/v1/chat/completions`, {
+      const response = await fetch(`${ensureVersionPrefix(url)}/chat/completions`, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
@@ -986,6 +993,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
               ...(m.thinkingEnabled !== undefined ? { thinkingEnabled: m.thinkingEnabled } : {}),
               ...(m.thinkingLevel ? { thinkingLevel: m.thinkingLevel } : {}),
               ...(m.nonThinkingEnabled !== undefined ? { nonThinkingEnabled: m.nonThinkingEnabled } : {}),
+              ...(m.thinkingExtraKwargs ? { thinkingExtraKwargs: m.thinkingExtraKwargs } : {}),
+              ...(m.nonThinkingExtraKwargs ? { nonThinkingExtraKwargs: m.nonThinkingExtraKwargs } : {}),
             }))
           : model
             ? [{ id: model, contextWindow: 200000, source: 'user' as const }]

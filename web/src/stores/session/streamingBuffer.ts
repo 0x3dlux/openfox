@@ -7,7 +7,6 @@ const buffer: StreamingBuffer = {
   toolOutput: [],
 }
 
-let streamingRafId: number | null = null
 let flushFn: (() => void) | null = null
 
 export function setFlushFn(fn: () => void) {
@@ -19,16 +18,9 @@ export function getBuffer(): StreamingBuffer {
 }
 
 export function scheduleStreamingFlush() {
-  if (streamingRafId !== null) return
-  streamingRafId = requestAnimationFrame(() => {
-    streamingRafId = null
-    flushFn?.()
-  })
+  flushFn?.()
 }
 
 export function cancelStreamingFlush() {
-  if (streamingRafId !== null) {
-    cancelAnimationFrame(streamingRafId)
-    streamingRafId = null
-  }
+  // No-op: flush is synchronous now
 }

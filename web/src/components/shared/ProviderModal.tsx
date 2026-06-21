@@ -257,7 +257,7 @@ export function ProviderModal({
             contextWindow: m.contextWindow,
             supportsVision: m.supportsVision,
             thinkingEnabled: m.thinkingEnabled,
-            thinkingLevel: m.thinkingLevel,
+            thinkingLevel: m.thinkingLevel ?? (m.thinkingEnabled ? 'max' : undefined),
             nonThinkingEnabled: m.nonThinkingEnabled,
             thinkingExtraKwargs: m.thinkingExtraKwargs,
             nonThinkingExtraKwargs: m.nonThinkingExtraKwargs,
@@ -348,7 +348,7 @@ export function ProviderModal({
       const response = await authFetch('/api/providers/test-params', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: formUrl, params, apiKey: formApiKey || undefined }),
+        body: JSON.stringify({ url: formUrl, model: modelId, params, apiKey: formApiKey || undefined }),
       })
       const data = await response.json()
       if (response.ok) {

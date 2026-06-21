@@ -507,6 +507,51 @@ describe('llm client', () => {
     ])
   })
 
+  it('streams reasoning_content when reasoningEffort is set', async () => {
+    openAiCreateMock.mockResolvedValueOnce(
+      (async function* () {
+        yield createChunk({
+          choices: [{ delta: { reasoning_content: 'step by step ' }, finish_reason: null }],
+        })
+        yield createChunk({
+          choices: [{ delta: { content: 'final answer' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
+        })
+      })(),
+    )
+
+    const client = createLLMClient(createConfig(), 'vllm')
+    const events = [] as Array<Record<string, unknown>>
+
+    for await (const event of client.stream({
+      messages: [{ role: 'user', content: 'think hard' }],
+      reasoningEffort: 'high',
+    })) {
+      events.push(event as Record<string, unknown>)
+    }
+
+    // Should use streaming (not non-streaming fallback)
+    const callArgs = openAiCreateMock.mock.calls[0]?.[0] as Record<string, unknown> | undefined
+    expect(callArgs).toHaveProperty('stream', true)
+    expect(callArgs).toHaveProperty('reasoning_effort', 'high')
+    expect(callArgs).toHaveProperty('model', 'qwen3-32b')
+
+    expect(events).toEqual([
+      { type: 'thinking_delta', content: 'step by step ' },
+      { type: 'text_delta', content: 'final answer' },
+      {
+        type: 'done',
+        response: {
+          id: 'resp-1',
+          content: 'final answer',
+          thinkingContent: 'step by step',
+          finishReason: 'stop',
+          usage: { promptTokens: 5, completionTokens: 3, totalTokens: 8 },
+        },
+      },
+    ])
+  })
+
   it('allows active streams to continue beyond the idle timeout when chunks arrive frequently', async () => {
     const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 

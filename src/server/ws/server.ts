@@ -366,6 +366,11 @@ export function createWebSocketServer(
       return getLLMClient()
     }
 
+    // Resolve reasoning effort from model config
+    const modelConfig = provider.models.find((m) => m.id === session.providerModel)
+    const reasoningEffort =
+      modelConfig?.thinkingEnabled && modelConfig?.thinkingLevel ? modelConfig.thinkingLevel : undefined
+
     // Create a new LLM client for this session
     const baseUrl = ensureVersionPrefix(provider.url)
     const sessionConfig: Config = {
@@ -376,6 +381,7 @@ export function createWebSocketServer(
         model: session.providerModel!,
         ...(provider.apiKey && { apiKey: provider.apiKey }),
         ...(provider.thinkingField && { thinkingField: provider.thinkingField }),
+        ...(reasoningEffort && { reasoningEffort }),
       },
     }
     const client = createLLMClient(sessionConfig)

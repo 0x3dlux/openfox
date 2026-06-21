@@ -19,6 +19,10 @@ import {
   mapFinishReason,
   getThinking,
 } from './client-pure.js'
+import { Agent, setGlobalDispatcher } from 'undici'
+
+const agent = new Agent({ allowH2: true })
+setGlobalDispatcher(agent)
 
 export interface LLMClientWithModel extends LLMClient {
   getModel(): string
@@ -140,16 +144,17 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
     },
 
     async *stream(request: LLMCompletionRequest): AsyncIterable<LLMStreamEvent> {
+      const resolvedEffort = (request.reasoningEffort ?? reasoningEffort) as ReasoningEffort | undefined
+
       logger.debug('LLM stream request', {
         messageCount: request.messages.length,
         hasTools: !!request.tools?.length,
         profile: profile.name,
-        reasoningEffort: request.reasoningEffort ?? reasoningEffort,
+        reasoningEffort: resolvedEffort,
         idleTimeout,
       })
 
       try {
-        const resolvedEffort = (request.reasoningEffort ?? reasoningEffort) as ReasoningEffort | undefined
         const createParams = await buildStreamingCreateParams({
           model,
           request,
@@ -215,7 +220,7 @@ export function createLLMClient(config: Config, initialBackend: Backend = 'unkno
               finishReason = mapFinishReason(choice.finish_reason)
             }
 
-            const delta = choice.delta as {
+            const delta = choice.delta as Record<string, unknown> & {
               content?: string | null
               reasoning_content?: string | null
               reasoning?: string | null

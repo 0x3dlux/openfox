@@ -1,96 +1,12 @@
 import { create } from 'zustand'
 import { authFetch } from '../lib/api'
-import { buildModelParams } from '../lib/model-params'
 import { useSessionStore } from './session'
+import type { ModelConfig } from '@shared/types.js'
 
 type LlmStatus = 'connected' | 'disconnected' | 'unknown'
 
-type ContextState = {
-  currentTokens: number
-  maxTokens: number
-  compactionCount: number
-  dangerZone: boolean
-  canCompact: boolean
-  dynamicContextChanged?: boolean
-}
-
-type ModelSettings = {
-  contextWindow?: number
-  temperature?: number | null
-  topP?: number | null
-  topK?: number | null
-  maxTokens?: number | null
-  supportsVision?: boolean
-  thinkingEnabled?: boolean
-  thinkingLevel?: string
-  nonThinkingEnabled?: boolean
-  thinkingExtraKwargs?: string
-  nonThinkingExtraKwargs?: string
-  thinkingQueryParams?: string
-  nonThinkingQueryParams?: string
-}
-
-function updateSessionContextState(contextState: ContextState | null | undefined) {
-  if (contextState)
-    useSessionStore
-      .getState()
-      .updateContextState({ ...contextState, dynamicContextChanged: contextState.dynamicContextChanged ?? false })
-}
-
-async function postModelUpdate(
-  providerId: string,
-  modelId: string,
-  body: Record<string, unknown>,
-): Promise<{ success: boolean; model?: ModelConfig; contextState?: ContextState | null }> {
-  const response = await authFetch(`/api/providers/${providerId}/models/${encodeURIComponent(modelId)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!response.ok) {
-    const errorData = (await response.json()) as { error?: string }
-    throw new Error(errorData.error ?? 'Failed to update model')
-  }
-  return response.json()
-}
-
-function applyModelUpdate(
-  providers: Provider[],
-  providerId: string,
-  modelId: string,
-  update: Partial<ModelConfig>,
-): Provider[] {
-  return providers.map((p) =>
-    p.id === providerId
-      ? { ...p, models: p.models.map((m) => (m.id === modelId ? { ...m, ...update, source: 'user' as const } : m)) }
-      : p,
-  )
-}
-
 type Backend = 'vllm' | 'sglang' | 'ollama' | 'llamacpp' | 'openai' | 'anthropic' | 'opencode-go' | 'unknown'
 type ProviderStatus = 'connected' | 'disconnected' | 'unknown'
-
-interface ModelConfig {
-  id: string
-  contextWindow: number
-  source: 'backend' | 'user' | 'default'
-  temperature?: number
-  topP?: number
-  topK?: number
-  maxTokens?: number
-  supportsVision?: boolean
-  thinkingEnabled?: boolean
-  thinkingLevel?: string
-  nonThinkingEnabled?: boolean
-  thinkingExtraKwargs?: string
-  nonThinkingExtraKwargs?: string
-  thinkingQueryParams?: string
-  nonThinkingQueryParams?: string
-  defaultTemperature?: number
-  defaultTopP?: number
-  defaultTopK?: number
-  defaultMaxTokens?: number
-}
 
 interface Provider {
   id: string
@@ -132,8 +48,6 @@ interface ConfigState {
   syncFromSession: (providerId: string, model: string) => void
   startAutoRefresh: () => void
   stopAutoRefresh: () => void
-  updateModelContext: (providerId: string, modelId: string, contextWindow: number) => Promise<boolean>
-  updateModelSettings: (providerId: string, modelId: string, settings: ModelSettings) => Promise<boolean>
   refreshProviderModels: (providerId: string) => Promise<boolean>
 
   // Selectors
@@ -313,55 +227,6 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         isActive: p.id === providerId,
       })),
     })
-  },
-
-  updateModelContext: async (providerId: string, modelId: string, contextWindow: number) => {
-    set({ activating: true, error: null })
-    try {
-      const data = await postModelUpdate(providerId, modelId, { contextWindow })
-      const { providers } = get()
-      set({ providers: applyModelUpdate(providers, providerId, modelId, { contextWindow }), activating: false })
-      updateSessionContextState(data.contextState)
-      return true
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to update model context', activating: false })
-      return false
-    }
-  },
-
-  updateModelSettings: async (providerId: string, modelId: string, settings: ModelSettings) => {
-    set({ activating: true, error: null })
-    try {
-      const data = await postModelUpdate(providerId, modelId, settings)
-      const { providers } = get()
-      const updated = {
-        ...(settings.contextWindow !== undefined && { contextWindow: settings.contextWindow }),
-        ...buildModelParams({
-          temperature: settings.temperature ?? undefined,
-          topP: settings.topP ?? undefined,
-          topK: settings.topK ?? undefined,
-          maxTokens: settings.maxTokens ?? undefined,
-        }),
-        ...(settings.supportsVision !== undefined && { supportsVision: settings.supportsVision }),
-        ...(settings.thinkingEnabled !== undefined && { thinkingEnabled: settings.thinkingEnabled }),
-        ...(settings.thinkingLevel !== undefined && { thinkingLevel: settings.thinkingLevel }),
-        ...(settings.nonThinkingEnabled !== undefined && { nonThinkingEnabled: settings.nonThinkingEnabled }),
-        ...(settings.thinkingExtraKwargs !== undefined && { thinkingExtraKwargs: settings.thinkingExtraKwargs }),
-        ...(settings.nonThinkingExtraKwargs !== undefined && {
-          nonThinkingExtraKwargs: settings.nonThinkingExtraKwargs,
-        }),
-        ...(settings.thinkingQueryParams !== undefined && { thinkingQueryParams: settings.thinkingQueryParams }),
-        ...(settings.nonThinkingQueryParams !== undefined && {
-          nonThinkingQueryParams: settings.nonThinkingQueryParams,
-        }),
-      }
-      set({ providers: applyModelUpdate(providers, providerId, modelId, updated), activating: false })
-      updateSessionContextState(data.contextState)
-      return true
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to update model settings', activating: false })
-      return false
-    }
   },
 
   refreshProviderModels: async (providerId: string) => {

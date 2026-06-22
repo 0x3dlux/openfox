@@ -6,7 +6,7 @@ import { dirname, resolve, join } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { createServer as createViteServer, type ViteDevServer } from 'vite'
 
-import type { Config, ProviderBackend } from '../shared/types.js'
+import type { Config, ModelConfig, ProviderBackend } from '../shared/types.js'
 import type { ServerHandle } from './context.js'
 import { initDatabase } from './db/index.js'
 import { initEventStore } from './events/index.js'
@@ -826,6 +826,29 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     })
   })
 
+  // Shared helper: convert raw model array to ModelConfig[] with all fields passed through
+  type ModelConfigInput = Pick<ModelConfig, 'id'> & Partial<Omit<ModelConfig, 'id' | 'source'>>
+
+  function buildModelConfigs(models: ModelConfigInput[]): ModelConfig[] {
+    return models.map((m) => ({
+      id: m.id,
+      contextWindow: m.contextWindow ?? 200000,
+      source: 'user' as const,
+      ...(m.supportsVision !== undefined && { supportsVision: m.supportsVision }),
+      ...(m.thinkingEnabled !== undefined && { thinkingEnabled: m.thinkingEnabled }),
+      ...(m.thinkingLevel !== undefined && { thinkingLevel: m.thinkingLevel }),
+      ...(m.nonThinkingEnabled !== undefined && { nonThinkingEnabled: m.nonThinkingEnabled }),
+      ...(m.thinkingExtraKwargs !== undefined && { thinkingExtraKwargs: m.thinkingExtraKwargs }),
+      ...(m.nonThinkingExtraKwargs !== undefined && { nonThinkingExtraKwargs: m.nonThinkingExtraKwargs }),
+      ...(m.thinkingQueryParams !== undefined && { thinkingQueryParams: m.thinkingQueryParams }),
+      ...(m.nonThinkingQueryParams !== undefined && { nonThinkingQueryParams: m.nonThinkingQueryParams }),
+      ...(m.temperature !== undefined && { temperature: m.temperature }),
+      ...(m.topP !== undefined && { topP: m.topP }),
+      ...(m.topK !== undefined && { topK: m.topK }),
+      ...(m.maxTokens !== undefined && { maxTokens: m.maxTokens }),
+    }))
+  }
+
   // Onboarding: test LLM connection without adding provider
   app.post('/api/providers/test', async (req, res) => {
     const { url, backend: reqBackend } = req.body as { url: string; backend?: string }
@@ -943,16 +966,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       model?: string
       isLocal?: boolean
       thinkingField?: string
-      models?: Array<{
-        id: string
-        contextWindow: number
-        supportsVision?: boolean
-        thinkingEnabled?: boolean
-        thinkingLevel?: string
-        nonThinkingEnabled?: boolean
-        thinkingExtraKwargs?: string
-        nonThinkingExtraKwargs?: string
-      }>
+      models?: Record<string, unknown>[]
     }
 
     if (!name || !url || !backend) {
@@ -974,17 +988,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
         ...(isLocal !== undefined ? { isLocal } : {}),
         ...(thinkingField ? { thinkingField } : {}),
         models: modelConfigs?.length
-          ? modelConfigs.map((m) => ({
-              id: m.id,
-              contextWindow: m.contextWindow,
-              source: 'user' as const,
-              ...(m.supportsVision !== undefined ? { supportsVision: m.supportsVision } : {}),
-              ...(m.thinkingEnabled !== undefined ? { thinkingEnabled: m.thinkingEnabled } : {}),
-              ...(m.thinkingLevel ? { thinkingLevel: m.thinkingLevel } : {}),
-              ...(m.nonThinkingEnabled !== undefined ? { nonThinkingEnabled: m.nonThinkingEnabled } : {}),
-              ...(m.thinkingExtraKwargs ? { thinkingExtraKwargs: m.thinkingExtraKwargs } : {}),
-              ...(m.nonThinkingExtraKwargs ? { nonThinkingExtraKwargs: m.nonThinkingExtraKwargs } : {}),
-            }))
+          ? buildModelConfigs(modelConfigs as ModelConfigInput[])
           : model
             ? [{ id: model, contextWindow: 200000, source: 'user' as const }]
             : [],
@@ -1106,16 +1110,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       apiKey?: string | null
       isLocal?: boolean
       thinkingField?: string | null
-      models?: Array<{
-        id: string
-        contextWindow: number
-        supportsVision?: boolean
-        thinkingEnabled?: boolean
-        thinkingLevel?: string
-        nonThinkingEnabled?: boolean
-        thinkingExtraKwargs?: string
-        nonThinkingExtraKwargs?: string
-      }>
+      models?: Record<string, unknown>[]
     }
     try {
       const { loadGlobalConfig, saveGlobalConfig, updateProvider } = await import('../cli/config.js')
@@ -1132,17 +1127,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       if (isLocal !== undefined) updates['isLocal'] = isLocal
       if (thinkingField !== undefined) updates['thinkingField'] = thinkingField || undefined
       if (modelConfigs !== undefined) {
-        updates['models'] = modelConfigs.map((m) => ({
-          id: m.id,
-          contextWindow: m.contextWindow,
-          source: 'user' as const,
-          ...(m.supportsVision !== undefined ? { supportsVision: m.supportsVision } : {}),
-          ...(m.thinkingEnabled !== undefined ? { thinkingEnabled: m.thinkingEnabled } : {}),
-          ...(m.thinkingLevel ? { thinkingLevel: m.thinkingLevel } : {}),
-          ...(m.nonThinkingEnabled !== undefined ? { nonThinkingEnabled: m.nonThinkingEnabled } : {}),
-          ...(m.thinkingExtraKwargs ? { thinkingExtraKwargs: m.thinkingExtraKwargs } : {}),
-          ...(m.nonThinkingExtraKwargs ? { nonThinkingExtraKwargs: m.nonThinkingExtraKwargs } : {}),
-        }))
+        updates['models'] = buildModelConfigs(modelConfigs as ModelConfigInput[])
       }
       const updatedConfig = updateProvider(globalConfig, id, updates)
       await saveGlobalConfig(config.mode ?? 'production', updatedConfig)
@@ -1179,93 +1164,6 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       activeProviderId: id,
       model: llmClient.getModel(),
       backend: llmClient.getBackend(),
-    })
-  })
-
-  app.post('/api/providers/:id/models/:modelId', async (req, res) => {
-    const { id, modelId } = req.params
-    const body = req.body as {
-      contextWindow?: number
-      temperature?: number | null
-      topP?: number | null
-      topK?: number | null
-      maxTokens?: number | null
-      supportsVision?: boolean
-      thinkingEnabled?: boolean
-      thinkingLevel?: string
-      nonThinkingEnabled?: boolean
-      thinkingExtraKwargs?: string
-      nonThinkingExtraKwargs?: string
-    }
-
-    logger.info('API: POST /api/providers/:id/models/:modelId', {
-      providerId: id,
-      modelId,
-      body,
-    })
-
-    // Support both old API (contextWindow only) and new API (full settings)
-    const hasFullSettings =
-      body.temperature !== undefined ||
-      body.topP !== undefined ||
-      body.topK !== undefined ||
-      body.maxTokens !== undefined ||
-      body.thinkingEnabled !== undefined ||
-      body.thinkingLevel !== undefined ||
-      body.nonThinkingEnabled !== undefined ||
-      body.thinkingExtraKwargs !== undefined ||
-      body.nonThinkingExtraKwargs !== undefined
-
-    let result: { success: boolean; error?: string; model?: import('../shared/types.js').ModelConfig }
-    if (hasFullSettings) {
-      result = await providerManager.updateModelSettings(id as string, modelId as string, body)
-    } else if (body.contextWindow) {
-      result = await providerManager.updateModelContext(id as string, modelId as string, body.contextWindow)
-    } else {
-      return res.status(400).json({ error: 'contextWindow or full settings required' })
-    }
-
-    if (!result.success) {
-      return res.status(400).json({ error: result.error })
-    }
-
-    // Persist to config.json
-    const { loadGlobalConfig, saveGlobalConfig } = await import('../cli/config.js')
-    const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
-    const updatedProviders = providerManager.getProviders()
-    const updatedConfig = {
-      ...globalConfig,
-      providers: updatedProviders,
-      activeProviderId: providerManager.getActiveProviderId(),
-      defaultModelSelection: providerManager.getActiveProviderId()
-        ? `${providerManager.getActiveProviderId()}/${providerManager.getCurrentModel()}`
-        : undefined,
-    }
-    await saveGlobalConfig(config.mode ?? 'production', updatedConfig)
-
-    // Return updated context state for sessions using this provider/model
-    // This allows the frontend to update the session header immediately via REST
-    let contextState = null
-    const sessions = sessionManager.listSessions()
-    if (sessions.length > 0) {
-      // Check if any session is using this provider
-      // Session uses this provider if: explicit providerId matches, OR uses global and global matches
-      for (const session of sessions) {
-        const sessionProviderId = session.providerId || providerManager.getActiveProviderId()
-        if (sessionProviderId === id) {
-          contextState = sessionManager.getContextState(session.id)
-          break
-        }
-      }
-    }
-
-    res.json({
-      success: true,
-      providerId: id,
-      modelId,
-      contextWindow: body.contextWindow,
-      model: result.model,
-      contextState,
     })
   })
 

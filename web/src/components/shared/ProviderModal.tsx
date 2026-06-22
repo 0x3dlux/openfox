@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { authFetch } from '../../lib/api'
 import type { Backend } from '../../stores/config'
+import type { ModelConfig as SharedModelConfig } from '@shared/types.js'
 import { ChevronDownIcon } from './icons'
 import { getBackendDisplayName } from '../onboarding/types'
 
@@ -117,6 +118,22 @@ function TestResultBlock({
   )
 }
 
+function QueryParamsInput({ value, onChange }: { value: string | undefined; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="text-xs text-text-secondary block mb-1">
+        Query params <span className="text-text-muted">(optional JSON)</span>
+      </label>
+      <input
+        type="text"
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary font-mono"
+      />
+    </div>
+  )
+}
+
 const COMMON_PORTS = [8000, 11434, 8080]
 
 const BACKEND_OPTIONS: { value: Backend; label: string }[] = [
@@ -160,18 +177,7 @@ export interface ProviderFormData {
   apiKey?: string
   isLocal?: boolean
   thinkingField?: string
-  models: Array<{
-    id: string
-    contextWindow: number
-    supportsVision?: boolean
-    thinkingEnabled?: boolean
-    thinkingLevel?: string
-    nonThinkingEnabled?: boolean
-    thinkingExtraKwargs?: string
-    nonThinkingExtraKwargs?: string
-    thinkingQueryParams?: string
-    nonThinkingQueryParams?: string
-  }>
+  models: Array<Omit<SharedModelConfig, 'source'>>
 }
 
 interface ProviderModalProps {
@@ -187,22 +193,7 @@ interface ProviderModalProps {
     apiKey?: string
     isLocal?: boolean
     thinkingField?: string
-    models?: Array<{
-      id: string
-      contextWindow: number
-      supportsVision?: boolean
-      thinkingEnabled?: boolean
-      thinkingLevel?: string
-      nonThinkingEnabled?: boolean
-      thinkingExtraKwargs?: string
-      nonThinkingExtraKwargs?: string
-      thinkingQueryParams?: string
-      nonThinkingQueryParams?: string
-      defaultTemperature?: number
-      defaultTopP?: number
-      defaultTopK?: number
-      defaultMaxTokens?: number
-    }>
+    models?: Array<Omit<SharedModelConfig, 'source'>>
   }
   editModelId?: string
 }
@@ -417,6 +408,10 @@ export function ProviderModal({
         nonThinkingExtraKwargs: modelConfigs[m.id]?.nonThinkingExtraKwargs,
         thinkingQueryParams: modelConfigs[m.id]?.thinkingQueryParams,
         nonThinkingQueryParams: modelConfigs[m.id]?.nonThinkingQueryParams,
+        temperature: modelConfigs[m.id]?.temperature,
+        topP: modelConfigs[m.id]?.topP,
+        topK: modelConfigs[m.id]?.topK,
+        maxTokens: modelConfigs[m.id]?.maxTokens,
       })),
     })
     onClose()
@@ -674,19 +669,10 @@ export function ProviderModal({
                                     className="w-full px-2 py-1.5 bg-bg-tertiary border border-border rounded text-xs text-text-primary"
                                   />
                                 </div>
-                                <div>
-                                  <label className="text-xs text-text-secondary block mb-1">
-                                    Query params <span className="text-text-muted">(optional JSON)</span>
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={modelConfigs[model.id]?.thinkingQueryParams ?? ''}
-                                    onChange={(e) =>
-                                      updateModelConfig(model.id, { thinkingQueryParams: e.target.value })
-                                    }
-                                    className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary font-mono"
-                                  />
-                                </div>
+                                <QueryParamsInput
+                                  value={modelConfigs[model.id]?.thinkingQueryParams}
+                                  onChange={(v) => updateModelConfig(model.id, { thinkingQueryParams: v })}
+                                />
                                 <ExtraKwargsBlock
                                   kwargs={thinkKwargs}
                                   onChange={setThinkKwargs}
@@ -711,19 +697,10 @@ export function ProviderModal({
                             </label>
                             {modelConfigs[model.id]?.nonThinkingEnabled && (
                               <div className="ml-6 space-y-2 pl-3 border-l-2 border-accent-warning/30">
-                                <div>
-                                  <label className="text-xs text-text-secondary block mb-1">
-                                    Query params <span className="text-text-muted">(optional JSON)</span>
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={modelConfigs[model.id]?.nonThinkingQueryParams ?? ''}
-                                    onChange={(e) =>
-                                      updateModelConfig(model.id, { nonThinkingQueryParams: e.target.value })
-                                    }
-                                    className="w-full px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-primary font-mono"
-                                  />
-                                </div>
+                                <QueryParamsInput
+                                  value={modelConfigs[model.id]?.nonThinkingQueryParams}
+                                  onChange={(v) => updateModelConfig(model.id, { nonThinkingQueryParams: v })}
+                                />
                                 <ExtraKwargsBlock
                                   kwargs={nonThinkKwargs}
                                   onChange={setNonThinkKwargs}

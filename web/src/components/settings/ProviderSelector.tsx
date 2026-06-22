@@ -147,7 +147,7 @@ export function ProviderSelector() {
   }
 
   const handleProviderModalSave = async (formData: ProviderFormData) => {
-    // Send PUT to update provider on server
+    // Send PUT to update provider on server (includes all models)
     try {
       const res = await authFetch(`/api/providers/${formData.id}`, {
         method: 'PUT',
@@ -163,27 +163,6 @@ export function ProviderSelector() {
         }),
       })
       if (!res.ok) throw new Error('Failed to update provider')
-      // Persist per-model configs via individual POST calls
-      for (const model of formData.models) {
-        const settings: Record<string, unknown> = {}
-        if (model.contextWindow !== undefined) settings.contextWindow = model.contextWindow
-        if (model.supportsVision !== undefined) settings.supportsVision = model.supportsVision
-        if (model.thinkingEnabled !== undefined) settings.thinkingEnabled = model.thinkingEnabled
-        if (model.thinkingLevel !== undefined) settings.thinkingLevel = model.thinkingLevel
-        if (model.nonThinkingEnabled !== undefined) settings.nonThinkingEnabled = model.nonThinkingEnabled
-        if (model.thinkingExtraKwargs !== undefined) settings.thinkingExtraKwargs = model.thinkingExtraKwargs
-        if (model.nonThinkingExtraKwargs !== undefined) settings.nonThinkingExtraKwargs = model.nonThinkingExtraKwargs
-        if (model.thinkingQueryParams !== undefined) settings.thinkingQueryParams = model.thinkingQueryParams
-        if (model.nonThinkingQueryParams !== undefined) settings.nonThinkingQueryParams = model.nonThinkingQueryParams
-        if (Object.keys(settings).length > 0) {
-          const modelRes = await authFetch(`/api/providers/${formData.id}/models/${encodeURIComponent(model.id)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(settings),
-          })
-          if (!modelRes.ok) throw new Error(`Failed to update model: ${model.id}`)
-        }
-      }
       // Refresh config to get updated providers
       await useConfigStore.getState().fetchConfig()
     } catch {

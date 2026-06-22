@@ -100,6 +100,38 @@ describe('ProviderModal - thinkingLevel persistence', () => {
     expect(savedModel?.thinkingLevel).toBe('max')
   })
 
+  it('includes all model fields in save payload', async () => {
+    const { modelId } = await renderAndSave(undefined)
+
+    expect(onSaveMock).toHaveBeenCalledTimes(1)
+    const savedData: ProviderFormData = onSaveMock.mock.calls[0]![0]!
+    const savedModel = savedData.models.find((m) => m.id === modelId)
+    expect(savedModel).toBeDefined()
+
+    // Every field the UI can set must be present in the save payload.
+    // If you add a new model field to the UI, add it here too.
+    const expectedFields = [
+      'id',
+      'contextWindow',
+      'supportsVision',
+      'thinkingEnabled',
+      'thinkingLevel',
+      'nonThinkingEnabled',
+      'thinkingExtraKwargs',
+      'nonThinkingExtraKwargs',
+      'thinkingQueryParams',
+      'nonThinkingQueryParams',
+      'temperature',
+      'topP',
+      'topK',
+      'maxTokens',
+    ] as const
+
+    for (const field of expectedFields) {
+      expect(savedModel).toHaveProperty(field)
+    }
+  })
+
   it('does not reset form step when editProvider reference changes (parent re-render)', async () => {
     await new Promise<void>((resolve) => {
       root.render(

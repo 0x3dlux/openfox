@@ -1,8 +1,7 @@
 /**
  * Model Context Update E2E Tests
  *
- * Tests that updating a model's context window via REST API returns contextState
- * so the frontend can update the session header immediately.
+ * Tests that updating a model's context window via REST API persists correctly.
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
@@ -89,7 +88,7 @@ describe('Model Context Update', () => {
     await project.cleanup()
   })
 
-  it('session-header-updates-context-on-save: REST API returns contextState for immediate header update', async () => {
+  it('persists model context window update via PUT provider endpoint', async () => {
     const restProject = await createProject(serverUrl, { name: 'test', workdir: project.path })
     const restSession = await createSession(serverUrl, { projectId: restProject.id, title: 'Test session' })
 
@@ -100,35 +99,28 @@ describe('Model Context Update', () => {
       body: JSON.stringify({ providerId: testProviderId, model: testModelId }),
     })
 
-    const modelId = testModelId
     const newContextWindow = 500000
 
-    // Update model context via API
-    const response = await fetch(`${serverUrl}/api/providers/${testProviderId}/models/${encodeURIComponent(modelId)}`, {
-      method: 'POST',
+    // Update model context via PUT provider endpoint (single save path)
+    const response = await fetch(`${serverUrl}/api/providers/${testProviderId}`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contextWindow: newContextWindow }),
+      body: JSON.stringify({
+        models: [{ id: testModelId, contextWindow: newContextWindow }],
+      }),
     })
 
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}))
-      console.log('API error:', response.status, errorBody)
-    }
     expect(response.ok).toBe(true)
     const responseBody = (await response.json()) as {
       success: boolean
-      contextState?: {
-        currentTokens: number
-        maxTokens: number
-        compactionCount: number
-        dangerZone: boolean
-        canCompact: boolean
-      } | null
+      provider?: { models: Array<{ id: string; contextWindow: number }> }
     }
 
-    // Verify API returns contextState for frontend to update session header immediately
+    // Verify the provider was updated
     expect(responseBody.success).toBe(true)
-    expect(responseBody.contextState).toBeDefined()
-    expect(responseBody.contextState?.maxTokens).toBe(newContextWindow)
+    expect(responseBody.provider).toBeDefined()
+    const updatedModel = responseBody.provider!.models.find((m) => m.id === testModelId)
+    expect(updatedModel).toBeDefined()
+    expect(updatedModel!.contextWindow).toBe(newContextWindow)
   })
 })

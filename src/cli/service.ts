@@ -132,7 +132,7 @@ WantedBy=graphical-session.target
   console.log(`Created: ${servicePath}`)
 }
 
-export async function runServiceCommand(_mode: Mode, subcommand?: string): Promise<void> {
+export async function runServiceCommand(_mode: Mode, subcommand?: string, ...args: string[]): Promise<void> {
   if (!subcommand) {
     printServiceHelp()
     return
@@ -155,7 +155,7 @@ export async function runServiceCommand(_mode: Mode, subcommand?: string): Promi
       await serviceStatus()
       break
     case 'logs':
-      await serviceLogs()
+      await serviceLogs(args)
       break
     case 'uninstall':
       await serviceUninstall()
@@ -180,7 +180,7 @@ Commands:
   stop       Stop the service (if installed)
   restart    Restart the service (if installed)
   status     Show service status
-  logs       Show recent service logs
+  logs [-f]  Show recent service logs (use -f or --follow to tail)
   uninstall  Disable and remove the service files
 `)
 }
@@ -271,17 +271,23 @@ async function serviceStatus(): Promise<void> {
   systemctl(['is-enabled', SERVICE_NAME], false)
 }
 
-async function serviceLogs(): Promise<void> {
+async function serviceLogs(args: string[]): Promise<void> {
   const installed = await pathExists(SERVICE_PATH)
   if (!installed) {
     console.log('Service not installed.')
     return
   }
 
-  const result = spawnSync('journalctl', ['--user', '-u', SERVICE_NAME, '-n', '50', '--no-pager'], {
-    encoding: 'utf-8',
-  })
-  console.log(result.stdout || result.stderr || 'No logs')
+  const follow = args.includes('-f') || args.includes('--follow')
+
+  if (follow) {
+    spawn('journalctl', ['--user', '-u', SERVICE_NAME, '-f', '--no-pager'], { stdio: 'inherit' })
+  } else {
+    const result = spawnSync('journalctl', ['--user', '-u', SERVICE_NAME, '-n', '50', '--no-pager'], {
+      encoding: 'utf-8',
+    })
+    console.log(result.stdout || result.stderr || 'No logs')
+  }
 }
 
 async function serviceUninstall(): Promise<void> {

@@ -187,11 +187,11 @@ export async function runCli(options: { mode: Mode }): Promise<void> {
     }
     case 'service': {
       const { runServiceCommand } = await import('./service.js')
-      const [, subcommand] = positionals
+      const [, subcommand, ...serviceArgs] = positionals
       if (subcommand === '--help' || subcommand === '-h' || values.help) {
         runServiceCommand(mode, undefined)
       } else {
-        await runServiceCommand(mode, subcommand)
+        await runServiceCommand(mode, subcommand, ...serviceArgs)
       }
       break
     }

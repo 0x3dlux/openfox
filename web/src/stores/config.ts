@@ -156,7 +156,7 @@ function getBackendDisplayName(backend: Backend): string {
     case 'opencode-go':
       return 'OpenCode Go'
     case 'unknown':
-      return ''
+      return 'Other'
   }
 }
 

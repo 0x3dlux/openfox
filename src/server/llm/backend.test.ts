@@ -42,7 +42,7 @@ describe('backend', () => {
         ollama: 'Ollama',
         llamacpp: 'llama.cpp',
         'opencode-go': 'OpenCode Go',
-        unknown: 'Unknown',
+        unknown: 'Other',
       }
 
       for (const [backend, name] of Object.entries(cases) as Array<[Backend, string]>) {

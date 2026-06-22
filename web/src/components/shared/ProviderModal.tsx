@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { authFetch } from '../../lib/api'
 import type { Backend } from '../../stores/config'
 import { ChevronDownIcon } from './icons'
@@ -120,13 +120,11 @@ function TestResultBlock({
 const COMMON_PORTS = [8000, 11434, 8080]
 
 const BACKEND_OPTIONS: { value: Backend; label: string }[] = [
+  { value: 'llamacpp', label: 'llama.cpp' },
+  { value: 'ollama', label: 'Ollama' },
   { value: 'vllm', label: 'vLLM' },
   { value: 'sglang', label: 'SGLang' },
-  { value: 'ollama', label: 'Ollama' },
-  { value: 'llamacpp', label: 'llama.cpp' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'opencode-go', label: 'OpenCode Go' },
+  { value: 'unknown', label: 'Other (APIs)' },
 ]
 
 interface ModelInfo {
@@ -214,7 +212,7 @@ export function ProviderModal({
   const [formStep, setFormStep] = useState(initialStep)
   const [formName, setFormName] = useState('')
   const [formUrl, setFormUrl] = useState('')
-  const [formBackend, setFormBackend] = useState<Backend>('unknown')
+  const [formBackend, setFormBackend] = useState<string>('')
   const [formApiKey, setFormApiKey] = useState('')
   const [formIsLocal, setFormIsLocal] = useState(false)
   const [fetchingModels, setFetchingModels] = useState(false)
@@ -230,6 +228,14 @@ export function ProviderModal({
     Record<string, { loading: boolean; result?: string; message?: Record<string, unknown>; error?: string }>
   >({})
   const [rawModalData, setRawModalData] = useState<string | null>(null)
+  const urlInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (formStep === 1 && isOpen) {
+      // Small delay to ensure the input is mounted
+      requestAnimationFrame(() => urlInputRef.current?.focus())
+    }
+  }, [formStep, isOpen])
 
   function updateModelConfig(id: string, partial: Partial<ModelConfig>) {
     setModelConfigs((prev) => ({ ...prev, [id]: { ...prev[id]!, ...partial } }))
@@ -241,7 +247,7 @@ export function ProviderModal({
       setFormStep(initialStep)
       setFormName(editProvider?.name ?? '')
       setFormUrl(editProvider?.url ?? '')
-      setFormBackend(editProvider?.backend ?? 'unknown')
+      setFormBackend(editProvider?.backend ?? '')
       setFormApiKey(editProvider?.apiKey ?? '')
       setFormIsLocal(editProvider?.isLocal ?? false)
       setFetchError(null)
@@ -373,7 +379,7 @@ export function ProviderModal({
       id: providerId,
       name,
       url: formUrl,
-      backend: formBackend,
+      backend: (formBackend || 'unknown') as Backend,
       apiKey: formApiKey || undefined,
       isLocal: formIsLocal || undefined,
       thinkingField: thinkingField || undefined,
@@ -434,7 +440,7 @@ export function ProviderModal({
                     onClick={() => {
                       setFormName('')
                       setFormUrl(`http://localhost:${port}`)
-                      setFormBackend('unknown')
+                      setFormBackend('')
                       setFetchError(null)
                     }}
                     className={`p-2 rounded border text-center text-sm transition-colors ${
@@ -450,8 +456,9 @@ export function ProviderModal({
             </div>
 
             <div>
-              <label className="block text-sm text-text-secondary mb-1">API URL</label>
+              <label className="block text-sm text-text-secondary mb-1">Provider URL</label>
               <input
+                ref={urlInputRef}
                 type="text"
                 value={formUrl}
                 data-testid="provider-modal-url"
@@ -470,6 +477,7 @@ export function ProviderModal({
               <label className="block text-sm text-text-secondary mb-1">Provider name</label>
               <input
                 type="text"
+                autoComplete="off"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder="My LLM Server"
@@ -482,7 +490,8 @@ export function ProviderModal({
                 API key <span className="text-text-muted">(optional)</span>
               </label>
               <input
-                type="password"
+                type="text"
+                autoComplete="off"
                 value={formApiKey}
                 onChange={(e) => setFormApiKey(e.target.value)}
                 placeholder="sk-..."
@@ -511,10 +520,13 @@ export function ProviderModal({
                   <label className="block text-sm text-text-secondary mb-1">Backend type</label>
                   <select
                     value={formBackend}
-                    onChange={(e) => setFormBackend(e.target.value as Backend)}
+                    onChange={(e) => setFormBackend(e.target.value)}
                     data-testid="provider-modal-backend"
                     className="w-full px-4 py-2 bg-bg-primary border border-border rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
                   >
+                    <option value="" disabled>
+                      -- Select backend type --
+                    </option>
                     {BACKEND_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
@@ -548,12 +560,14 @@ export function ProviderModal({
               <div className="p-3 rounded-lg text-sm bg-red-500/10 text-red-500 border border-red-500/20">
                 <p>{fetchError}</p>
                 <p className="text-xs text-text-muted mt-1">URL: {formUrl}</p>
-                <button
-                  onClick={() => fetchModels(formUrl)}
-                  className="mt-2 text-xs text-accent-primary hover:underline"
-                >
-                  Retry
-                </button>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => fetchModels(formUrl)} className="text-xs text-accent-primary hover:underline">
+                    Retry
+                  </button>
+                  <button onClick={() => setFormStep(1)} className="text-xs text-accent-primary hover:underline">
+                    Edit URL
+                  </button>
+                </div>
               </div>
             )}
 
@@ -787,7 +801,7 @@ export function ProviderModal({
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm font-medium text-text-primary">{formName || 'Provider'}</span>
                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-accent-primary/20 text-accent-primary">
-                  {getBackendDisplayName(formBackend)}
+                  {getBackendDisplayName((formBackend || 'unknown') as Backend)}
                 </span>
               </div>
               <p className="text-xs text-text-muted mb-3">{formUrl}</p>

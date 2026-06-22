@@ -57,6 +57,6 @@ export function getBackendDisplayName(backend: Backend): string {
     case 'opencode-go':
       return 'OpenCode Go'
     case 'unknown':
-      return 'Unknown'
+      return 'Other'
   }
 }

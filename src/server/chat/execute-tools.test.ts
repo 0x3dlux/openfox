@@ -43,15 +43,13 @@ describe('executeTools', () => {
       truncated: false,
     })
 
-    const toolCalls: ToolCall[] = [
-      { id: 'call-1', name: 'run_command', arguments: { command: 'echo hi' } },
-    ]
+    const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'run_command', arguments: { command: 'echo hi' } }]
 
     await executeTools('msg-1', toolCalls, makeCtx(), append)
 
     const callEvents = append.mock.calls.filter((args: unknown[]) => (args[0] as TurnEvent).type === 'tool.call')
     expect(callEvents).toHaveLength(1)
-    expect((callEvents[0]![0] as TurnEvent)).toMatchObject({
+    expect(callEvents[0]![0] as TurnEvent).toMatchObject({
       type: 'tool.call',
       data: { messageId: 'msg-1', toolCall: { id: 'call-1', name: 'run_command' } },
     })
@@ -66,15 +64,13 @@ describe('executeTools', () => {
       truncated: false,
     })
 
-    const toolCalls: ToolCall[] = [
-      { id: 'call-1', name: 'run_command', arguments: { command: 'echo hi' } },
-    ]
+    const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'run_command', arguments: { command: 'echo hi' } }]
 
     await executeTools('msg-1', toolCalls, makeCtx(), append)
 
     const resultEvents = append.mock.calls.filter((args: unknown[]) => (args[0] as TurnEvent).type === 'tool.result')
     expect(resultEvents).toHaveLength(1)
-    expect((resultEvents[0]![0] as TurnEvent)).toMatchObject({
+    expect(resultEvents[0]![0] as TurnEvent).toMatchObject({
       type: 'tool.result',
       data: { messageId: 'msg-1', toolCallId: 'call-1' },
     })
@@ -123,9 +119,7 @@ describe('executeTools', () => {
       truncated: false,
     })
 
-    const toolCalls: ToolCall[] = [
-      { id: 'call-1', name: 'run_command', arguments: { command: 'npm run typecheck' } },
-    ]
+    const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'run_command', arguments: { command: 'npm run typecheck' } }]
 
     const result = await executeTools('msg-1', toolCalls, makeCtx(), append)
 
@@ -143,9 +137,7 @@ describe('executeTools', () => {
       truncated: false,
     })
 
-    const toolCalls: ToolCall[] = [
-      { id: 'call-1', name: 'update_criterion', arguments: { id: 'missing' } },
-    ]
+    const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'update_criterion', arguments: { id: 'missing' } }]
 
     const result = await executeTools('msg-1', toolCalls, makeCtx(), append)
 
@@ -163,9 +155,7 @@ describe('executeTools', () => {
       truncated: false,
     })
 
-    const toolCalls: ToolCall[] = [
-      { id: 'call-1', name: 'run_command', arguments: { command: 'echo hi' } },
-    ]
+    const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'run_command', arguments: { command: 'echo hi' } }]
 
     await executeTools('msg-1', toolCalls, { ...makeCtx(), turnMetrics: { addToolTime } as any }, append)
 
@@ -176,11 +166,14 @@ describe('executeTools', () => {
     const append = vi.fn()
     const execute = vi.fn()
 
-    const toolCalls: ToolCall[] = [
-      { id: 'call-1', name: 'run_command', arguments: {}, parseError: 'Invalid JSON' },
-    ]
+    const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'run_command', arguments: {}, parseError: 'Invalid JSON' }]
 
-    const result = await executeTools('msg-1', toolCalls, { ...makeCtx(), toolRegistry: { execute, definitions: [] } as any }, append)
+    const result = await executeTools(
+      'msg-1',
+      toolCalls,
+      { ...makeCtx(), toolRegistry: { execute, definitions: [] } as any },
+      append,
+    )
 
     expect(execute).not.toHaveBeenCalled()
     expect(result.toolMessages).toHaveLength(1)
@@ -192,13 +185,43 @@ describe('executeTools', () => {
     const controller = new AbortController()
     controller.abort()
 
-    const toolCalls: ToolCall[] = [
-      { id: 'call-1', name: 'run_command', arguments: { command: 'echo hi' } },
-    ]
+    const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'run_command', arguments: { command: 'echo hi' } }]
 
-    await expect(
-      executeTools('msg-1', toolCalls, makeCtx({ signal: controller.signal }), append),
-    ).rejects.toThrow('Aborted')
+    await expect(executeTools('msg-1', toolCalls, makeCtx({ signal: controller.signal }), append)).rejects.toThrow(
+      'Aborted',
+    )
+  })
+
+  it('detects step_done tool and sets stepDoneCalled in result', async () => {
+    const append = vi.fn()
+    mockToolRegistry.execute = vi.fn().mockResolvedValue({
+      success: true,
+      output: 'Step completion signal recorded.',
+      durationMs: 0,
+      truncated: false,
+    })
+
+    const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'step_done', arguments: {} }]
+
+    const result = await executeTools('msg-1', toolCalls, makeCtx(), append)
+
+    expect(result.stepDoneCalled).toBe(true)
+  })
+
+  it('does not set stepDoneCalled when step_done fails', async () => {
+    const append = vi.fn()
+    mockToolRegistry.execute = vi.fn().mockResolvedValue({
+      success: false,
+      error: 'Something went wrong',
+      durationMs: 0,
+      truncated: false,
+    })
+
+    const toolCalls: ToolCall[] = [{ id: 'call-1', name: 'step_done', arguments: {} }]
+
+    const result = await executeTools('msg-1', toolCalls, makeCtx(), append)
+
+    expect(result.stepDoneCalled).toBe(false)
   })
 
   it('detects return_value tool and includes it in result', async () => {

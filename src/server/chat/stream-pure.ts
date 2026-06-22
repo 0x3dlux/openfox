@@ -585,7 +585,7 @@ export function createToolResultEvent(messageId: string, toolCallId: string, res
  */
 export function createChatDoneEvent(
   messageId: string,
-  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated',
+  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' | 'step_done',
   stats?: MessageStats,
   agentType?: 'sub-agent',
 ): TurnEvent {

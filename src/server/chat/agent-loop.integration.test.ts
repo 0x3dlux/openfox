@@ -260,6 +260,50 @@ describe('agentLoop integration', () => {
     expect(truncatedEvents.length).toBeGreaterThanOrEqual(1)
   })
 
+  it('breaks loop immediately when step_done is called', async () => {
+    const append = vi.fn()
+    const toolCall: ToolCall = { id: 'call-1', name: 'step_done', arguments: {} }
+
+    ;(consumeStreamGenerator as any).mockResolvedValueOnce(
+      makeStreamResult({ toolCalls: [toolCall], finishReason: 'tool_calls' }),
+    )
+    ;(executeTools as any).mockResolvedValue({
+      toolMessages: [
+        { role: 'tool', content: 'Step completion signal recorded.', source: 'history', toolCallId: 'call-1' },
+      ],
+      stepDoneCalled: true,
+    })
+
+    await runTopLevelAgentLoop(makeConfig({ append }), turnMetrics)
+
+    // Should have called streamLLM only once (no second LLM call after step_done)
+    expect(consumeStreamGenerator).toHaveBeenCalledTimes(1)
+    // Should emit chat.done
+    const chatDoneEvents = append.mock.calls.filter((args: unknown[]) => (args[0] as any).type === 'chat.done')
+    expect(chatDoneEvents.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('continues loop when step_done is not called', async () => {
+    const append = vi.fn()
+    const toolCall: ToolCall = { id: 'call-1', name: 'run_command', arguments: { command: 'echo hi' } }
+
+    ;(consumeStreamGenerator as any)
+      .mockResolvedValueOnce(makeStreamResult({ toolCalls: [toolCall], finishReason: 'tool_calls' }))
+      .mockResolvedValueOnce(makeStreamResult({ content: 'Done', finishReason: 'stop' }))
+    ;(executeTools as any).mockResolvedValue({
+      toolMessages: [{ role: 'tool', content: 'output', source: 'history', toolCallId: 'call-1' }],
+      stepDoneCalled: false,
+    })
+
+    await runTopLevelAgentLoop(makeConfig({ append }), turnMetrics)
+
+    // Should have called streamLLM twice (tool calls then final response)
+    expect(consumeStreamGenerator).toHaveBeenCalledTimes(2)
+    // Should emit chat.done at the end
+    const chatDoneEvents = append.mock.calls.filter((args: unknown[]) => (args[0] as any).type === 'chat.done')
+    expect(chatDoneEvents.length).toBeGreaterThanOrEqual(1)
+  })
+
   it('auto-compacts within the loop when threshold is exceeded, then continues normally', async () => {
     const append = vi.fn()
     const injectAgentReminder = vi.fn()

@@ -414,6 +414,9 @@ export async function executeWorkflow(
               ? { injectKickoff: () => injectWorkflowKickoffIfNeeded(sessionManager, sessionId, es) }
               : {}),
             onToolExecuted: (toolCall: ToolCall, toolResult: ToolResult) => {
+              // Also detected in execute-tools.ts (stepDoneCalled flag) to break
+              // the agent loop immediately. This layer handles workflow orchestration
+              // (transition evaluation) after the agent turn returns.
               if (toolCall.name === 'step_done' && toolResult.success) {
                 stepDoneCalled = true
               }

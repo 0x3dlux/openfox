@@ -260,7 +260,7 @@ export function createChatMessageUpdatedMessage(
 
 export function createChatDoneMessage(
   messageId: string,
-  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated',
+  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' | 'step_done',
   stats?: ChatDonePayload['stats'],
   agentType?: 'sub-agent',
 ): ServerMessage<ChatDonePayload> {

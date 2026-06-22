@@ -12,7 +12,7 @@ export interface FormatRetry {
   timestamp: number
 }
 
-type CompleteReason = 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
+type CompleteReason = 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' | 'step_done'
 
 function markComplete(msg: { isComplete?: boolean; completeReason?: CompleteReason }, reason: CompleteReason): void {
   msg.isComplete = true
@@ -153,7 +153,7 @@ export function applyEvents<
     preparingToolCalls?: PreparingToolCall[]
     formatRetries?: FormatRetry[]
     isComplete?: boolean
-    completeReason?: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' | 'truncated'
+    completeReason?: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' | 'step_done'
   },
 >(
   initialMessages: T[],

@@ -33,6 +33,7 @@ export interface ToolBatchResult {
   criteriaChanged: boolean
   returnValueContent?: string | undefined
   returnValueResult?: string | undefined
+  stepDoneCalled?: boolean | undefined
 }
 
 export async function executeTools(
@@ -44,6 +45,7 @@ export async function executeTools(
   const toolMessages: RequestContextMessage[] = []
   let returnValueContent: string | undefined
   let returnValueResult: string | undefined
+  let stepDoneCalled = false
 
   if (ctx.signal?.aborted) {
     throw new Error('Aborted')
@@ -155,6 +157,16 @@ export async function executeTools(
       returnValueResult = (toolCall.arguments as Record<string, unknown>)['result'] as string | undefined
     }
 
+    // Detected at two levels:
+    //   1. Here in execute-tools: signals the agent loop to break immediately
+    //      (no further LLM calls after step_done).
+    //   2. In executor.ts via onToolExecuted callback: signals the workflow
+    //      orchestrator to evaluate transitions and move to the next step.
+    // Both checks are needed — they serve different concerns.
+    if (toolCall.name === 'step_done' && toolResult.success) {
+      stepDoneCalled = true
+    }
+
     const content = stripAnsi(
       toolResult.success
         ? (toolResult.output ?? 'Success')
@@ -187,5 +199,5 @@ export async function executeTools(
     })
   }
 
-  return { toolMessages, criteriaChanged: false, returnValueContent, returnValueResult }
+  return { toolMessages, criteriaChanged: false, returnValueContent, returnValueResult, stepDoneCalled }
 }

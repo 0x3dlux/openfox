@@ -817,7 +817,7 @@ export function foldSessionState(
       case 'chat.done': {
         const data = event.data as {
           messageId: string
-          reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
+          reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' | 'step_done'
           stats?: MessageStats
         }
         messageStats.push({

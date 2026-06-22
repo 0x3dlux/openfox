@@ -294,7 +294,7 @@ export type TurnEvent =
       type: 'chat.done'
       data: {
         messageId: string
-        reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
+        reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' | 'step_done'
         stats?: MessageStats
         agentType?: 'sub-agent' // Set when this completion is from a sub-agent
       }
@@ -462,7 +462,7 @@ export interface TaskStats {
 
 export interface MessageStatsEntry {
   messageId: string
-  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
+  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' | 'step_done'
   stats?: MessageStats
 }
 
@@ -496,7 +496,7 @@ export interface SnapshotMessage {
   preparingToolCalls?: PreparingToolCall[]
   formatRetries?: FormatRetry[]
   isComplete?: boolean
-  completeReason?: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated'
+  completeReason?: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' | 'step_done'
   segments?: MessageSegment[]
   stats?: MessageStats
   timestamp: number

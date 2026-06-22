@@ -29,7 +29,7 @@ import { getAllInstructions } from '../context/instructions.js'
 import { getEnabledSkillMetadata } from '../skills/registry.js'
 import { getRuntimeConfig } from '../runtime-config.js'
 import { getGlobalConfigDir } from '../../cli/paths.js'
-import { createChatMessageUpdatedMessage } from '../ws/protocol.js'
+import { createChatMessageUpdatedMessage, createChatDoneMessage } from '../ws/protocol.js'
 import { executeTools, type ToolBatchContext } from './execute-tools.js'
 import { createRetryLimiter, type RetryLimiter } from './retry-limiter.js'
 import { drainQueue } from './drain-queue.js'
@@ -52,6 +52,35 @@ function emitPartialDoneEvents(
     }),
   )
   append(createChatDoneEvent(assistantMsgId, 'stopped', stats))
+}
+
+function emitDoneAndBreak(
+  assistantMsgId: string,
+  segments: import('../../shared/types.js').MessageSegment[] | undefined,
+  statsIdentity: import('../../shared/types.js').StatsIdentity,
+  mode: import('../../shared/types.js').ToolMode,
+  turnMetrics: TurnMetrics,
+  append: (event: import('../events/types.js').TurnEvent) => void,
+  onMessage: ((msg: ServerMessage) => void) | undefined,
+  reason: 'complete' | 'stopped' | 'error' | 'waiting_for_user' | 'truncated' | 'step_done',
+): void {
+  const stats = turnMetrics.buildStats(statsIdentity, mode)
+  append(
+    createMessageDoneEvent(assistantMsgId, {
+      ...(segments ? { segments } : {}),
+      stats,
+    }),
+  )
+  append(createChatDoneEvent(assistantMsgId, reason, stats))
+  if (onMessage) {
+    onMessage(
+      createChatMessageUpdatedMessage(assistantMsgId, {
+        isStreaming: false,
+        stats,
+      }),
+    )
+    onMessage(createChatDoneMessage(assistantMsgId, reason, stats))
+  }
 }
 
 // ============================================================================
@@ -392,28 +421,33 @@ ${COMPACTION_PROMPT}`,
         }
         batchContext.agentTimeout = getRuntimeConfig().agent.toolTimeout
         const batchResult = await executeTools(assistantMsgId, result.toolCalls, batchContext, append)
+        if (batchResult.stepDoneCalled) {
+          emitDoneAndBreak(
+            assistantMsgId,
+            result.segments,
+            statsIdentity,
+            mode,
+            turnMetrics,
+            append,
+            onMessage,
+            'step_done',
+          )
+          break
+        }
         if (batchResult.returnValueContent) {
           returnValueContent = batchResult.returnValueContent
           returnValueResult = batchResult.returnValueResult
           if (config.breakOnReturnValue) {
-            const stats = turnMetrics.buildStats(statsIdentity, mode)
-            append(
-              createMessageDoneEvent(assistantMsgId, {
-                segments: result.segments,
-                stats,
-              }),
+            emitDoneAndBreak(
+              assistantMsgId,
+              result.segments,
+              statsIdentity,
+              mode,
+              turnMetrics,
+              append,
+              onMessage,
+              'complete',
             )
-            append(createChatDoneEvent(assistantMsgId, 'complete', stats))
-            if (onMessage) {
-              onMessage(
-                createChatMessageUpdatedMessage(assistantMsgId, {
-                  isStreaming: false,
-                  stats,
-                }),
-              )
-              const { createChatDoneMessage } = await import('../ws/protocol.js')
-              onMessage(createChatDoneMessage(assistantMsgId, 'complete', stats))
-            }
             break
           }
         }

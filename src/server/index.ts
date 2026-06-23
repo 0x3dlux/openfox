@@ -882,10 +882,11 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   // Onboarding: fetch models by URL (before provider is saved)
   app.get('/api/providers/models', async (req, res) => {
     const url = req.query['url'] as string | undefined
+    const apiKey = req.query['apiKey'] as string | undefined
     if (!url) return res.status(400).json({ error: 'url is required' })
     try {
       const { fetchModelsWithContext } = await import('./provider-manager.js')
-      const models = await fetchModelsWithContext(url)
+      const models = await fetchModelsWithContext(url, apiKey)
       if (models.length === 0) {
         return res.status(404).json({ error: `No models found at ${buildModelsUrl(url)}`, url })
       }

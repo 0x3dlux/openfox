@@ -294,7 +294,9 @@ export function ProviderModal({
     setFetchError(null)
     setModels([])
     try {
-      const response = await authFetch(`/api/providers/models?url=${encodeURIComponent(url)}`)
+      const params = new URLSearchParams({ url })
+      if (formApiKey) params.set('apiKey', formApiKey)
+      const response = await authFetch(`/api/providers/models?${params.toString()}`)
       if (response.ok) {
         const data = (await response.json()) as { models: ModelInfo[]; url: string }
         if (data.models?.length) {

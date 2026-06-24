@@ -150,6 +150,7 @@ export async function runCli(options: { mode: Mode }): Promise<void> {
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
       service: { type: 'boolean' },
+      follow: { type: 'boolean', short: 'f' },
     },
     allowPositionals: true,
     strict: true,
@@ -188,6 +189,9 @@ export async function runCli(options: { mode: Mode }): Promise<void> {
     case 'service': {
       const { runServiceCommand } = await import('./service.js')
       const [, subcommand, ...serviceArgs] = positionals
+      if (values.follow) {
+        serviceArgs.push('-f')
+      }
       if (subcommand === '--help' || subcommand === '-h' || values.help) {
         runServiceCommand(mode, undefined)
       } else {

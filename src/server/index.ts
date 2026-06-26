@@ -14,7 +14,8 @@ import { detectModel, getLlmStatus, getBackendDisplayName } from './llm/index.js
 import { ensureVersionPrefix, buildModelsUrl } from './llm/url-utils.js'
 import { createMockLLMClient } from './llm/mock.js'
 import { createProviderManager, parseDefaultModelSelection } from './provider-manager.js'
-import { createToolRegistry } from './tools/index.js'
+import { createToolRegistry, setMcpTools } from './tools/index.js'
+import { McpManager, createMcpTools } from './mcp/index.js'
 import { createWebSocketServer } from './ws/index.js'
 import { SessionManager } from './session/manager.js'
 import { setRuntimeConfig } from './runtime-config.js'
@@ -125,6 +126,23 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   )
 
   const toolRegistry = createToolRegistry()
+
+  // Initialize MCP manager and connect to configured servers
+  const mcpManager = new McpManager()
+  const mcpServers = (config.mcpServers ?? {}) as Record<string, import('./mcp/types.js').McpServerConfig>
+  Promise.all(
+    Object.entries(mcpServers).map(([name, serverConfig]) =>
+      mcpManager.addServer(name, serverConfig).catch((err) => {
+        logger.warn('Failed to connect MCP server on startup', { name, error: String(err) })
+      }),
+    ),
+  ).then(() => {
+    const mcpTools = createMcpTools(mcpManager)
+    if (mcpTools.length > 0) {
+      setMcpTools(mcpTools)
+      logger.info('MCP tools registered', { count: mcpTools.length })
+    }
+  })
 
   const app = express()
 
@@ -1191,6 +1209,168 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     })
   })
 
+  // MCP Server endpoints
+  async function rebuildMcpTools(): Promise<void> {
+    const { createMcpTools } = await import('./mcp/tool-adapter.js')
+    const { setMcpTools } = await import('./tools/index.js')
+    const mcpTools = createMcpTools(mcpManager)
+    setMcpTools(mcpTools)
+  }
+
+  app.get('/api/mcp/servers', (_req, res) => {
+    const servers = mcpManager.getAllServers()
+    res.json({ servers })
+  })
+
+  app.post('/api/mcp/servers/test', async (req, res) => {
+    const { name, command, args, env } = req.body as {
+      name?: string
+      command?: string
+      args?: string[]
+      env?: Record<string, string>
+    }
+    if (!command) {
+      return res.status(400).json({ error: 'command is required' })
+    }
+    try {
+      const testManager = new McpManager()
+      const testConfig: import('./mcp/types.js').McpServerConfig = {
+        transport: 'stdio',
+        command,
+        ...(args && args.length > 0 ? { args } : {}),
+        ...(env && Object.keys(env).length > 0 ? { env } : {}),
+      }
+      await testManager.addServer(name ?? 'test', testConfig)
+      const server = testManager.getServer(name ?? 'test')
+      await testManager.disconnectAll()
+      if (server?.status === 'connected') {
+        res.json({ success: true, tools: server.tools.map((t) => t.name) })
+      } else {
+        res.json({ success: false, error: server?.error ?? 'Connection failed' })
+      }
+    } catch (error) {
+      res.status(400).json({ success: false, error: error instanceof Error ? error.message : String(error) })
+    }
+  })
+
+  app.post('/api/mcp/servers', async (req, res) => {
+    const { name, transport, command, args, env, url } = req.body as {
+      name?: string
+      transport?: string
+      command?: string
+      args?: string[]
+      env?: Record<string, string>
+      url?: string
+    }
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' })
+    }
+    try {
+      const serverCfg: import('./mcp/types.js').McpServerConfig = {
+        transport: (transport as 'stdio' | 'http') ?? 'stdio',
+        ...(command ? { command } : {}),
+        ...(args && args.length > 0 ? { args } : {}),
+        ...(env && Object.keys(env).length > 0 ? { env } : {}),
+        ...(url ? { url } : {}),
+      }
+      await mcpManager.addServer(name, serverCfg)
+      const server = mcpManager.getServer(name)
+
+      // Persist to global config
+      const { loadGlobalConfig, saveGlobalConfig } = await import('../cli/config.js')
+      const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+      const updatedMcpServers = { ...(globalConfig.mcpServers ?? {}), [name]: serverCfg }
+      await saveGlobalConfig(config.mode ?? 'production', {
+        ...globalConfig,
+        mcpServers: updatedMcpServers as Record<string, import('./mcp/types.js').McpServerConfig>,
+      })
+
+      await rebuildMcpTools()
+
+      // Set dynamic context changed so user sees "Update system prompt" banner
+      if (server) {
+        const sessions = sessionManager.listSessions()
+        for (const s of sessions) {
+          sessionManager.setDynamicContextChanged(s.id, true)
+        }
+      }
+
+      res.status(201).json({ server })
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
+    }
+  })
+
+  app.delete('/api/mcp/servers/:name', async (req, res) => {
+    const { name } = req.params
+    const server = mcpManager.getServer(name)
+    if (!server) {
+      return res.status(404).json({ error: `MCP server '${name}' not found` })
+    }
+    mcpManager.removeServer(name)
+
+    // Persist to global config
+    const { loadGlobalConfig, saveGlobalConfig } = await import('../cli/config.js')
+    const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+    const updatedMcpServers = { ...(globalConfig.mcpServers ?? {}) }
+    delete updatedMcpServers[name]
+    await saveGlobalConfig(config.mode ?? 'production', {
+      ...globalConfig,
+      mcpServers: updatedMcpServers as Record<string, import('./mcp/types.js').McpServerConfig>,
+    })
+
+    await rebuildMcpTools()
+
+    // Set dynamic context changed
+    const sessions = sessionManager.listSessions()
+    for (const s of sessions) {
+      sessionManager.setDynamicContextChanged(s.id, true)
+    }
+
+    res.json({ success: true })
+  })
+
+  app.put('/api/mcp/servers/:name/tools/:toolName', async (req, res) => {
+    const { name, toolName } = req.params
+    const { enabled } = req.body as { enabled?: boolean }
+    if (enabled === undefined) {
+      return res.status(400).json({ error: 'enabled is required' })
+    }
+    try {
+      await mcpManager.setToolEnabled(name, toolName, enabled)
+
+      // Persist disabledTools to global config
+      const server = mcpManager.getServer(name)
+      if (server) {
+        const { loadGlobalConfig, saveGlobalConfig } = await import('../cli/config.js')
+        const globalConfig = await loadGlobalConfig(config.mode ?? 'production')
+        const mcpServers = { ...(globalConfig.mcpServers ?? {}) }
+        const serverCfg = mcpServers[name]
+        if (serverCfg) {
+          const disabledTools = server.tools.filter((t) => !t.enabled).map((t) => t.name)
+          const cfg = { ...serverCfg, ...(disabledTools.length > 0 ? { disabledTools } : { disabledTools: undefined }) }
+          mcpServers[name] = cfg
+          await saveGlobalConfig(config.mode ?? 'production', {
+            ...globalConfig,
+            mcpServers: mcpServers as Record<string, import('./mcp/types.js').McpServerConfig>,
+          })
+        }
+      }
+
+      await rebuildMcpTools()
+
+      // Set dynamic context changed
+      const sessions = sessionManager.listSessions()
+      for (const s of sessions) {
+        sessionManager.setDynamicContextChanged(s.id, true)
+      }
+
+      res.json({ success: true })
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
+    }
+  })
+
   // CRUD routes (extracted to routes/)
   const projectDir = config.workdir
   app.use('/api/skills', createSkillRoutes(configDir, projectDir))
@@ -1425,6 +1605,8 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
   const httpServer = createHttpServer(app)
 
   // Create WebSocket server attached to HTTP server
+  const { setMcpManagerForWs } = await import('./ws/server.js')
+  setMcpManagerForWs(mcpManager)
   const wssExports = createWebSocketServer(
     httpServer,
     config,
@@ -1487,6 +1669,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
         logger.info('Shutting down...')
         void (async () => {
           await devServerManager.stopAll()
+          await mcpManager.disconnectAll()
           const { stopAllInspectProxies } = await import('./dev-server/inspect-proxy.js')
           stopAllInspectProxies()
           const { cleanupAllProcesses } = await import('./tools/background-process/store.js')

@@ -76,6 +76,7 @@ export interface BaseAssemblyInput {
 export interface AssemblyResult {
   systemPrompt: string
   messages: MinimalMessage[]
+  tools: LLMToolDefinition[]
 }
 
 export function createAssemblyResult(input: {
@@ -94,6 +95,7 @@ export function createAssemblyResult(input: {
   return {
     systemPrompt: input.systemPrompt,
     messages: messagesForLLM.map((message) => messageToMinimal(message)),
+    tools: input.requestTools,
   }
 }
 

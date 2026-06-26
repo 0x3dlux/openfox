@@ -569,6 +569,20 @@ export interface Config {
   workdir: string
   /** Active workflow ID (defaults to "default") */
   activeWorkflowId?: string | undefined
+  /** MCP server configurations */
+  mcpServers?:
+    | Record<
+        string,
+        {
+          transport: 'stdio' | 'http'
+          command?: string
+          args?: string[]
+          env?: Record<string, string>
+          url?: string
+          disabledTools?: string[]
+        }
+      >
+    | undefined
 }
 
 // ============================================================================

@@ -75,12 +75,22 @@ const visionFallbackSchema = z.object({
   timeout: z.number().default(120),
 })
 
+const mcpServerSchema = z.object({
+  transport: z.enum(['stdio', 'http']).default('stdio'),
+  command: z.string().optional(),
+  args: z.array(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
+  url: z.string().optional(),
+  disabledTools: z.array(z.string()).optional(),
+})
+
 const defaultVisionFallback = { enabled: false, url: 'http://localhost:11434', model: 'qwen3.5:0.8b', timeout: 120 }
 
 // New config schema with providers array
 const configSchema = z
   .object({
     providers: z.array(providerSchema).default([]),
+    mcpServers: z.record(z.string(), mcpServerSchema).optional(),
     defaultModelSelection: z.string().optional(),
     activeProviderId: z.string().optional(),
     activeWorkflowId: z.string().optional(),
@@ -92,6 +102,7 @@ const configSchema = z
   })
   .transform((data) => ({
     providers: data.providers ?? [],
+    mcpServers: data.mcpServers,
     defaultModelSelection: data.defaultModelSelection,
     activeProviderId: data.activeProviderId,
     activeWorkflowId: data.activeWorkflowId,
@@ -320,6 +331,7 @@ export async function saveGlobalConfig(mode: Mode, config: Partial<GlobalConfig>
   const configPath = getGlobalConfigPath(mode)
   const fullConfig: GlobalConfig = {
     providers: config.providers ?? [],
+    mcpServers: config.mcpServers,
     defaultModelSelection: config.defaultModelSelection,
     activeProviderId: config.activeProviderId,
     activeWorkflowId: config.activeWorkflowId,
@@ -369,6 +381,7 @@ export function setDefaultModelSelection(
   const defaultModelSelection = `${providerId}/${model}`
   return {
     providers: config.providers?.map((p) => ({ ...p, isActive: p.id === providerId })) ?? [],
+    mcpServers: config.mcpServers,
     defaultModelSelection,
     activeProviderId: providerId,
     activeWorkflowId: config.activeWorkflowId,
@@ -400,6 +413,7 @@ export function addProvider(config: Partial<GlobalConfig>, provider: Omit<Provid
       ...(config.providers ?? []).map((p) => (shouldActivate ? { ...p, isActive: false } : p)),
       { ...newProvider, isActive: shouldActivate },
     ],
+    mcpServers: config.mcpServers,
     defaultModelSelection: shouldActivate ? `${newProvider.id}/auto` : config.defaultModelSelection,
     activeProviderId: shouldActivate ? newProvider.id : config.activeProviderId,
     activeWorkflowId: config.activeWorkflowId,
@@ -451,6 +465,7 @@ export function removeProvider(config: Partial<GlobalConfig>, providerId: string
 
   return {
     providers: filtered.map((p) => ({ ...p, isActive: p.id === newActiveId })),
+    mcpServers: config.mcpServers,
     activeProviderId: newActiveId,
     defaultModelSelection: newDefaultModelSelection,
     activeWorkflowId: config.activeWorkflowId,
@@ -472,6 +487,7 @@ export function activateProvider(config: Partial<GlobalConfig>, providerId: stri
   if (!provider) {
     return {
       providers: config.providers ?? [],
+      mcpServers: config.mcpServers,
       defaultModelSelection: config.defaultModelSelection,
       activeProviderId: config.activeProviderId,
       activeWorkflowId: config.activeWorkflowId,
@@ -490,6 +506,7 @@ export function activateProvider(config: Partial<GlobalConfig>, providerId: stri
 
   return {
     providers: (config.providers ?? []).map((p) => ({ ...p, isActive: p.id === providerId })),
+    mcpServers: config.mcpServers,
     defaultModelSelection: config.defaultModelSelection,
     activeProviderId: providerId,
     activeWorkflowId: config.activeWorkflowId,

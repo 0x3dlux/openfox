@@ -6,6 +6,7 @@ import { InstructionsTab } from './tabs/InstructionsTab'
 import { DisplayTab } from './tabs/DisplayTab'
 import { AdvancedTab } from './tabs/AdvancedTab'
 import { KeybindingsTab } from './tabs/KeybindingsTab'
+import { McpTab } from './tabs/McpTab'
 import { wsClient } from '../../lib/ws'
 
 interface GlobalSettingsModalProps {
@@ -13,7 +14,7 @@ interface GlobalSettingsModalProps {
   onClose: () => void
 }
 
-type Tab = 'instructions' | 'skills' | 'notifications' | 'display' | 'keybindings' | 'advanced'
+type Tab = 'instructions' | 'skills' | 'notifications' | 'display' | 'keybindings' | 'advanced' | 'mcp'
 
 export function GlobalSettingsModal({ isOpen, onClose }: GlobalSettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>('instructions')
@@ -49,6 +50,7 @@ export function GlobalSettingsModal({ isOpen, onClose }: GlobalSettingsModalProp
             active={activeTab === 'keybindings'}
             onClick={() => setActiveTab('keybindings')}
           />
+          <TabButton label="MCP" active={activeTab === 'mcp'} onClick={() => setActiveTab('mcp')} />
           <TabButton label="Advanced" active={activeTab === 'advanced'} onClick={() => setActiveTab('advanced')} />
         </div>
 
@@ -62,6 +64,11 @@ export function GlobalSettingsModal({ isOpen, onClose }: GlobalSettingsModalProp
         )}
         {activeTab === 'display' && <DisplayTab />}
         {activeTab === 'keybindings' && <KeybindingsTab />}
+        {activeTab === 'mcp' && (
+          <div className="max-h-[60vh] overflow-y-auto">
+            <McpTab />
+          </div>
+        )}
         {activeTab === 'advanced' && <AdvancedTab onClose={onClose} />}
       </div>
     </Modal>

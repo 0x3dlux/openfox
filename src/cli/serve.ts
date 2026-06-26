@@ -67,6 +67,19 @@ export async function runServe(options: ServeOptions): Promise<void> {
     activeProviderId: globalConfig.activeProviderId,
     activeWorkflowId: globalConfig.activeWorkflowId,
     defaultModelSelection: globalConfig.defaultModelSelection,
+    mcpServers: globalConfig.mcpServers as
+      | Record<
+          string,
+          {
+            transport: 'stdio' | 'http'
+            command?: string
+            args?: string[]
+            env?: Record<string, string>
+            url?: string
+            disabledTools?: string[]
+          }
+        >
+      | undefined,
     // Workdir precedence: .env override → global config → process.cwd()
     // Normalize: remove trailing slash to prevent double slashes in paths
     workdir: (process.env['OPENFOX_WORKDIR'] ?? globalConfig.workspace?.workdir ?? process.cwd()).replace(/\/$/, ''),

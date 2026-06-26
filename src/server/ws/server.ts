@@ -31,6 +31,13 @@ import { logger } from '../utils/logger.js'
 import { devServerManager } from '../dev-server/manager.js'
 import { onProcessEvent } from '../tools/background-process/manager.js'
 
+// Module-level MCP manager accessor (set during server setup, read by WS handlers)
+let _mcpManager: { getToolDefinitions(): import('../llm/types.js').LLMToolDefinition[] } | undefined
+
+export function setMcpManagerForWs(mgr: typeof _mcpManager): void {
+  _mcpManager = mgr
+}
+
 import { getAuthConfig, isValidToken } from '../auth.js'
 import {
   parseClientMessage,
@@ -949,7 +956,17 @@ async function handleClientMessage(
           const configDir = getGlobalConfigDir(runtimeConfig.mode ?? 'production')
           const skills = await getEnabledSkillMetadata(configDir, runtimeConfig.workdir)
 
-          const currentHash = computeDynamicContextHash(instructionContent, skills)
+          const mcpTools = (
+            _mcpManager ? _mcpManager.getToolDefinitions() : []
+          ) as import('../llm/types.js').LLMToolDefinition[]
+          const toolFingerprint = mcpTools
+            .map(
+              (t: import('../llm/types.js').LLMToolDefinition) =>
+                `${t.function.name}:${JSON.stringify(t.function.parameters)}`,
+            )
+            .sort()
+            .join('|')
+          const currentHash = computeDynamicContextHash(instructionContent, skills, toolFingerprint)
           const cachedHash = sessionManager.getCachedPrompt(sessionId)?.hash
 
           if (cachedHash) {
@@ -997,7 +1014,17 @@ async function handleClientMessage(
           const configDir = getGlobalConfigDir(runtimeConfig.mode ?? 'production')
           const skills = await getEnabledSkillMetadata(configDir, runtimeConfig.workdir)
 
-          const dynamicHash = computeDynamicContextHash(instructionContent, skills)
+          const mcpTools = (
+            _mcpManager ? _mcpManager.getToolDefinitions() : []
+          ) as import('../llm/types.js').LLMToolDefinition[]
+          const toolFingerprint = mcpTools
+            .map(
+              (t: import('../llm/types.js').LLMToolDefinition) =>
+                `${t.function.name}:${JSON.stringify(t.function.parameters)}`,
+            )
+            .sort()
+            .join('|')
+          const dynamicHash = computeDynamicContextHash(instructionContent, skills, toolFingerprint)
 
           const allAgents = await loadAllAgentsDefault()
           const subAgentDefs = getSubAgents(allAgents)
@@ -1008,7 +1035,7 @@ async function handleClientMessage(
             subAgentDefs,
           )
 
-          sessionManager.setCachedPrompt(sessionId, systemPrompt, dynamicHash)
+          sessionManager.setCachedPrompt(sessionId, systemPrompt, mcpTools, dynamicHash)
           sessionManager.setDynamicContextChanged(sessionId, false)
 
           const newContextState = sessionManager.getContextState(sessionId)

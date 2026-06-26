@@ -1,0 +1,35 @@
+import type { LLMToolDefinition } from '../llm/types.js'
+
+export interface McpServerConfig {
+  transport: 'stdio' | 'http'
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  url?: string
+  disabledTools?: string[]
+}
+
+export interface McpServerState {
+  name: string
+  config: McpServerConfig
+  status: 'connected' | 'disconnected' | 'error'
+  tools: McpToolInfo[]
+  estimatedTokens: number
+  error?: string
+}
+
+export interface McpToolInfo {
+  name: string
+  description?: string
+  inputSchema: Record<string, unknown>
+  enabled: boolean
+  estimatedTokens: number
+}
+
+export interface McpManagerOptions {
+  onServersChanged?: () => void
+}
+
+export interface McpToolDefinition extends LLMToolDefinition {
+  serverName: string
+}

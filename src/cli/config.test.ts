@@ -427,4 +427,71 @@ describe('config', () => {
       expect(defaultModel).toBe('Intel/Qwen3.5-397B')
     })
   })
+
+  describe('mcpServers config', () => {
+    it('should parse valid mcpServers config', () => {
+      const raw = {
+        providers: [],
+        mcpServers: {
+          brave: {
+            transport: 'stdio',
+            command: 'npx',
+            args: ['@brave/brave-search-mcp-server'],
+            env: { BRAVE_API_KEY: 'test-key' },
+          },
+          filesystem: {
+            transport: 'stdio',
+            command: 'node',
+            args: ['server.js', '/tmp'],
+          },
+        },
+      }
+      const { config } = migrateConfig(raw)
+      expect(config.mcpServers).toBeDefined()
+      expect(Object.keys(config.mcpServers!)).toEqual(['brave', 'filesystem'])
+      expect(config.mcpServers!['brave']!.command).toBe('npx')
+      expect(config.mcpServers!['brave']!.transport).toBe('stdio')
+      expect(config.mcpServers!['brave']!.env).toEqual({ BRAVE_API_KEY: 'test-key' })
+      expect(config.mcpServers!['filesystem']!.args).toEqual(['server.js', '/tmp'])
+    })
+
+    it('should parse mcpServers with disabledTools', () => {
+      const raw = {
+        providers: [],
+        mcpServers: {
+          test: {
+            transport: 'stdio',
+            command: 'node',
+            disabledTools: ['tool_a', 'tool_b'],
+          },
+        },
+      }
+      const { config } = migrateConfig(raw)
+      expect(config.mcpServers!['test']!.disabledTools).toEqual(['tool_a', 'tool_b'])
+    })
+
+    it('should handle missing mcpServers', () => {
+      const raw = { providers: [] }
+      const { config } = migrateConfig(raw)
+      expect(config.mcpServers).toBeUndefined()
+    })
+
+    it('should preserve mcpServers through save and load cycle', async () => {
+      const raw = {
+        providers: [],
+        mcpServers: {
+          brave: {
+            transport: 'stdio',
+            command: 'npx',
+            args: ['@brave/brave-search-mcp-server'],
+          },
+        },
+      }
+      const { config } = migrateConfig(raw)
+      await saveGlobalConfig('test', config)
+      const loaded = await loadGlobalConfig('test')
+      expect(loaded.mcpServers).toBeDefined()
+      expect(loaded.mcpServers!['brave']!.command).toBe('npx')
+    })
+  })
 })

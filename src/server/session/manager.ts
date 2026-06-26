@@ -90,7 +90,10 @@ export class SessionManager {
   private events = new EventEmitter<SessionEvents>()
   private activeSessionId: string | null = null
   private providerManager: import('../provider-manager.js').ProviderManager
-  private cachedPromptStore = new Map<string, { systemPrompt: string; hash: string }>()
+  private cachedPromptStore = new Map<
+    string,
+    { systemPrompt: string; tools: import('../llm/types.js').LLMToolDefinition[]; hash: string }
+  >()
   private dynamicContextChangedStore = new Map<string, boolean>()
 
   constructor(providerManager: import('../provider-manager.js').ProviderManager) {
@@ -820,11 +823,18 @@ export class SessionManager {
     logger.debug('updateExecutionState called', { sessionId, updates })
   }
 
-  setCachedPrompt(sessionId: string, systemPrompt: string, hash: string): void {
-    this.cachedPromptStore.set(sessionId, { systemPrompt, hash })
+  setCachedPrompt(
+    sessionId: string,
+    systemPrompt: string,
+    tools: import('../llm/types.js').LLMToolDefinition[],
+    hash: string,
+  ): void {
+    this.cachedPromptStore.set(sessionId, { systemPrompt, tools, hash })
   }
 
-  getCachedPrompt(sessionId: string): { systemPrompt: string; hash: string } | undefined {
+  getCachedPrompt(
+    sessionId: string,
+  ): { systemPrompt: string; tools: import('../llm/types.js').LLMToolDefinition[]; hash: string } | undefined {
     return this.cachedPromptStore.get(sessionId)
   }
 
@@ -1005,6 +1015,7 @@ export class SessionManager {
     if (!hasCachedPrompt && eventState.cachedSystemPrompt && eventState.dynamicContextHash) {
       this.cachedPromptStore.set(dbSession.id, {
         systemPrompt: eventState.cachedSystemPrompt,
+        tools: [],
         hash: eventState.dynamicContextHash,
       })
     }

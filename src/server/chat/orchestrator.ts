@@ -347,8 +347,12 @@ export async function runAgentTurn(
       onMessage: options.onMessage,
       assembleRequest: (input) => {
         const cached = options.sessionManager.getCachedPrompt(options.sessionId)
+        const toolFingerprint = input.promptTools
+          .map((t) => `${t.function.name}:${JSON.stringify(t.function.parameters)}`)
+          .sort()
+          .join('|')
         if (cached) {
-          const currentHash = computeDynamicContextHash(instructionContent ?? '', skills)
+          const currentHash = computeDynamicContextHash(instructionContent ?? '', skills, toolFingerprint)
           if (cached.hash !== currentHash) {
             options.sessionManager.setDynamicContextChanged(options.sessionId, true)
           }
@@ -356,7 +360,7 @@ export async function runAgentTurn(
             systemPrompt: cached.systemPrompt,
             messages: input.messages,
             injectedFiles: input.injectedFiles,
-            requestTools: input.promptTools,
+            requestTools: cached.tools.length > 0 ? cached.tools : input.promptTools,
             toolChoice: input.toolChoice,
           })
         }
@@ -366,8 +370,8 @@ export async function runAgentTurn(
           subAgentDefs,
           modelName: options.llmClient.getModel(),
         })
-        const hash = computeDynamicContextHash(instructionContent ?? '', skills)
-        options.sessionManager.setCachedPrompt(options.sessionId, result.systemPrompt, hash)
+        const hash = computeDynamicContextHash(instructionContent ?? '', skills, toolFingerprint)
+        options.sessionManager.setCachedPrompt(options.sessionId, result.systemPrompt, result.tools, hash)
         return result
       },
       getToolRegistry: () => getToolRegistryForAgent(agentDef),

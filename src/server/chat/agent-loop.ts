@@ -110,6 +110,7 @@ export interface TopLevelLoopConfig {
   }) => {
     systemPrompt: string
     messages: MinimalMessage[]
+    tools: LLMToolDefinition[]
   }
   getToolRegistry: () => ToolRegistry
   onToolExecuted?: ((toolCall: ToolCall, result: ToolResult) => void) | undefined
@@ -235,7 +236,7 @@ export async function runTopLevelAgentLoop(
       systemPrompt: assembledRequest.systemPrompt,
       llmClient,
       messages: assembledRequest.messages,
-      tools: toolRegistry.definitions,
+      tools: assembledRequest.tools,
       toolChoice: 'auto',
       signal,
       ...(config.retryPatterns ? { retryPatterns: config.retryPatterns } : {}),

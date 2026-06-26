@@ -228,9 +228,15 @@ export function createRegistryFromTools(
 
 // All tools by name for dynamic registry creation
 // Lazy initialization to avoid circular dependency issues during module load
+let mcpToolsOverride: Tool[] = []
+
+export function setMcpTools(tools: Tool[]): void {
+  mcpToolsOverride = tools
+}
+
 function getAllToolsMap(): Map<string, Tool> {
-  return new Map<string, Tool>([
-    ...[
+  const builtInTools: [string, Tool][] = (
+    [
       readFileTool,
       writeFileTool,
       editFileTool,
@@ -244,8 +250,10 @@ function getAllToolsMap(): Map<string, Tool> {
       devServerTool,
       stepDoneTool,
       backgroundProcessTool,
-    ].map((t) => [t.name, t] as const),
-  ])
+    ] as Tool[]
+  ).map((t) => [t.name, t])
+  const mcpEntries: [string, Tool][] = mcpToolsOverride.map((t) => [t.name, t])
+  return new Map<string, Tool>([...builtInTools, ...mcpEntries])
 }
 
 /**

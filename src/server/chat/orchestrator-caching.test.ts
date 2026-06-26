@@ -46,7 +46,7 @@ function makeAssembleRequest(sessionManager: SessionManager, instructionContent:
       modelName: 'test-model',
     })
     const hash = computeDynamicContextHash(instructionContent ?? '', skills)
-    sessionManager.setCachedPrompt('test-session', result.systemPrompt, hash)
+    sessionManager.setCachedPrompt('test-session', result.systemPrompt, [], hash)
     return result
   }
 }
@@ -86,12 +86,12 @@ describe('orchestrator assembleRequest caching', () => {
     const result = assembleRequest(baseInput)
 
     expect(result.systemPrompt).toBe('fresh-agent-prompt')
-    expect(setCachedPrompt).toHaveBeenCalledWith('test-session', 'fresh-agent-prompt', 'test-hash')
+    expect(setCachedPrompt).toHaveBeenCalledWith('test-session', 'fresh-agent-prompt', [], 'test-hash')
     expect(setDynamicContextChanged).not.toHaveBeenCalled()
   })
 
   it('uses cached prompt when hash matches', () => {
-    getCachedPrompt.mockReturnValue({ systemPrompt: 'cached-prompt', hash: 'test-hash' })
+    getCachedPrompt.mockReturnValue({ systemPrompt: 'cached-prompt', tools: [], hash: 'test-hash' })
     ;(computeDynamicContextHash as any).mockReturnValue('test-hash')
 
     const assembleRequest = makeAssembleRequest(sessionManager, 'instructions', [])
@@ -103,7 +103,7 @@ describe('orchestrator assembleRequest caching', () => {
   })
 
   it('sets dynamicContextChanged when hash differs', () => {
-    getCachedPrompt.mockReturnValue({ systemPrompt: 'cached-prompt', hash: 'old-hash' })
+    getCachedPrompt.mockReturnValue({ systemPrompt: 'cached-prompt', tools: [], hash: 'old-hash' })
     ;(computeDynamicContextHash as any).mockReturnValue('new-hash')
 
     const assembleRequest = makeAssembleRequest(sessionManager, 'instructions', [])

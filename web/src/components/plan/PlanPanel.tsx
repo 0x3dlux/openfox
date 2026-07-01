@@ -21,6 +21,7 @@ import { ChatInput } from './ChatInput'
 import { groupMessages, type DisplayItem } from './groupMessages.js'
 import { usePromptHistory } from '../../hooks/usePromptHistory.js'
 import { useAutoScroll } from '@/hooks/useAutoScroll.ts'
+import { useScrolledSend } from '@/hooks/useScrolledSend.ts'
 import { useKeybindings, useBinding, useAgentSwitchingBindings } from '../../hooks/useKeybindings'
 
 interface PlanPanelProps {
@@ -50,10 +51,7 @@ export function PlanPanel({
   const streamingMessage = useSessionStore((state) => state.streamingMessage)
   const sessions = useSessionStore((state) => state.sessions)
   const isRunning = useIsRunning()
-  const sendMessage = useSessionStore((state) => state.sendMessage)
-  const acceptAndBuild = useSessionStore((state) => state.acceptAndBuild)
   const stopGeneration = useSessionStore((state) => state.stopGeneration)
-  const launchRunner = useSessionStore((state) => state.launchRunner)
 
   const agentDefaults = useAgentsStore((state) => state.defaults)
   const agentUserItems = useAgentsStore((state) => state.userItems)
@@ -89,6 +87,14 @@ export function PlanPanel({
   }, [messages])
 
   const { isAutoScrollActive, setAutoScroll } = useAutoScroll(scrollContainerRef, session)
+  const { sendMessage, launchWorkflow } = useScrolledSend(setAutoScroll)
+
+  const handleLaunchWorkflow = useCallback(
+    (workflowId: string, subGroup?: string) => {
+      launchWorkflow(undefined, undefined, workflowId, subGroup)
+    },
+    [launchWorkflow],
+  )
 
   const handleTimelineNavigate = useCallback(
     (index: number) => {
@@ -135,28 +141,17 @@ export function PlanPanel({
     useSessionStore.getState().switchMode(agentId)
   })
 
-  const isPlanning = session?.mode === 'planner'
-  const isBuilding = session?.mode === 'builder'
-
   const handleSelectWorkflow = (workflowId: string) => {
     const content = input.trim() ? input : undefined
     const atts = attachments.length > 0 ? attachments : undefined
-    if (isPlanning) {
-      acceptAndBuild(workflowId, content, atts)
-    } else if (isBuilding) {
-      launchRunner(content, atts, workflowId)
-    }
+    launchWorkflow(content, atts, workflowId)
     clearInput()
   }
 
   const handleSelectWorkflowWithSubGroup = (workflowId: string, subGroup: string) => {
     const content = input.trim() ? input : undefined
     const atts = attachments.length > 0 ? attachments : undefined
-    if (isPlanning) {
-      acceptAndBuild(workflowId, content, atts, subGroup)
-    } else if (isBuilding) {
-      launchRunner(content, atts, workflowId, subGroup)
-    }
+    launchWorkflow(content, atts, workflowId, subGroup)
     clearInput()
   }
 
@@ -180,7 +175,12 @@ export function PlanPanel({
         {turnStatsModal && <TurnStatsModal stats={turnStatsModal} onClose={() => setTurnStatsModal(null)} />}
         <ConnectionStatusBar />
 
-        <MessageList displayItems={displayItems} scrollContainerRef={scrollContainerRef} highlightedMessageId={null} />
+        <MessageList
+          displayItems={displayItems}
+          scrollContainerRef={scrollContainerRef}
+          highlightedMessageId={null}
+          onLaunchWorkflow={handleLaunchWorkflow}
+        />
 
         <ChatInput
           input={input}
@@ -241,11 +241,7 @@ export function PlanPanel({
           onSelectWorkflow={(workflowId) => {
             const content = input.trim() || undefined
             const atts = attachments.length > 0 ? attachments : undefined
-            if (session?.mode === 'planner') {
-              useSessionStore.getState().acceptAndBuild(workflowId, content, atts)
-            } else {
-              useSessionStore.getState().launchRunner(content, atts, workflowId)
-            }
+            launchWorkflow(content, atts, workflowId)
             clearInput()
           }}
         />

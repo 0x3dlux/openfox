@@ -9,6 +9,7 @@ import { AutoScrollToggle } from '../shared/AutoScrollToggle'
 import { SearchIcon, StopIcon } from '../shared/icons'
 import { processImageFile } from '../../lib/image-processing.js'
 import { CHAT_TEXTAREA_ID } from '../../lib/focusChatTextarea'
+import { useScrolledSend } from '../../hooks/useScrolledSend'
 import { MoreMenu } from './MoreMenu'
 import { QueuedMessages } from './QueuedMessages'
 import { AgentSelector } from './AgentSelector'
@@ -79,12 +80,13 @@ export function ChatInput({
   const prevLenRef = useRef(0)
 
   const isRunning = useIsRunning()
-  const sendMessage = useSessionStore((state) => state.sendMessage)
   const stopGeneration = useSessionStore((state) => state.stopGeneration)
   const cancelQueued = useSessionStore((state) => state.cancelQueued)
   const queuedMessages = useSessionStore((state) => state.queuedMessages)
   const restoredInput = useSessionStore((state) => state.restoredInput)
   const clearRestoredInput = useSessionStore((state) => state.clearRestoredInput)
+
+  const { sendMessage } = useScrolledSend(setAutoScroll)
 
   useEffect(() => {
     if (restoredInput !== null) {

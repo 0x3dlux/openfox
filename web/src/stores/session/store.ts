@@ -532,7 +532,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
       }
     },
 
-    launchRunner: (content?, attachments?, workflowId?, subGroup?) => {
+    launchWorkflow: (content?, attachments?, workflowId?, subGroup?) => {
       set({ streamingMessageId: null })
       const payload: Record<string, unknown> = {}
       if (content?.trim()) payload.content = content
@@ -585,26 +585,6 @@ export const useSessionStore = create<SessionState>((set, get) => {
         }
       } catch (error) {
         console.error('Error switching danger level:', error)
-      }
-    },
-
-    acceptAndBuild: (workflowId?, content?, attachments?, subGroup?) => {
-      set({ streamingMessageId: null })
-      const payload: Record<string, unknown> = {}
-      if (workflowId) payload.workflowId = workflowId
-      if (content?.trim()) payload.content = content
-      if (attachments && attachments.length > 0) payload.attachments = attachments
-      if (subGroup) payload.subGroup = subGroup
-
-      const sessionId = get().currentSession?.id
-      if (sessionId) {
-        authFetch(`/api/sessions/${sessionId}/mode`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'builder' }),
-        }).then(() => {
-          wsClient.send('runner.launch', payload)
-        })
       }
     },
 

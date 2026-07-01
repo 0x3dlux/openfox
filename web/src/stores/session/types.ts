@@ -84,10 +84,9 @@ export interface SessionState {
   ) => void
   stopGeneration: () => void
   continueGeneration: () => void
-  launchRunner: (content?: string, attachments?: Attachment[], workflowId?: string, subGroup?: string) => void
+  launchWorkflow: (content?: string, attachments?: Attachment[], workflowId?: string, subGroup?: string) => void
   switchMode: (mode: SessionMode) => void
   switchDangerLevel: (dangerLevel: 'normal' | 'dangerous') => void
-  acceptAndBuild: (workflowId?: string, content?: string, attachments?: Attachment[], subGroup?: string) => void
   editCriteria: (criteria: Criterion[]) => void
   compactContext: () => void
   setSessionProvider: (providerId: string, model?: string) => Promise<Session | null>

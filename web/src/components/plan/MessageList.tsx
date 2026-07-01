@@ -17,12 +17,14 @@ interface MessageListProps {
   displayItems: DisplayItem[]
   scrollContainerRef: RefObject<HTMLDivElement | null>
   highlightedMessageId: string | null
+  onLaunchWorkflow: (workflowId: string, subGroup?: string) => void
 }
 
 export const MessageList = memo(function MessageList({
   displayItems,
   scrollContainerRef,
   highlightedMessageId,
+  onLaunchWorkflow,
 }: MessageListProps) {
   const criteria = useSessionStore((state) => state.currentSession?.metadataEntries?.['criteria'] ?? EMPTY_CRITERIA)
   const sessionId = useSessionStore((state) => state.currentSession?.id)
@@ -30,7 +32,6 @@ export const MessageList = memo(function MessageList({
   const sessionPhase = useSessionStore((state) => state.currentSession?.phase)
   const error = useSessionStore((state) => state.error)
   const clearError = useSessionStore((state) => state.clearError)
-  const acceptAndBuild = useSessionStore((state) => state.acceptAndBuild)
   const isRunning = useIsRunning()
   const { showThinking, showVerboseToolOutput, showStats, showAgentDefinitions, showWorkflowBars } =
     useDisplaySettings()
@@ -156,7 +157,7 @@ export const MessageList = memo(function MessageList({
                   bgHover={bgHover}
                   border={border}
                   subGroups={w.subGroups}
-                  onLaunch={(subGroup?: string) => acceptAndBuild(w.id, undefined, undefined, subGroup)}
+                  onLaunch={(subGroup?: string) => onLaunchWorkflow(w.id, subGroup)}
                 />
               )
             })}

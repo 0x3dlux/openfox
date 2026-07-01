@@ -224,12 +224,21 @@ export async function runTopLevelAgentLoop(
       }),
     )
 
-    const previousContextTokens = sessionManager.getContextState(sessionId).currentTokens
+    const contextState = sessionManager.getContextState(sessionId)
+    const previousContextTokens = contextState.currentTokens
 
-    const modelSettings =
+    const contextWindow = sessionManager.getCurrentModelContext()
+    const availableForOutput = Math.max(256, contextWindow - contextState.currentTokens)
+
+    let modelSettings =
       currentMaxTokensOverride !== undefined
         ? { ...sessionManager.getCurrentModelSettings(), maxTokens: currentMaxTokensOverride }
         : sessionManager.getCurrentModelSettings()
+
+    if (modelSettings) {
+      const requestedMaxTokens = modelSettings.maxTokens ?? 16384
+      modelSettings = { ...modelSettings, maxTokens: Math.min(requestedMaxTokens, availableForOutput) }
+    }
 
     const streamGen = streamLLMPure({
       messageId: assistantMsgId,

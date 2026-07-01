@@ -211,6 +211,7 @@ function createSessionManager(state: Record<string, any>) {
     requireSession: vi.fn(() => structuredClone(state['current'])),
     getCurrentWindowMessages: vi.fn(() => state['current'].messages ?? []),
     getContextState: vi.fn(() => ({ ...contextState })),
+    getCurrentModelContext: vi.fn(() => 200000),
     setCurrentContextSize: vi.fn((_sessionId: string, tokens: number) => {
       contextState.currentTokens = tokens
     }),

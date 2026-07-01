@@ -46,6 +46,18 @@ vi.mock('./conversation-history.js', () => ({
   getConversationMessages: vi.fn().mockReturnValue([]),
 }))
 
+// Mock stream-pure to capture modelSettings for clamping tests
+import { streamLLMPure, consumeStreamGenerator } from './stream-pure.js'
+
+vi.mock('./stream-pure.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./stream-pure.js')>()
+  return {
+    ...actual,
+    streamLLMPure: vi.fn(),
+    consumeStreamGenerator: vi.fn(),
+  }
+})
+
 import { runTopLevelAgentLoop } from './agent-loop.js'
 import { executeTools } from './execute-tools.js'
 import { getEventStore } from '../events/store.js'
@@ -350,6 +362,7 @@ describe('runTopLevelAgentLoop assembleRequest', () => {
         canCompact: false,
         dynamicContextChanged: false,
       }),
+      getCurrentModelContext: vi.fn().mockReturnValue(200000),
       getCurrentModelSettings: vi.fn().mockReturnValue({}),
       setCurrentContextSize: vi.fn(),
       getDynamicContextChanged: vi.fn().mockReturnValue(false),
@@ -368,5 +381,264 @@ describe('runTopLevelAgentLoop assembleRequest', () => {
     await expect(promise).rejects.toThrow()
 
     expect(assembleRequestMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ============================================================================
+// maxTokens clamping behavior
+// ============================================================================
+
+describe('maxTokens clamping', () => {
+  let mockEventStore: EventStore
+  let mockSessionManager: SessionManager
+  let mockLLMClient: any
+  let mockTurnMetrics: TurnMetrics
+  let assembleRequestMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    mockEventStore = {
+      append: vi.fn(),
+      getEvents: vi.fn().mockReturnValue([]),
+      getLatestSeq: vi.fn().mockReturnValue(0),
+      cleanupOldEvents: vi.fn().mockReturnValue(0),
+    } as unknown as EventStore
+    ;(getEventStore as any).mockReturnValue(mockEventStore)
+
+    mockLLMClient = {
+      getModel: vi.fn().mockReturnValue('test-model'),
+    }
+
+    mockTurnMetrics = {
+      addToolTime: vi.fn(),
+      addLLMCall: vi.fn(),
+      buildStats: vi.fn().mockReturnValue({}),
+    } as unknown as TurnMetrics
+
+    assembleRequestMock = vi.fn().mockReturnValue({
+      systemPrompt: 'test-system-prompt',
+      messages: [],
+    })
+    ;(getAllInstructions as any).mockResolvedValue({ content: 'test instructions', files: [] })
+    ;(getEnabledSkillMetadata as any).mockResolvedValue([])
+
+    // Make streamLLMPure return a result immediately so the loop doesn't hang
+    ;(consumeStreamGenerator as any).mockResolvedValue({
+      content: '',
+      toolCalls: [],
+      segments: [],
+      usage: { promptTokens: 10, completionTokens: 5 },
+      timing: { ttft: 0.1, completionTime: 0.5, tps: 10, prefillTps: 100 },
+      aborted: false,
+      finishReason: 'stop',
+      modelParams: {},
+    })
+  })
+
+  function makeConfig(overrides?: Partial<TopLevelLoopConfig>): TopLevelLoopConfig {
+    return {
+      mode: 'planner',
+      append: vi.fn(),
+      sessionManager: mockSessionManager,
+      sessionId: 'test-session',
+      llmClient: mockLLMClient,
+      statsIdentity: { providerId: 'test', providerName: 'Test', backend: 'unknown' as const, model: 'test-model' },
+      assembleRequest: assembleRequestMock as any,
+      getToolRegistry: () => ({ definitions: [], execute: vi.fn() }) as any,
+      getConversationMessages: vi.fn().mockResolvedValue([]),
+      ...overrides,
+    }
+  }
+
+  it('clamps maxTokens when context is partially full', async () => {
+    mockSessionManager = {
+      requireSession: vi.fn().mockReturnValue({
+        workdir: '/test',
+        projectId: 'test-project',
+        executionState: null,
+        criteria: [],
+        isRunning: false,
+      }),
+      getContextState: vi.fn().mockReturnValue({
+        currentTokens: 195000,
+        maxTokens: 200000,
+        compactionCount: 0,
+        dangerZone: false,
+        canCompact: false,
+        dynamicContextChanged: false,
+      }),
+      getCurrentModelContext: vi.fn().mockReturnValue(200000),
+      getCurrentModelSettings: vi.fn().mockReturnValue({ maxTokens: 16384 }),
+      setCurrentContextSize: vi.fn(),
+      getDynamicContextChanged: vi.fn().mockReturnValue(false),
+      setDynamicContextChanged: vi.fn(),
+      getCachedPrompt: vi.fn().mockReturnValue(undefined),
+      setCachedPrompt: vi.fn(),
+      getLspManager: vi.fn(),
+      drainAsapMessages: vi.fn().mockReturnValue([]),
+      getCurrentWindowMessages: vi.fn().mockReturnValue([]),
+      updateMessage: vi.fn(),
+    } as any
+
+    await runTopLevelAgentLoop(makeConfig(), mockTurnMetrics).catch(() => {})
+
+    // availableForOutput = 200000 - 195000 = 5000, requested 16384 → clamped to 5000
+    const callArgs = (streamLLMPure as any).mock.calls[0]?.[0]
+    expect(callArgs).toBeDefined()
+    expect(callArgs.modelSettings?.maxTokens).toBe(5000)
+  })
+
+  it('clamps maxTokens when user-configured maxTokens exceeds available space', async () => {
+    mockSessionManager = {
+      requireSession: vi.fn().mockReturnValue({
+        workdir: '/test',
+        projectId: 'test-project',
+        executionState: null,
+        criteria: [],
+        isRunning: false,
+      }),
+      getContextState: vi.fn().mockReturnValue({
+        currentTokens: 190000,
+        maxTokens: 200000,
+        compactionCount: 0,
+        dangerZone: false,
+        canCompact: false,
+        dynamicContextChanged: false,
+      }),
+      getCurrentModelContext: vi.fn().mockReturnValue(200000),
+      // User configured a high maxTokens that exceeds available space
+      getCurrentModelSettings: vi.fn().mockReturnValue({ maxTokens: 32000 }),
+      setCurrentContextSize: vi.fn(),
+      getDynamicContextChanged: vi.fn().mockReturnValue(false),
+      setDynamicContextChanged: vi.fn(),
+      getCachedPrompt: vi.fn().mockReturnValue(undefined),
+      setCachedPrompt: vi.fn(),
+      getLspManager: vi.fn(),
+      drainAsapMessages: vi.fn().mockReturnValue([]),
+      getCurrentWindowMessages: vi.fn().mockReturnValue([]),
+      updateMessage: vi.fn(),
+    } as any
+
+    await runTopLevelAgentLoop(makeConfig(), mockTurnMetrics).catch(() => {})
+
+    // availableForOutput = 200000 - 190000 = 10000, requested 32000 → clamped to 10000
+    const callArgs = (streamLLMPure as any).mock.calls[0]?.[0]
+    expect(callArgs).toBeDefined()
+    expect(callArgs.modelSettings?.maxTokens).toBe(10000)
+  })
+
+  it('applies 256-token floor when context is over limit', async () => {
+    mockSessionManager = {
+      requireSession: vi.fn().mockReturnValue({
+        workdir: '/test',
+        projectId: 'test-project',
+        executionState: null,
+        criteria: [],
+        isRunning: false,
+      }),
+      getContextState: vi.fn().mockReturnValue({
+        currentTokens: 200000,
+        maxTokens: 200000,
+        compactionCount: 0,
+        dangerZone: false,
+        canCompact: false,
+        dynamicContextChanged: false,
+      }),
+      getCurrentModelContext: vi.fn().mockReturnValue(200000),
+      getCurrentModelSettings: vi.fn().mockReturnValue({ maxTokens: 16384 }),
+      setCurrentContextSize: vi.fn(),
+      getDynamicContextChanged: vi.fn().mockReturnValue(false),
+      setDynamicContextChanged: vi.fn(),
+      getCachedPrompt: vi.fn().mockReturnValue(undefined),
+      setCachedPrompt: vi.fn(),
+      getLspManager: vi.fn(),
+      drainAsapMessages: vi.fn().mockReturnValue([]),
+      getCurrentWindowMessages: vi.fn().mockReturnValue([]),
+      updateMessage: vi.fn(),
+    } as any
+
+    await runTopLevelAgentLoop(makeConfig(), mockTurnMetrics).catch(() => {})
+
+    const callArgs = (streamLLMPure as any).mock.calls[0]?.[0]
+    expect(callArgs).toBeDefined()
+    // 200000 - 200000 = 0, floor is 256
+    expect(callArgs.modelSettings?.maxTokens).toBe(256)
+  })
+
+  it('does not clamp when context is empty', async () => {
+    mockSessionManager = {
+      requireSession: vi.fn().mockReturnValue({
+        workdir: '/test',
+        projectId: 'test-project',
+        executionState: null,
+        criteria: [],
+        isRunning: false,
+      }),
+      getContextState: vi.fn().mockReturnValue({
+        currentTokens: 0,
+        maxTokens: 200000,
+        compactionCount: 0,
+        dangerZone: false,
+        canCompact: false,
+        dynamicContextChanged: false,
+      }),
+      getCurrentModelContext: vi.fn().mockReturnValue(200000),
+      getCurrentModelSettings: vi.fn().mockReturnValue({ maxTokens: 16384 }),
+      setCurrentContextSize: vi.fn(),
+      getDynamicContextChanged: vi.fn().mockReturnValue(false),
+      setDynamicContextChanged: vi.fn(),
+      getCachedPrompt: vi.fn().mockReturnValue(undefined),
+      setCachedPrompt: vi.fn(),
+      getLspManager: vi.fn(),
+      drainAsapMessages: vi.fn().mockReturnValue([]),
+      getCurrentWindowMessages: vi.fn().mockReturnValue([]),
+      updateMessage: vi.fn(),
+    } as any
+
+    await runTopLevelAgentLoop(makeConfig(), mockTurnMetrics).catch(() => {})
+
+    const callArgs = (streamLLMPure as any).mock.calls[0]?.[0]
+    expect(callArgs).toBeDefined()
+    // 200000 - 0 = 200000, requested 16384, so should remain 16384
+    expect(callArgs.modelSettings?.maxTokens).toBe(16384)
+  })
+
+  it('passes undefined modelSettings when getCurrentModelSettings returns undefined', async () => {
+    mockSessionManager = {
+      requireSession: vi.fn().mockReturnValue({
+        workdir: '/test',
+        projectId: 'test-project',
+        executionState: null,
+        criteria: [],
+        isRunning: false,
+      }),
+      getContextState: vi.fn().mockReturnValue({
+        currentTokens: 0,
+        maxTokens: 200000,
+        compactionCount: 0,
+        dangerZone: false,
+        canCompact: false,
+        dynamicContextChanged: false,
+      }),
+      getCurrentModelContext: vi.fn().mockReturnValue(200000),
+      getCurrentModelSettings: vi.fn().mockReturnValue(undefined),
+      setCurrentContextSize: vi.fn(),
+      getDynamicContextChanged: vi.fn().mockReturnValue(false),
+      setDynamicContextChanged: vi.fn(),
+      getCachedPrompt: vi.fn().mockReturnValue(undefined),
+      setCachedPrompt: vi.fn(),
+      getLspManager: vi.fn(),
+      drainAsapMessages: vi.fn().mockReturnValue([]),
+      getCurrentWindowMessages: vi.fn().mockReturnValue([]),
+      updateMessage: vi.fn(),
+    } as any
+
+    await runTopLevelAgentLoop(makeConfig(), mockTurnMetrics).catch(() => {})
+
+    const callArgs = (streamLLMPure as any).mock.calls[0]?.[0]
+    expect(callArgs).toBeDefined()
+    // modelSettings should be undefined — no partial object created
+    expect(callArgs.modelSettings).toBeUndefined()
   })
 })

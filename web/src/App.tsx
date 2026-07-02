@@ -258,7 +258,10 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
-  const effectiveLeftOpen = isMobile ? leftMobileOpen : leftSidebarOpen
+  const [location] = useLocation()
+  const isProjectPage = /^\/p\/[^/]+$/.test(location)
+
+  const effectiveLeftOpen = isMobile ? leftMobileOpen : isProjectPage ? true : leftSidebarOpen
   const effectiveRightOpen = isMobile ? rightMobileOpen : rightSidebarOpen
 
   const handleLeftToggle = () => {

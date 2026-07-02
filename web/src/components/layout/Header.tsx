@@ -62,7 +62,7 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
   return (
     <header className="h-8 bg-secondary border-b border-border flex items-center justify-between px-2">
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        {onMenuClick && isProjectPage && (
+        {onMenuClick && isSessionPage && (
           <button
             onClick={onMenuClick}
             className="flex-shrink-0 p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"

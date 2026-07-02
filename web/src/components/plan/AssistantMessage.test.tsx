@@ -53,4 +53,67 @@ describe('AssistantMessage', () => {
     expect(html).toContain('Aborted')
     expect(html).not.toContain('Interrupted')
   })
+
+  it('displays the full model name in stats (no hyphen truncation)', () => {
+    const html = renderToStaticMarkup(
+      <AssistantMessage
+        message={{
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          tokenCount: 0,
+          isStreaming: false,
+          stats: {
+            providerId: 'openai',
+            providerName: 'OpenAI',
+            backend: 'openai',
+            model: 'deepseek-v4-flash-dspark',
+            mode: 'planner',
+            totalTime: 3.2,
+            toolTime: 0.5,
+            prefillTokens: 8600,
+            prefillSpeed: 11500,
+            generationTokens: 124,
+            generationSpeed: 50.2,
+          },
+        }}
+      />,
+    )
+
+    expect(html).toContain('deepseek-v4-flash-dspark')
+    // Should NOT truncate to first 2 hyphen-segments only
+    expect(html).not.toContain('>deepseek-v4<')
+  })
+
+  it('strips provider path prefix from model name', () => {
+    const html = renderToStaticMarkup(
+      <AssistantMessage
+        message={{
+          id: 'assistant-2',
+          role: 'assistant',
+          content: '',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          tokenCount: 0,
+          isStreaming: false,
+          stats: {
+            providerId: 'my-provider',
+            providerName: 'My Provider',
+            backend: 'openai',
+            model: 'my-provider/deepseek-v4-flash-dspark',
+            mode: 'builder',
+            totalTime: 5.0,
+            toolTime: 1.0,
+            prefillTokens: 1000,
+            prefillSpeed: 1000,
+            generationTokens: 50,
+            generationSpeed: 25,
+          },
+        }}
+      />,
+    )
+
+    expect(html).toContain('deepseek-v4-flash-dspark')
+    expect(html).not.toContain('my-provider/')
+  })
 })

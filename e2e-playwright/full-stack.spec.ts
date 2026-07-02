@@ -46,6 +46,7 @@ async function setupTestEnvironment(): Promise<TestContext> {
     OPENFOX_DB_PATH: ':memory:',
     OPENFOX_WORKDIR: workdir,
     OPENFOX_LLM_URL: 'http://192.168.1.223:8000',
+    OPENFOX_MODEL_NAME: 'deepseek-v4-flash-dspark',
     OPENFOX_BACKEND: 'vllm',
     OPENFOX_LOG_LEVEL: 'warn',
     OPENFOX_MOCK_LLM: 'false',
@@ -59,7 +60,9 @@ async function setupTestEnvironment(): Promise<TestContext> {
   })
 
   let stderr = ''
-  serverProcess.stderr!.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+  serverProcess.stderr!.on('data', (chunk: Buffer) => {
+    stderr += chunk.toString()
+  })
 
   // Wait for server to be ready, but fail fast if process dies early
   const maxWait = 60000
@@ -141,12 +144,23 @@ test.describe('Full-stack Build & Verify E2E', () => {
     // Step 1: Add LLM provider via the ProviderModal wizard
     await page.getByTestId('onboarding-add-provider-button').click()
 
-    // Modal step 1: fill URL and proceed
+    // Modal step 1: click the vLLM preset first (sets backend type, name, and URL),
+    // then override the URL with the test server address
+    await page.getByRole('button', { name: 'vLLM' }).click()
     await page.getByTestId('provider-modal-url').fill('http://192.168.1.223:8000')
     await page.getByTestId('provider-modal-next').click()
 
-    // Modal step 2: select backend and skip model config
-    await page.getByTestId('provider-modal-backend').selectOption('vllm')
+    // Modal step 2: backend is already selected from the preset.
+    // Auto-config runs automatically for new providers — wait for it to finish
+    // so the "Next" button becomes enabled.
+    await page.waitForFunction(
+      () => {
+        const btn = document.querySelector('[data-testid="provider-modal-next"]') as HTMLButtonElement | null
+        return btn && !btn.disabled
+      },
+      { timeout: 30000 },
+    )
+
     await page.getByTestId('provider-modal-next').click()
 
     // Modal step 3: review and save
@@ -198,6 +212,11 @@ test.describe('Full-stack Build & Verify E2E', () => {
     // Wait for session to be created and redirect
     await page.waitForURL(/\/p\/[a-f0-9-]+\/s\/[a-f0-9-]+/)
     await page.waitForLoadState('networkidle')
+
+    // Select the model via the ProviderSelector dropdown
+    await page.getByTitle('Click to switch provider or model').click()
+    await page.getByRole('button', { name: /deepseek v4 flash/i }).click()
+    await page.waitForTimeout(500)
 
     // Type the prompt
     await page.getByTestId('chat-input-textarea').fill(TEST_PROMPT)

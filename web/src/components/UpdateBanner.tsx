@@ -13,7 +13,7 @@ export function UpdateBanner() {
 
   useEffect(() => {
     if (!version || !pending) return
-    const timer = setTimeout(() => setDismissed(true), 30_000)
+    const timer = setTimeout(() => setDismissed(true), 8_000)
     return () => clearTimeout(timer)
   }, [version, pending])
 

@@ -44,7 +44,6 @@ vi.mock('./stores/session', () => ({
     sessions: [],
     currentSession: null,
     messages: [],
-    streamingMessageId: null,
     currentTodos: [],
     contextState: null,
     pendingPathConfirmation: null,

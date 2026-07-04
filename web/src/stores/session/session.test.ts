@@ -592,7 +592,6 @@ describe('useSessionStore session isolation', () => {
           isStreaming: true,
         } as any,
       ],
-      streamingMessageId: 'assistant-1',
     }))
 
     useSessionStore.getState().handleServerMessage({
@@ -614,10 +613,9 @@ describe('useSessionStore session isolation', () => {
         partial: true,
       }),
     ])
-    expect(useSessionStore.getState().streamingMessageId).toBeNull()
   })
 
-  it('keeps tool calls in messages[] when streamingMessage is replaced (sync fix)', async () => {
+  it('keeps tool calls with results in messages[] throughout message lifecycle', async () => {
     const useSessionStore = await loadSessionStore()
 
     useSessionStore.setState((state) => ({
@@ -642,24 +640,9 @@ describe('useSessionStore session isolation', () => {
           isStreaming: true,
         } as any,
       ],
-      streamingMessageId: 'msg-a',
-      streamingMessage: {
-        id: 'msg-a',
-        role: 'assistant',
-        content: 'hello',
-        timestamp: '2024-01-01T00:00:00.000Z',
-        tokenCount: 0,
-        isStreaming: true,
-      } as any,
     }))
 
-    // Simulate the desync: streamingMessageId is null but streamingMessage is set
-    useSessionStore.setState((state) => ({
-      ...state,
-      streamingMessageId: null,
-    }))
-
-    // chat.message_updated with isEndingStreaming=false (desync)
+    // Finalize the message
     useSessionStore.getState().handleServerMessage({
       type: 'chat.message_updated',
       sessionId: 'session-1',
@@ -669,7 +652,7 @@ describe('useSessionStore session isolation', () => {
       },
     })
 
-    // Tool events — without fix these only update streamingMessage
+    // Add tool call and result
     useSessionStore.getState().handleServerMessage({
       type: 'chat.tool_call',
       sessionId: 'session-1',
@@ -692,7 +675,7 @@ describe('useSessionStore session isolation', () => {
       },
     })
 
-    // New assistant message replaces streamingMessage
+    // Add a new message (would have replaced streamingMessage in old architecture)
     useSessionStore.getState().handleServerMessage({
       type: 'chat.message',
       sessionId: 'session-1',
@@ -1155,7 +1138,6 @@ describe('useSessionStore session isolation', () => {
       currentSession: null,
       unreadSessionIds: [],
       messages: [],
-      streamingMessageId: null,
       currentTodos: [],
       contextState: null,
       pendingPathConfirmations: [],
@@ -1205,7 +1187,6 @@ describe('useSessionStore session isolation', () => {
       currentSession: null,
       unreadSessionIds: [],
       messages: [],
-      streamingMessageId: null,
       currentTodos: [],
       contextState: null,
       pendingPathConfirmations: [],
@@ -1469,12 +1450,11 @@ describe('useSessionStore session isolation', () => {
     await useSessionStore.getState().loadSession('session-1')
 
     const state = useSessionStore.getState()
-    expect(state.streamingMessageId).toBe('assistant-streaming')
-    expect(state.streamingMessage).toEqual(streamingMsg)
     expect(state.messages).toEqual([streamingMsg])
+    expect(state.messages.find((m) => m.isStreaming)).toBeDefined()
   })
 
-  it('sets streamingMessageId to null when REST response has no streaming message', async () => {
+  it('loads session with no streaming message when REST response has none', async () => {
     const useSessionStore = await loadSessionStore()
 
     fetchMock.mockResolvedValueOnce({
@@ -1510,8 +1490,8 @@ describe('useSessionStore session isolation', () => {
     await useSessionStore.getState().loadSession('session-2')
 
     const state = useSessionStore.getState()
-    expect(state.streamingMessageId).toBeNull()
-    expect(state.streamingMessage).toBeNull()
+    expect(state.messages).toEqual([])
+    expect(state.messages.find((m) => m.isStreaming)).toBeUndefined()
   })
 
   it('prevents concurrent createSession calls when pendingSessionCreate is already true', async () => {

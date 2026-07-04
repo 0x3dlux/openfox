@@ -82,8 +82,8 @@ export const useSessionStore = create<SessionState>((set, get) => {
     buf.toolOutput = []
 
     set((state) => {
-      const sm = state.streamingMessage
-      if (sm && sm.id === buf.messageId) {
+      const sm = state.messages.find((m) => m.id === buf.messageId)
+      if (sm) {
         const updated = { ...sm }
         if (hasDelta) {
           updated.content = updated.content + delta
@@ -97,7 +97,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
           const unmatched = toolOutputs.filter((o) => !matchedCallIds.has(o.callId))
           if (unmatched.length > 0) buf.toolOutput.push(...unmatched)
         }
-        return { streamingMessage: updated }
+        return { messages: state.messages.map((m) => (m.id === buf.messageId ? updated : m)) }
       }
 
       if (hasToolOutput) {
@@ -123,8 +123,6 @@ export const useSessionStore = create<SessionState>((set, get) => {
     currentSession: null,
     unreadSessionIds: [],
     messages: [],
-    streamingMessageId: null,
-    streamingMessage: null,
     currentTodos: [],
     contextState: null,
     subAgentContextStates: {},
@@ -298,8 +296,6 @@ export const useSessionStore = create<SessionState>((set, get) => {
             unreadSessionIds: get().unreadSessionIds.filter((id) => id !== sessionId),
             subAgentContextStates: {},
             messages: [],
-            streamingMessageId: null,
-            streamingMessage: null,
             currentTodos: [],
             contextState: null,
             pendingPathConfirmations: [],
@@ -319,12 +315,9 @@ export const useSessionStore = create<SessionState>((set, get) => {
 
         const data = await res.json()
         const loadedMessages = (data.messages as Message[] | undefined) ?? []
-        const streamingMsg = loadedMessages.find((m) => m.isStreaming) ?? null
         set({
           currentSession: data.session,
           messages: loadedMessages,
-          streamingMessageId: streamingMsg?.id ?? null,
-          streamingMessage: streamingMsg,
           contextState: data.contextState,
           queuedMessages: (data.queueState as QueuedMessage[] | undefined) ?? [],
           pendingQuestions: (data.pendingQuestions ?? []) as PendingQuestionPayload[],
@@ -472,8 +465,6 @@ export const useSessionStore = create<SessionState>((set, get) => {
       set((state) => ({
         currentSession: null,
         messages: [],
-        streamingMessageId: null,
-        streamingMessage: null,
         currentTodos: [],
         contextState: null,
         restoredInput: null,
@@ -487,8 +478,6 @@ export const useSessionStore = create<SessionState>((set, get) => {
     sendMessage: async (content, attachments, opts) => {
       const sessionId = get().currentSession?.id
       if (!sessionId) return
-
-      set({ streamingMessageId: null })
 
       try {
         const res = await authFetch(`/api/sessions/${sessionId}/message`, {
@@ -527,7 +516,6 @@ export const useSessionStore = create<SessionState>((set, get) => {
     continueGeneration: async () => {
       const sessionId = get().currentSession?.id
       if (!sessionId) return
-      set({ streamingMessageId: null })
 
       try {
         await authFetch(`/api/sessions/${sessionId}/continue`, { method: 'POST' })
@@ -537,7 +525,6 @@ export const useSessionStore = create<SessionState>((set, get) => {
     },
 
     launchWorkflow: (content?, attachments?, workflowId?, subGroup?) => {
-      set({ streamingMessageId: null })
       const payload: Record<string, unknown> = {}
       if (content?.trim()) payload.content = content
       if (attachments && attachments.length > 0) payload.attachments = attachments

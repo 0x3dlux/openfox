@@ -113,7 +113,7 @@ describe('chat.tool_output streaming after message_updated', () => {
     const msg = useSessionStore.getState().messages.find((m) => m.id === 'msg-1')
     expect(msg?.toolCalls).toHaveLength(1)
     expect(msg?.toolCalls?.[0]?.streamingOutput).toBeUndefined()
-    expect(useSessionStore.getState().streamingMessage).toBeNull()
+    expect(useSessionStore.getState().messages.find((m) => m.isStreaming)).toBeUndefined()
 
     useSessionStore.getState().handleServerMessage({
       type: 'chat.tool_output',

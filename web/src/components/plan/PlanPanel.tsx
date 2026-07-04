@@ -48,7 +48,6 @@ export function PlanPanel({
 
   const session = useSessionStore((state) => state.currentSession)
   const rawMessages = useSessionStore((state) => state.messages)
-  const streamingMessage = useSessionStore((state) => state.streamingMessage)
   const sessions = useSessionStore((state) => state.sessions)
   const isRunning = useIsRunning()
   const stopGeneration = useSessionStore((state) => state.stopGeneration)
@@ -73,18 +72,13 @@ export function PlanPanel({
     useWorkflowsStore.getState().fetchWorkflows()
   }, [])
 
-  const messages = useMemo(() => {
-    if (!streamingMessage) return rawMessages
-    return rawMessages.map((m) => (m.id === streamingMessage.id ? streamingMessage : m))
-  }, [rawMessages, streamingMessage])
-
   const previousDisplayItemsRef = useRef<DisplayItem[]>([])
 
   const displayItems = useMemo((): DisplayItem[] => {
-    const items = groupMessages(messages, previousDisplayItemsRef.current)
+    const items = groupMessages(rawMessages, previousDisplayItemsRef.current)
     previousDisplayItemsRef.current = items
     return items
-  }, [messages])
+  }, [rawMessages])
 
   const { isAutoScrollActive, setAutoScroll } = useAutoScroll(scrollContainerRef, session)
   const { sendMessage, launchWorkflow } = useScrolledSend(setAutoScroll)
@@ -168,7 +162,7 @@ export function PlanPanel({
       <SessionLayout
         criteriaSidebarOpen={criteriaSidebarOpen}
         onCriteriaSidebarToggle={onCriteriaSidebarToggle}
-        messages={messages}
+        messages={rawMessages}
       >
         <SessionHeader />
 

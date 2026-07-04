@@ -164,19 +164,9 @@ export function handleServerMessage(
     state: SessionState,
     messageId: string,
     apply: (m: Message) => Message,
-  ): Partial<SessionState> => {
-    const sm = state.streamingMessage
-    if (sm && sm.id === messageId) {
-      const updated = apply(sm)
-      return {
-        streamingMessage: updated,
-        messages: state.messages.map((m) => (m.id === messageId ? updated : m)),
-      }
-    }
-    return {
-      messages: state.messages.map((m) => (m.id === messageId ? apply(m) : m)),
-    }
-  }
+  ): Partial<SessionState> => ({
+    messages: state.messages.map((m) => (m.id === messageId ? apply(m) : m)),
+  })
 
   switch (message.type) {
     case 'session.state': {
@@ -185,7 +175,6 @@ export function handleServerMessage(
         break
       }
       cancelStreamingFlush()
-      const streamingMsg = payload.messages.find((m) => m.isStreaming) ?? null
       const wasPendingCreate = get().pendingSessionCreate === true
 
       set({
@@ -193,8 +182,6 @@ export function handleServerMessage(
         sessions: mergeSessionIntoSummary(get().sessions, payload.session),
         unreadSessionIds: removeUnreadSessionId(get().unreadSessionIds, payload.session.id),
         messages: payload.messages,
-        streamingMessageId: streamingMsg?.id ?? null,
-        streamingMessage: streamingMsg,
         currentTodos: [],
         pendingPathConfirmations: payload.pendingConfirmations ?? [],
         pendingQuestions: payload.pendingQuestions ?? [],
@@ -263,8 +250,6 @@ export function handleServerMessage(
           sessions: state.sessions.map((s) =>
             s.id === message.sessionId && isUserMessage ? { ...s, messageCount: s.messageCount + 1 } : s,
           ),
-          streamingMessageId: payload.message.isStreaming ? payload.message.id : state.streamingMessageId,
-          streamingMessage: payload.message.isStreaming ? payload.message : state.streamingMessage,
         }
       })
       break
@@ -276,29 +261,16 @@ export function handleServerMessage(
         break
       }
       const payload = message.payload as ChatMessageUpdatedPayload
-      const isEndingStreaming = payload.updates.isStreaming === false && get().streamingMessageId === payload.messageId
+      const target = get().messages.find((m) => m.id === payload.messageId)
+      const isEndingStreaming = payload.updates.isStreaming === false && target?.isStreaming === true
 
       if (isEndingStreaming) {
         cancelStreamingFlush()
       }
 
-      set((state) => {
-        const sm = state.streamingMessage
-
-        if (sm && sm.id === payload.messageId) {
-          const finalMessage = { ...sm, ...payload.updates }
-          return {
-            messages: state.messages.map((m) => (m.id === payload.messageId ? finalMessage : m)),
-            streamingMessageId: isEndingStreaming ? null : state.streamingMessageId,
-            streamingMessage: isEndingStreaming ? null : { ...sm, ...payload.updates },
-          }
-        }
-
-        return {
-          messages: state.messages.map((m) => (m.id === payload.messageId ? { ...m, ...payload.updates } : m)),
-          streamingMessageId: isEndingStreaming ? null : state.streamingMessageId,
-        }
-      })
+      set((state) => ({
+        messages: state.messages.map((m) => (m.id === payload.messageId ? { ...m, ...payload.updates } : m)),
+      }))
       break
     }
 
@@ -342,16 +314,14 @@ export function handleServerMessage(
       }
       const payload = message.payload as ChatToolPreparingPayload
 
-      const sm = get().streamingMessage
-      if (!sm || sm.id !== payload.messageId) {
-        return
-      }
-
-      const existingToolCall = sm.toolCalls?.find((_, idx) => idx === payload.index)
-      if (existingToolCall) return
-
       set((state) => {
-        const existing = state.streamingMessage!.preparingToolCalls ?? []
+        const msg = state.messages.find((m) => m.id === payload.messageId)
+        if (!msg) return {}
+
+        const existingToolCall = msg.toolCalls?.find((_, idx) => idx === payload.index)
+        if (existingToolCall) return {}
+
+        const existing = msg.preparingToolCalls ?? []
         const existingIndex = existing.findIndex((p) => p.index === payload.index)
         let preparingToolCalls: typeof existing
         if (existingIndex >= 0) {
@@ -369,13 +339,7 @@ export function handleServerMessage(
           ]
         }
         return {
-          streamingMessage: {
-            ...state.streamingMessage!,
-            preparingToolCalls,
-          },
-          messages: state.messages.map((m) =>
-            m.id === state.streamingMessage!.id ? { ...state.streamingMessage!, preparingToolCalls } : m,
-          ),
+          messages: state.messages.map((m) => (m.id === payload.messageId ? { ...m, preparingToolCalls } : m)),
         }
       })
       break
@@ -532,27 +496,19 @@ export function handleServerMessage(
       const payload = message.payload as ChatDonePayload
       const messageStats = payload.stats as Message['stats']
 
-      set((state) => {
-        const sm = state.streamingMessage
-        const finalMessage =
-          sm && sm.id === payload.messageId ? { ...sm, isStreaming: false, stats: messageStats ?? sm.stats } : null
-
-        return {
-          messages: state.messages.map((m) =>
-            m.id === payload.messageId
-              ? (finalMessage ?? {
-                  ...m,
-                  isStreaming: false,
-                  stats: messageStats ?? m.stats,
-                  completeReason: payload.reason,
-                })
-              : m,
-          ),
-          streamingMessageId: null,
-          streamingMessage: null,
-          visionFallbackByMessage: {},
-        }
-      })
+      set((state) => ({
+        messages: state.messages.map((m) =>
+          m.id === payload.messageId
+            ? {
+                ...m,
+                isStreaming: false,
+                stats: messageStats ?? m.stats,
+                completeReason: payload.reason,
+              }
+            : m,
+        ),
+        visionFallbackByMessage: {},
+      }))
       break
     }
 
@@ -574,14 +530,10 @@ export function handleServerMessage(
       }
       set((state) => ({
         error: { code: 'CHAT_ERROR', message: payload.error },
-        streamingMessageId: payload.recoverable ? state.streamingMessageId : null,
         ...(payload.recoverable
           ? {}
           : {
-              messages: state.streamingMessage
-                ? state.messages.map((m) => (m.id === state.streamingMessage!.id ? state.streamingMessage! : m))
-                : state.messages,
-              streamingMessage: null,
+              messages: state.messages,
             }),
       }))
       break
@@ -758,7 +710,6 @@ export function handleServerMessage(
       console.error('Server error:', payload)
       set({
         error: { code: payload.code, message: payload.message },
-        streamingMessageId: null,
       })
       break
     }

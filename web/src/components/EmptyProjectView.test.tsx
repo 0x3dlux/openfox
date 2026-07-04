@@ -87,8 +87,6 @@ describe('EmptyProjectView', () => {
       connectionStatus: 'connected' as const,
       unreadSessionIds: [],
       messages: [],
-      streamingMessageId: null,
-      streamingMessage: null,
       currentTodos: [],
       contextState: null,
       pendingPathConfirmation: null,

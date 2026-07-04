@@ -15,6 +15,7 @@ export const SETTINGS_KEYS = {
   DISPLAY_USER_PRESETS: 'display.userPresets',
   DISPLAY_FOLLOW_SYSTEM_THEME: 'display.followSystemTheme',
   DISPLAY_SHOW_OPEN_IN_EDITOR: 'display.showOpenInEditorLinks',
+  DISPLAY_MAX_VISIBLE_ITEMS: 'display.maxVisibleItems',
   LLM_DYNAMIC_SYSTEM_PROMPT: 'llm.dynamicSystemPrompt',
   KEYBINDINGS: 'keybindings',
   RETRY_PATTERNS: 'agent.retryPatterns',
@@ -51,6 +52,7 @@ export const DISPLAY_SETTINGS_KEYS = [
   SETTINGS_KEYS.DISPLAY_SHOW_SYNTAX_HIGHLIGHTING,
   SETTINGS_KEYS.DISPLAY_FOLLOW_SYSTEM_THEME,
   SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR,
+  SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS,
 ] as const
 
 export function useDisplaySettings() {
@@ -65,6 +67,9 @@ export function useDisplaySettings() {
       useSettingsStore((state) => state.settings[SETTINGS_KEYS.DISPLAY_SHOW_WORKFLOW_BARS] ?? 'true') === 'true',
     showSyntaxHighlighting:
       useSettingsStore((state) => state.settings[SETTINGS_KEYS.DISPLAY_SHOW_SYNTAX_HIGHLIGHTING] ?? 'true') === 'true',
+    maxVisibleItems: Number(
+      useSettingsStore((state) => state.settings[SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS] ?? '300'),
+    ),
   }
 }
 

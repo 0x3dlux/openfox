@@ -16,6 +16,7 @@ export const SETTINGS_KEYS = {
   DISPLAY_USER_PRESETS: 'display.userPresets',
   DISPLAY_FOLLOW_SYSTEM_THEME: 'display.followSystemTheme',
   DISPLAY_SHOW_OPEN_IN_EDITOR: 'display.showOpenInEditorLinks',
+  DISPLAY_MAX_VISIBLE_ITEMS: 'display.maxVisibleItems',
   LLM_DYNAMIC_SYSTEM_PROMPT: 'llm.dynamicSystemPrompt',
   KEYBINDINGS: 'keybindings',
   RETRY_PATTERNS: 'agent.retryPatterns',
@@ -31,6 +32,7 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   [SETTINGS_KEYS.DISPLAY_THEME]: JSON.stringify({ preset: 'dark' }),
   [SETTINGS_KEYS.DISPLAY_FOLLOW_SYSTEM_THEME]: 'true',
   [SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR]: 'false',
+  [SETTINGS_KEYS.DISPLAY_MAX_VISIBLE_ITEMS]: '300',
   [SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT]: 'false',
   [SETTINGS_KEYS.RETRY_PATTERNS]: JSON.stringify({ patterns: [], maxRetriesPerTurn: 10 }),
   [SETTINGS_KEYS.KEYBINDINGS]: JSON.stringify({

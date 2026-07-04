@@ -79,7 +79,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
 }: ToolCallDisplayProps) {
   // Auto-expand file operations and running commands so content is immediately visible
   const isFileOperation = tool === 'edit_file' || tool === 'write_file'
-  const isRunningCommand = tool === 'run_command' && status === 'pending'
+  const isRunningCommand = tool === 'run_command'
   const isReadFile = tool === 'read_file'
   const isReturnValue = tool === 'return_value'
   const shouldAutoExpand = forceCompact ? false : isFileOperation || isRunningCommand || isReturnValue

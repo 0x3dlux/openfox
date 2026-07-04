@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useSessionStore, useIsRunning } from '../../stores/session'
+import { useDisplaySettings } from '../../stores/settings'
 
 import { type TurnStats } from '../../lib/types'
 
@@ -72,13 +73,18 @@ export function PlanPanel({
     useWorkflowsStore.getState().fetchWorkflows()
   }, [])
 
+  const { maxVisibleItems } = useDisplaySettings()
+
   const previousDisplayItemsRef = useRef<DisplayItem[]>([])
 
-  const displayItems = useMemo((): DisplayItem[] => {
+  const { displayItems, hiddenCount } = useMemo((): { displayItems: DisplayItem[]; hiddenCount: number } => {
     const items = groupMessages(rawMessages, previousDisplayItemsRef.current)
     previousDisplayItemsRef.current = items
-    return items
-  }, [rawMessages])
+    if (maxVisibleItems > 0 && items.length > maxVisibleItems) {
+      return { displayItems: items.slice(-maxVisibleItems), hiddenCount: items.length - maxVisibleItems }
+    }
+    return { displayItems: items, hiddenCount: 0 }
+  }, [rawMessages, maxVisibleItems])
 
   const { isAutoScrollActive, setAutoScroll } = useAutoScroll(scrollContainerRef, session)
   const { sendMessage, launchWorkflow } = useScrolledSend(setAutoScroll)
@@ -174,6 +180,7 @@ export function PlanPanel({
           scrollContainerRef={scrollContainerRef}
           highlightedMessageId={null}
           onLaunchWorkflow={handleLaunchWorkflow}
+          hiddenCount={hiddenCount}
         />
 
         <ChatInput

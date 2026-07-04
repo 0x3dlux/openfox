@@ -2,10 +2,7 @@ import { memo, useState, useRef, type RefObject } from 'react'
 import { useSessionStore, useIsRunning } from '../../stores/session'
 import { useWorkflowsStore } from '../../stores/workflows'
 import { useDisplaySettings } from '../../stores/settings'
-import { ChatMessage } from './ChatMessage'
-import { AssistantMessage } from './AssistantMessage'
-import { SubAgentContainer } from './SubAgentContainer'
-import { CriteriaGroupDisplay } from '../shared/CriteriaGroupDisplay'
+import { ChatFeedItems } from './ChatFeedItems'
 import { CloseButton } from '../shared/CloseButton'
 import { useClickOutside } from '../../hooks/useClickOutside'
 import type { DisplayItem } from './groupMessages.js'
@@ -18,6 +15,7 @@ interface MessageListProps {
   scrollContainerRef: RefObject<HTMLDivElement | null>
   highlightedMessageId: string | null
   onLaunchWorkflow: (workflowId: string, subGroup?: string) => void
+  hiddenCount?: number
 }
 
 export const MessageList = memo(function MessageList({
@@ -25,6 +23,7 @@ export const MessageList = memo(function MessageList({
   scrollContainerRef,
   highlightedMessageId,
   onLaunchWorkflow,
+  hiddenCount = 0,
 }: MessageListProps) {
   const criteria = useSessionStore((state) => state.currentSession?.metadataEntries?.['criteria'] ?? EMPTY_CRITERIA)
   const sessionId = useSessionStore((state) => state.currentSession?.id)
@@ -46,6 +45,18 @@ export const MessageList = memo(function MessageList({
   const hasAssistantResponse = displayItems.some((item) => item.type === 'message' && item.message.role === 'assistant')
   const showStartBuilding = isPlanning && hasCriteria && !isRunning && hasAssistantResponse && !isDone
 
+  const projectId = useSessionStore((state) => state.currentSession?.projectId)
+  const [popupBlocked, setPopupBlocked] = useState(false)
+
+  const openFullHistory = () => {
+    if (!projectId || !sessionId) return
+    setPopupBlocked(false)
+    const win = window.open(`/p/${projectId}/s/${sessionId}/readonly`, '_blank')
+    if (!win) {
+      setPopupBlocked(true)
+    }
+  }
+
   return (
     <div
       ref={scrollContainerRef}
@@ -53,77 +64,41 @@ export const MessageList = memo(function MessageList({
       className="flex-1 min-w-0 overflow-y-auto relative bg-primary"
     >
       <div className="pt-4">
-        {displayItems.map((item, index) => {
-          if (item.type === 'context-divider') {
-            return (
-              <div key={index} data-item-index={index} className="flex items-center gap-2 feed-item px-2 md:px-4">
-                <div className="flex-1 border-t border-border" />
-                <span className="text-[10px] text-text-muted font-medium px-2">Earlier context summarized</span>
-                <div className="flex-1 border-t border-border" />
-              </div>
-            )
-          }
+        {hiddenCount > 0 && (
+          <div className="px-2 md:px-4 pb-2 space-y-1">
+            <button
+              onClick={openFullHistory}
+              className="w-full text-sm text-text-muted hover:text-text-primary bg-bg-tertiary/50 hover:bg-bg-tertiary border border-border rounded px-3 py-2 transition-colors text-center"
+            >
+              {hiddenCount} older item{hiddenCount !== 1 ? 's' : ''} hidden — View full history
+            </button>
+            {popupBlocked && (
+              <p className="text-xs text-text-muted text-center">
+                Popup blocked.{' '}
+                <a
+                  href={projectId && sessionId ? `/p/${projectId}/s/${sessionId}/readonly` : '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-text-primary"
+                >
+                  Open manually
+                </a>
+              </p>
+            )}
+          </div>
+        )}
 
-          if (item.type === 'subagent') {
-            const groupIsStreaming = item.messages.some((m) => m.isStreaming)
-            return (
-              <div key={index} data-item-index={index} className="px-2 md:px-4">
-                <SubAgentContainer
-                  messages={item.messages}
-                  subAgentType={item.subAgentType}
-                  subAgentId={item.subAgentId}
-                  isStreaming={groupIsStreaming}
-                />
-              </div>
-            )
-          }
-
-          if (item.type === 'criteria-batch') {
-            return (
-              <div key={index} data-item-index={index} className="feed-item px-2 md:px-4">
-                <CriteriaGroupDisplay toolCalls={item.toolCalls} criteria={criteria} />
-              </div>
-            )
-          }
-
-          const message = item.message
-          if (message.role === 'assistant') {
-            return (
-              <div key={index} data-item-index={index} className="px-2 md:px-4">
-                <AssistantMessage
-                  message={message}
-                  showStats={showStats}
-                  showThinking={showThinking}
-                  showVerboseToolOutput={showVerboseToolOutput}
-                />
-              </div>
-            )
-          }
-
-          const skipAutoPrompt = !showAgentDefinitions && message.messageKind === 'auto-prompt'
-          const skipWorkflow =
-            !showWorkflowBars &&
-            (message.messageKind === 'workflow-started' || message.messageKind === 'task-completed')
-          if (skipAutoPrompt || skipWorkflow) {
-            return null
-          }
-
-          return (
-            <div key={index} data-item-index={index} className="px-2 md:px-4">
-              <div
-                data-message-id={message.id}
-                className={highlightedMessageId === message.id ? 'rounded animate-highlight-fade' : undefined}
-              >
-                <ChatMessage
-                  message={message}
-                  messageIndex={index}
-                  sessionId={sessionId}
-                  isLastAssistantMessage={false}
-                />
-              </div>
-            </div>
-          )
-        })}
+        <ChatFeedItems
+          displayItems={displayItems}
+          highlightedMessageId={highlightedMessageId}
+          sessionId={sessionId}
+          criteria={criteria}
+          showThinking={showThinking}
+          showVerboseToolOutput={showVerboseToolOutput}
+          showStats={showStats}
+          showAgentDefinitions={showAgentDefinitions}
+          showWorkflowBars={showWorkflowBars}
+        />
       </div>
       <div className="px-2 md:px-4 pb-4">
         {error && (

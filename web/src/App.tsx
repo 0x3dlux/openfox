@@ -24,6 +24,7 @@ import { HomePage } from './components/HomePage'
 import { NewSessionHandler } from './components/NewSessionHandler'
 import { EmptyProjectView } from './components/EmptyProjectView'
 import { PlanPanel } from './components/plan/PlanPanel'
+import { ReadonlySessionView } from './components/plan/ReadonlySessionView'
 import { Spinner, SpinnerWithText } from './components/shared/Spinner'
 import { PasswordModal } from './components/PasswordModal'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
@@ -303,7 +304,9 @@ function App() {
   const submitPassword = useSessionStore((state) => state.submitPassword)
   const cancelPassword = useSessionStore((state) => state.cancelPassword)
 
-  if (connectionStatus !== 'connected' && !showPasswordModal && !hasToken) {
+  const [isReadonly] = useRoute('/p/:projectId/s/:sessionId/readonly')
+
+  if (!isReadonly && connectionStatus !== 'connected' && !showPasswordModal && !hasToken) {
     return (
       <>
         <PasswordModal isOpen={true} isRetry={passwordModalRetry} onSubmit={submitPassword} onCancel={cancelPassword} />
@@ -312,6 +315,10 @@ function App() {
         </div>
       </>
     )
+  }
+
+  if (isReadonly) {
+    return <ReadonlySessionView />
   }
 
   return (

@@ -13,7 +13,11 @@ export function UpdateBanner() {
 
   useEffect(() => {
     if (!version || !pending) return
-    const timer = setTimeout(() => setDismissed(true), 8_000)
+    const timer = setTimeout(() => {
+      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(PENDING_KEY)
+      setDismissed(true)
+    }, 8_000)
     return () => clearTimeout(timer)
   }, [version, pending])
 

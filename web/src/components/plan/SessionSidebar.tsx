@@ -3,6 +3,7 @@ import { useSessionStats } from '../../hooks/useSessionStats'
 import { useGitStatus } from '../../hooks/useGitStatus'
 import { useConfigStore } from '../../stores/config'
 import { useSessionStore } from '../../stores/session'
+import { authFetch } from '../../lib/api'
 import { formatTime, formatSpeed } from '../../lib/format-stats'
 import { StatsModal } from './StatsModal'
 import { MetadataEntries, MetadataSectionHeader } from '../shared/MetadataEntries'
@@ -82,7 +83,20 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
           {session && (session.metadataEntries?.['review_findings']?.length ?? 0) > 0 && (
             <div className="mt-6">
               <MetadataSectionHeader entries={session.metadataEntries!['review_findings']!} title="Review Findings" />
-              <MetadataEntries entries={session.metadataEntries!['review_findings']!} />
+              <MetadataEntries
+                entries={session.metadataEntries!['review_findings']!}
+                onClearAll={async () => {
+                  try {
+                    await authFetch(`/api/sessions/${session.id}/review-findings`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ review_findings: [] }),
+                    })
+                  } catch (e) {
+                    console.error('Failed to clear review findings:', e)
+                  }
+                }}
+              />
             </div>
           )}
         </div>

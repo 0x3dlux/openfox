@@ -1,10 +1,12 @@
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useState, useCallback } from 'react'
 import type { MetadataEntry } from '@shared/types.js'
 import { MetadataStatusIcon, statusOrder, decodeHtmlEntities } from './MetadataStatusIcon'
+import { TrashIcon } from './icons'
 
 interface MetadataEntriesProps {
   entries: MetadataEntry[]
   title?: string
+  onClearAll?: () => Promise<void> | void
 }
 
 export function MetadataSectionHeader({ entries, title }: { entries: MetadataEntry[]; title: string }) {
@@ -36,7 +38,14 @@ export function MetadataSectionHeader({ entries, title }: { entries: MetadataEnt
   )
 }
 
-export const MetadataEntries = memo(function MetadataEntries({ entries, title }: MetadataEntriesProps) {
+export const MetadataEntries = memo(function MetadataEntries({ entries, title, onClearAll }: MetadataEntriesProps) {
+  const [clearConfirm, setClearConfirm] = useState(false)
+
+  const handleClear = useCallback(() => {
+    setClearConfirm(false)
+    onClearAll?.()
+  }, [onClearAll])
+
   if (entries.length === 0) return null
 
   return (
@@ -59,6 +68,41 @@ export const MetadataEntries = memo(function MetadataEntries({ entries, title }:
           </div>
         ))}
       </div>
+      {onClearAll && (
+        <>
+          <div className="px-1.5 py-1 border-t border-border bg-secondary flex items-center gap-2">
+            <button
+              onClick={() => setClearConfirm(true)}
+              className="flex items-center gap-1 text-xs text-text-muted hover:text-accent-error transition-colors ml-auto cursor-pointer"
+              title="Clear all"
+            >
+              <TrashIcon className="w-3 h-3" />
+              Clear all
+            </button>
+          </div>
+          {clearConfirm && (
+            <div className="px-1.5 py-1 border-t border-border bg-secondary">
+              <div className="flex items-center gap-2 justify-between">
+                <span className="text-xs text-accent-error">Clear all?</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleClear}
+                    className="text-xs text-accent-error hover:text-accent-error/70 transition-colors cursor-pointer"
+                  >
+                    Yes
+                  </button>
+                  <button
+                    onClick={() => setClearConfirm(false)}
+                    className="text-xs text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+                  >
+                    No
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 })

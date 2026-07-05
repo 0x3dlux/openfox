@@ -491,6 +491,28 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     res.json({ success: true })
   })
 
+  // Session review findings (REST)
+  app.put('/api/sessions/:id/review-findings', async (req, res) => {
+    const sessionId = req.params.id
+    const session = sessionManager.getSession(sessionId)
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' })
+    }
+
+    const { review_findings } = req.body
+    if (!Array.isArray(review_findings)) {
+      return res.status(400).json({ error: 'review_findings is required and must be an array' })
+    }
+
+    const entries = review_findings.map((c: { id?: string; description: string; status?: string }, i: number) => ({
+      id: c.id ?? String(i),
+      description: c.description,
+      status: c.status ?? 'open',
+    }))
+    sessionManager.setMetadataEntries(sessionId, 'review_findings', entries)
+    res.json({ success: true })
+  })
+
   // Session mode (REST)
   app.put('/api/sessions/:id/mode', async (req, res) => {
     const { getEventStore } = await import('./events/index.js')

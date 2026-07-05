@@ -334,6 +334,12 @@ export async function executeWorkflow(
     // Set session phase
     sessionManager.setPhase(sessionId, step.phase as 'build' | 'verification' | 'blocked' | 'done')
 
+    // Set session mode to match agent step's agentId
+    if (step.type === 'agent') {
+      const agentStep = step as AgentStep
+      sessionManager.setMode(sessionId, agentStep.agentId ?? 'planner')
+    }
+
     logger.debug('Workflow step executing', { sessionId, iteration: iterations, stepId: step.id, stepType: step.type })
 
     let stepOutcome: StepOutcome | null = null

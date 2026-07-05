@@ -6,7 +6,7 @@ export type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting'
 type MessageHandler = (message: ServerMessage) => void
 type StatusHandler = (status: ConnectionStatus) => void
 
-class WebSocketClient {
+export class WebSocketClient {
   private ws: WebSocket | null = null
   private handlers = new Set<MessageHandler>()
   private statusHandler: StatusHandler | null = null
@@ -147,8 +147,7 @@ class WebSocketClient {
   }
 
   private attemptReconnect(): void {
-    const authFailureCodes = [1000, 1005, 1006, 4000]
-    const isAuthFailure = authFailureCodes.includes(this.lastCloseCode) || this.lastCloseCode === 0
+    const isAuthFailure = this.lastCloseCode === 4000
 
     // Only auto-reconnect if NO token - with token, expect user to manually reconnect
     if (isAuthFailure && this.hasToken()) {

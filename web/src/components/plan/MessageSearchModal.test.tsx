@@ -105,8 +105,17 @@ describe('getItemLabel', () => {
     expect(getItemLabel(item)).toBe('Sub-agent: code_reviewer')
   })
 
-  it('returns criteria batch label', () => {
-    const item: DisplayItem = { type: 'criteria-batch', toolCalls: [] }
-    expect(getItemLabel(item)).toBe('Acceptance Criteria')
+  it('returns empty label for criteria-only messages', () => {
+    const item: DisplayItem = {
+      type: 'message',
+      message: {
+        id: 'm1',
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toISOString(),
+        isStreaming: false,
+      },
+    }
+    expect(getItemLabel(item)).toBe('')
   })
 })

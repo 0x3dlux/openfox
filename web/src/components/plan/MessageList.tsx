@@ -92,7 +92,6 @@ export const MessageList = memo(function MessageList({
           displayItems={displayItems}
           highlightedMessageId={highlightedMessageId}
           sessionId={sessionId}
-          criteria={criteria}
           showThinking={showThinking}
           showVerboseToolOutput={showVerboseToolOutput}
           showStats={showStats}

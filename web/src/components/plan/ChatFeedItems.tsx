@@ -1,15 +1,13 @@
+import { memo } from 'react'
 import type { DisplayItem } from './groupMessages.js'
-import type { MetadataEntry } from '@shared/types.js'
 import { ChatMessage } from './ChatMessage'
 import { AssistantMessage } from './AssistantMessage'
 import { SubAgentContainer } from './SubAgentContainer'
-import { CriteriaGroupDisplay } from '../shared/CriteriaGroupDisplay'
 
 interface ChatFeedItemsProps {
   displayItems: DisplayItem[]
   highlightedMessageId?: string | null
   sessionId?: string | null
-  criteria?: MetadataEntry[]
   showThinking?: boolean
   showVerboseToolOutput?: boolean
   showStats?: boolean
@@ -17,11 +15,16 @@ interface ChatFeedItemsProps {
   showWorkflowBars?: boolean
 }
 
-export function ChatFeedItems({
+function itemKey(item: DisplayItem): string {
+  if (item.type === 'context-divider') return `ctx-${item.windowSequence}`
+  if (item.type === 'subagent') return item.messages[0]?.id ?? item.subAgentId
+  return item.message.id
+}
+
+export const ChatFeedItems = memo(function ChatFeedItems({
   displayItems,
   highlightedMessageId = null,
   sessionId,
-  criteria = [],
   showThinking = true,
   showVerboseToolOutput = true,
   showStats = true,
@@ -33,7 +36,7 @@ export function ChatFeedItems({
       {displayItems.map((item, index) => {
         if (item.type === 'context-divider') {
           return (
-            <div key={index} data-item-index={index} className="flex items-center gap-2 feed-item px-2 md:px-4">
+            <div key={itemKey(item)} data-item-index={index} className="flex items-center gap-2 feed-item px-2 md:px-4">
               <div className="flex-1 border-t border-border" />
               <span className="text-[10px] text-text-muted font-medium px-2">Earlier context summarized</span>
               <div className="flex-1 border-t border-border" />
@@ -44,7 +47,7 @@ export function ChatFeedItems({
         if (item.type === 'subagent') {
           const groupIsStreaming = item.messages.some((m) => m.isStreaming)
           return (
-            <div key={index} data-item-index={index} className="px-2 md:px-4">
+            <div key={itemKey(item)} data-item-index={index} className="px-2 md:px-4">
               <SubAgentContainer
                 messages={item.messages}
                 subAgentType={item.subAgentType}
@@ -55,18 +58,10 @@ export function ChatFeedItems({
           )
         }
 
-        if (item.type === 'criteria-batch') {
-          return (
-            <div key={index} data-item-index={index} className="feed-item px-2 md:px-4">
-              <CriteriaGroupDisplay toolCalls={item.toolCalls} criteria={criteria} />
-            </div>
-          )
-        }
-
         const message = item.message
         if (message.role === 'assistant') {
           return (
-            <div key={index} data-item-index={index} className="px-2 md:px-4">
+            <div key={itemKey(item)} data-item-index={index} className="px-2 md:px-4">
               <AssistantMessage
                 message={message}
                 showStats={showStats}
@@ -85,7 +80,7 @@ export function ChatFeedItems({
         }
 
         return (
-          <div key={index} data-item-index={index} className="px-2 md:px-4">
+          <div key={itemKey(item)} data-item-index={index} className="px-2 md:px-4">
             <div
               data-message-id={message.id}
               className={highlightedMessageId === message.id ? 'rounded animate-highlight-fade' : undefined}
@@ -102,4 +97,4 @@ export function ChatFeedItems({
       })}
     </>
   )
-}
+})

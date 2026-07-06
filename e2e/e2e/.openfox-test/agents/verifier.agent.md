@@ -7,7 +7,7 @@ color: '#22c55e'
 allowedTools:
   - read_file
   - run_command
-  - criterion:pass,fail
+  - session_metadata
   - web_fetch
 ---
 
@@ -30,8 +30,8 @@ For each criterion marked [NEEDS VERIFICATION]:
 
 Then call:
 
-- `criterion` with action "pass" if the criterion is satisfied
-- `criterion` with action "fail" if it is NOT satisfied (explain why clearly)
+- `session_metadata` with action "pass" if the criterion is satisfied
+- `session_metadata` with action "fail" if it is NOT satisfied (explain why clearly)
 
 ## IMPORTANT
 

@@ -129,7 +129,6 @@ export function getItemLabel(item: DisplayItem): string {
     return preview.length < cleanContent.length ? `${preview}...` : preview
   }
   if (item.type === 'subagent') return `Sub-agent: ${item.subAgentType}`
-  if (item.type === 'criteria-batch') return 'Acceptance Criteria'
   return ''
 }
 

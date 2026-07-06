@@ -94,18 +94,38 @@ describe('groupMessages identity preservation', () => {
     assertItemsIdentical([msg1, msg2, msg3, msg4], initialItems)
   })
 
-  it('should handle criteria-only message batching with identity preservation', () => {
+  it('should render criteria-only messages as regular message items', () => {
     const msg1 = createMessage('msg-1', 'user', 'Check criteria')
     const msg2 = createMessage('msg-2', 'assistant', '', {
-      toolCalls: [{ id: 'tool-1', name: 'criterion', arguments: { action: 'get' }, startedAt: Date.now() }],
+      toolCalls: [
+        {
+          id: 'tool-1',
+          name: 'session_metadata',
+          arguments: { action: 'get', key: 'criteria' },
+          startedAt: Date.now(),
+        },
+      ],
     })
     const msg3 = createMessage('msg-3', 'assistant', '', {
-      toolCalls: [{ id: 'tool-2', name: 'criterion', arguments: { action: 'get' }, startedAt: Date.now() }],
+      toolCalls: [
+        {
+          id: 'tool-2',
+          name: 'session_metadata',
+          arguments: { action: 'get', key: 'criteria' },
+          startedAt: Date.now(),
+        },
+      ],
     })
     const msg4 = createMessage('msg-4', 'user', 'Next')
 
-    const initialItems = groupMessages([msg1, msg2, msg3, msg4])
-    assertItemsIdentical([msg1, msg2, msg3, msg4], initialItems)
+    const items = groupMessages([msg1, msg2, msg3, msg4])
+
+    // Each criteria-only message is its own message item (not merged into a batch)
+    expect(items.length).toBe(4)
+    expect(items[0]).toEqual({ type: 'message', message: msg1 })
+    expect(items[1]).toEqual({ type: 'message', message: msg2 })
+    expect(items[2]).toEqual({ type: 'message', message: msg3 })
+    expect(items[3]).toEqual({ type: 'message', message: msg4 })
   })
 
   it('should include system-generated auto-prompt messages', () => {

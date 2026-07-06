@@ -2,31 +2,15 @@ import type { Message, ToolCall } from '@shared/types.js'
 
 export type { Message, ToolCall }
 
-// Display item: either a single message, a grouped sub-agent run, criteria batch, or a context window divider
+// Display item: either a single message, a grouped sub-agent run, or a context window divider
 export type DisplayItem =
   | { type: 'message'; message: Message }
   | { type: 'subagent'; subAgentId: string; subAgentType: string; messages: Message[] }
-  | { type: 'criteria-batch'; toolCalls: ToolCall[] }
   | { type: 'context-divider'; windowSequence: number }
 
-// Check if a message contains only criterion tool calls (no text content)
-// Subagent messages are never criteria-only - they stay grouped in their pane
-function isCriterionTool(toolName: string): boolean {
-  return toolName === 'criterion' || toolName === 'session_metadata'
-}
-
-function isCriteriaOnlyMessage(msg: Message): boolean {
-  if (msg.role !== 'assistant') return false
-  if (msg.subAgentId) return false // Keep subagent messages together
-  if (msg.content?.trim()) return false // Has text content
-  if (msg.thinkingContent?.trim()) return false // Has thinking content
-  if (!msg.toolCalls || msg.toolCalls.length === 0) return false // No tool calls
-  return msg.toolCalls.every((tc: { name: string }) => isCriterionTool(tc.name))
-}
-
 /**
- * Group messages into display items, collapsing consecutive sub-agent messages,
- * consecutive criteria-only messages, and inserting context window dividers.
+ * Group messages into display items, collapsing consecutive sub-agent messages
+ * and inserting context window dividers.
  *
  * This function preserves object identity for unchanged display items when given
  * a previousItems array, allowing React's memo() to skip unnecessary re-renders.
@@ -34,44 +18,18 @@ function isCriteriaOnlyMessage(msg: Message): boolean {
 export function groupMessages(messages: Message[], previousItems: DisplayItem[] = []): DisplayItem[] {
   const items: DisplayItem[] = []
   let currentSubAgentGroup: { subAgentId: string; subAgentType: string; messages: Message[] } | null = null
-  let criteriaBuffer: ToolCall[] = []
   let lastContextWindowId: string | undefined
   let windowSequence = 1
 
   // Create a map of message IDs to previous display items for identity preservation
   const previousItemsByMessageId = new Map<string, DisplayItem>()
   const previousItemsBySubAgentId = new Map<string, DisplayItem>()
-  const previousCriteriaBatches: DisplayItem[] = []
 
   for (const item of previousItems) {
     if (item.type === 'message') {
       previousItemsByMessageId.set(item.message.id, item)
     } else if (item.type === 'subagent') {
       previousItemsBySubAgentId.set(item.subAgentId, item)
-    } else if (item.type === 'criteria-batch') {
-      previousCriteriaBatches.push(item)
-    }
-  }
-
-  let criteriaBatchIndex = 0
-
-  const flushCriteriaBuffer = () => {
-    if (criteriaBuffer.length > 0) {
-      // Try to reuse a previous criteria-batch if tool calls match
-      const previousBatch = previousCriteriaBatches[criteriaBatchIndex]
-      const toolCallsMatch =
-        previousBatch &&
-        previousBatch.type === 'criteria-batch' &&
-        previousBatch.toolCalls.length === criteriaBuffer.length &&
-        previousBatch.toolCalls.every((tc, i) => tc.id === criteriaBuffer[i]?.id)
-
-      if (toolCallsMatch) {
-        items.push(previousBatch)
-      } else {
-        items.push({ type: 'criteria-batch', toolCalls: [...criteriaBuffer] })
-      }
-      criteriaBatchIndex++
-      criteriaBuffer = []
     }
   }
 
@@ -113,27 +71,11 @@ export function groupMessages(messages: Message[], previousItems: DisplayItem[] 
     // Detect context window boundary - insert divider when window changes
     // Only insert if we've seen a previous window (not for the first window)
     if (msg.contextWindowId && lastContextWindowId && msg.contextWindowId !== lastContextWindowId) {
-      // Flush any pending groups before the divider
-      flushCriteriaBuffer()
       flushSubAgentGroup()
       windowSequence++
       items.push({ type: 'context-divider', windowSequence })
     }
     lastContextWindowId = msg.contextWindowId
-
-    // Check if this is a criteria-only message
-    if (isCriteriaOnlyMessage(msg)) {
-      // Flush sub-agent group first (criteria can't be part of sub-agent)
-      flushSubAgentGroup()
-      // Add all tool calls from this message to the buffer
-      for (const tc of msg.toolCalls!) {
-        criteriaBuffer.push(tc)
-      }
-      continue
-    }
-
-    // Not a criteria-only message - flush criteria buffer
-    flushCriteriaBuffer()
 
     if (msg.subAgentId && msg.subAgentType) {
       // Part of a sub-agent run
@@ -162,8 +104,7 @@ export function groupMessages(messages: Message[], previousItems: DisplayItem[] 
     }
   }
 
-  // Flush final groups
-  flushCriteriaBuffer()
+  // Flush final group
   flushSubAgentGroup()
 
   return items

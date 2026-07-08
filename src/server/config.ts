@@ -18,6 +18,8 @@ const envSchema = z.object({
   OPENFOX_REASONING_EFFORT: z.string().optional(),
   // Deprecated: use OPENFOX_REASONING_EFFORT=none instead
   OPENFOX_DISABLE_THINKING: z.coerce.boolean().default(false),
+  OPENFOX_LLM_TIMEOUT: z.coerce.number().default(300_000),
+  OPENFOX_LLM_IDLE_TIMEOUT: z.coerce.number().default(300_000),
   OPENFOX_DEV: z.coerce.boolean().default(false),
 })
 
@@ -34,8 +36,8 @@ export function loadConfig(): Config {
     llm: {
       baseUrl: llmUrl,
       model: env.OPENFOX_MODEL_NAME,
-      timeout: 300_000, // 5 minutes (deprecated, kept for backward compatibility)
-      idleTimeout: 300_000, // 5 minutes of inactivity
+      timeout: env.OPENFOX_LLM_TIMEOUT,
+      idleTimeout: env.OPENFOX_LLM_IDLE_TIMEOUT,
       backend: env.OPENFOX_BACKEND as LlmBackend,
       ...(env.OPENFOX_REASONING_EFFORT
         ? { reasoningEffort: env.OPENFOX_REASONING_EFFORT }

@@ -284,9 +284,8 @@ export const traceCodeTool = createTool<TraceCodeArgs>(
     function: {
       name: 'trace_code',
       description:
-        'Trace a symbol through the codebase using LSP-powered static analysis. ' +
-        'Finds definitions, references, and type definitions up to a configurable depth. ' +
-        'Returns a graph of locations with inline code snippets for each node.',
+        'Trace a symbol through the codebase using LSP. Finds definitions, references, and type definitions up to a configurable depth. ' +
+        'The "file" param is just a seed for LSP — use any file where you saw the symbol, it searches the whole project.',
       parameters: {
         type: 'object',
         properties: {
@@ -297,7 +296,7 @@ export const traceCodeTool = createTool<TraceCodeArgs>(
           file: {
             type: 'string',
             description:
-              'File path containing the symbol. Used to seed the LSP server and detect the language. Relative to the working directory.',
+              'Seed file for LSP (any file referencing the symbol). Determines language. Not required to be the definition file. Relative to workdir.',
           },
           depth: {
             type: 'number',

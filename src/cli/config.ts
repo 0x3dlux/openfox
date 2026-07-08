@@ -94,6 +94,11 @@ const mcpServerSchema = z.object({
   cachedTools: z.array(cachedToolSchema).optional(),
 })
 
+const llmConfigSchema = z.object({
+  timeout: z.number().optional(),
+  idleTimeout: z.number().optional(),
+})
+
 const defaultVisionFallback = {
   enabled: false,
   url: 'http://localhost:11434',
@@ -114,6 +119,7 @@ const configSchema = z
     logging: loggingSchema.default({ level: 'error' as const }),
     database: databaseSchema.default({ path: '' }),
     workspace: workspaceSchema.default(() => ({ workdir: process.cwd() })),
+    llm: llmConfigSchema.optional(),
     visionFallback: visionFallbackSchema.optional(),
   })
   .transform((data) => ({
@@ -126,6 +132,7 @@ const configSchema = z
     logging: data.logging ?? { level: 'error' },
     database: data.database ?? { path: '' },
     workspace: data.workspace ?? { workdir: process.cwd() },
+    llm: data.llm,
     visionFallback: data.visionFallback ?? defaultVisionFallback,
   }))
 
@@ -332,6 +339,7 @@ export async function saveGlobalConfig(mode: Mode, config: Partial<GlobalConfig>
     logging: config.logging ?? { level: 'error' },
     database: config.database ?? { path: '' },
     workspace: config.workspace ?? { workdir: process.cwd() },
+    llm: config.llm,
     visionFallback: config.visionFallback ?? defaultVisionFallback,
   }
   await mkdir(dirname(configPath), { recursive: true })
@@ -377,6 +385,7 @@ export function setDefaultModelSelection(
     logging: config.logging ?? { level: 'error' },
     database: config.database ?? { path: '' },
     workspace: config.workspace ?? { workdir: process.cwd() },
+    llm: config.llm,
     visionFallback: config.visionFallback ?? defaultVisionFallback,
   }
 }
@@ -406,6 +415,7 @@ export function addProvider(config: Partial<GlobalConfig>, provider: Omit<Provid
     logging: config.logging ?? { level: 'error' },
     database: config.database ?? { path: '' },
     workspace: config.workspace ?? { workdir: process.cwd() },
+    llm: config.llm,
     visionFallback: config.visionFallback ?? defaultVisionFallback,
   }
 }
@@ -454,6 +464,7 @@ export function removeProvider(config: Partial<GlobalConfig>, providerId: string
     logging: config.logging ?? { level: 'error' },
     database: config.database ?? { path: '' },
     workspace: config.workspace ?? { workdir: process.cwd() },
+    llm: config.llm,
     visionFallback: config.visionFallback ?? defaultVisionFallback,
   }
 }
@@ -471,6 +482,7 @@ export function activateProvider(config: Partial<GlobalConfig>, providerId: stri
       logging: config.logging ?? { level: 'error' },
       database: config.database ?? { path: '' },
       workspace: config.workspace ?? { workdir: process.cwd() },
+      llm: config.llm,
       visionFallback: config.visionFallback ?? defaultVisionFallback,
     }
   }
@@ -485,6 +497,7 @@ export function activateProvider(config: Partial<GlobalConfig>, providerId: stri
     logging: config.logging ?? { level: 'error' },
     database: config.database ?? { path: '' },
     workspace: config.workspace ?? { workdir: process.cwd() },
+    llm: config.llm,
     visionFallback: config.visionFallback ?? defaultVisionFallback,
   }
 }

@@ -34,6 +34,8 @@ export async function runServe(options: ServeOptions): Promise<void> {
   const isEnvBackendExplicit = envBackend !== 'unknown'
   const isEnvModelExplicit = !!envModel // empty default means not explicitly set
   const isEnvUrlExplicit = envUrl !== 'http://localhost:8000/v1' // default in config.ts
+  const isEnvTimeoutExplicit = env.llm.timeout !== 300_000
+  const isEnvIdleTimeoutExplicit = env.llm.idleTimeout !== 300_000
 
   // Get provider values with fallbacks
   const providerUrl = activeProvider?.url ?? envUrl
@@ -47,6 +49,10 @@ export async function runServe(options: ServeOptions): Promise<void> {
       baseUrl: isEnvUrlExplicit ? envUrl : providerUrl,
       model: isEnvModelExplicit ? envModel : defaultModel,
       backend: isEnvBackendExplicit ? envBackend : providerBackend,
+      timeout: isEnvTimeoutExplicit ? env.llm.timeout : (globalConfig.llm?.timeout ?? env.llm.timeout),
+      idleTimeout: isEnvIdleTimeoutExplicit
+        ? env.llm.idleTimeout
+        : (globalConfig.llm?.idleTimeout ?? env.llm.idleTimeout),
     },
     server: {
       ...env.server,

@@ -64,8 +64,8 @@ describe('config', () => {
       })
       expect(migrated.providers[0]?.models).toEqual([{ id: 'qwen3-32b', contextWindow: 200000, source: 'user' }])
       expect(migrated.defaultModelSelection).toMatch(/^[a-f0-9-]+\/qwen3-32b$/)
-      // Old llm key should be removed
-      expect('llm' in migrated).toBe(false)
+      // Old llm.url/model/backend should be removed (new llm key is for timeout config)
+      expect(migrated.llm).toBeUndefined()
       expect(result.migrated).toBe(true)
     })
 

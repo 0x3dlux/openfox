@@ -155,9 +155,9 @@ describe('Markdown', () => {
     })
 
     it('handles tables with line numbers (read_file output)', () => {
-      const content = `15: | Path | Purpose |
-16: |------|---------|
-17: | /test | Test desc |`
+      const content = `15| | Path | Purpose |
+16| |------|---------|
+17| | /test | Test desc |`
 
       const html = renderToString(<Markdown content={content} />)
 

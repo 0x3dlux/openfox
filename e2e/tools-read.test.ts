@@ -81,7 +81,7 @@ describe('Read Tools', () => {
       if (toolCalls.length > 0 && toolCalls[0]!.result?.success) {
         const output = toolCalls[0]!.result!.output!
         // Should not contain line 1
-        expect(output.startsWith('1:')).toBe(false)
+        expect(output.startsWith('1|')).toBe(false)
       }
     })
 

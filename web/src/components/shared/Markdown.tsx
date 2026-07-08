@@ -226,8 +226,8 @@ function preprocessMarkdown(content: string): string {
   // This handles broken table formatting where LLM puts | on its own line
   processed = processed.replace(/^\|\s*$/gm, '')
 
-  // Strip line numbers added by read_file tool (format: "123: content")
-  processed = processed.replace(/^\d+:\s/gm, '')
+  // Strip line numbers added by read_file tool (format: "123|content")
+  processed = processed.replace(/^\d+\|/gm, '')
 
   return processed
 }

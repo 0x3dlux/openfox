@@ -209,7 +209,7 @@ function stripLineNumbers(content: string): string {
   return content
     .split('\n')
     .filter((l) => !l.startsWith('\n[') && !l.startsWith('['))
-    .map((l) => l.replace(/^\d+: /, ''))
+    .map((l) => l.replace(/^\d+\|/, ''))
     .join('\n')
 }
 
@@ -263,7 +263,7 @@ export const ReadFileView = memo(function ReadFileView({
   // For other file types, show with syntax highlighting and line numbers
   const strippedContent = stripLineNumbers(content)
   const firstLine = content.split('\n')[0]
-  const startMatch = firstLine?.match(/^(\d+): /)
+  const startMatch = firstLine?.match(/^(\d+)\|/)
   const startLine = startMatch ? parseInt(startMatch[1]!, 10) : 1
 
   return (

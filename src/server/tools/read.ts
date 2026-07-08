@@ -227,7 +227,7 @@ export const readFileTool = createTool<ReadFileArgs>(
     const selectedLines = lines.slice(startLine - 1, endLine)
 
     // Format with line numbers
-    const formatted = selectedLines.map((line, i) => `${startLine + i}: ${line}`).join('\n')
+    const formatted = selectedLines.map((line, i) => `${startLine + i}|${line}`).join('\n')
 
     // Check if truncated
     const truncated = endLine < totalLines

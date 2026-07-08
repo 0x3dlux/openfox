@@ -227,9 +227,9 @@ describe('readFileTool - Image Support', () => {
       const result = await readFileTool.execute({ path: 'test.ts', offset: 2, limit: 2 }, mockContext)
 
       expect(result.success).toBe(true)
-      expect(result.output).toContain('2: line 2')
-      expect(result.output).toContain('3: line 3')
-      expect(result.output).not.toContain('1: line 1')
+      expect(result.output).toContain('2|line 2')
+      expect(result.output).toContain('3|line 3')
+      expect(result.output).not.toContain('1|line 1')
       expect(result.metadata).toBeDefined()
       expect(result.metadata?.['encoding']).toBe('utf-8')
       expect(result.metadata?.['path']).toBe('/test/workdir/test.ts')
@@ -251,8 +251,8 @@ describe('readFileTool - Image Support', () => {
       const result = await readFileTool.execute({ path: 'test.ts', offset: 10, limit: 5 }, mockContext)
 
       expect(result.success).toBe(true)
-      expect(result.output).toContain('10: line 10')
-      expect(result.output).toContain('14: line 14')
+      expect(result.output).toContain('10|line 10')
+      expect(result.output).toContain('14|line 14')
     })
   })
 

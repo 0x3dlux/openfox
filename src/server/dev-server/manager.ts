@@ -153,7 +153,7 @@ class DevServerManager {
     // Start inspect proxy if not disabled
     if (!config.disableInspect && config.url && this._sessionManager) {
       try {
-        const { port, cleanup } = startInspectProxy(config.url, this._sessionManager)
+        const { port, cleanup } = startInspectProxy(config.url, this._sessionManager, workdir)
         instance.inspectProxyPort = port
         instance.proxyCleanup = cleanup
         logger.debug('Inspect proxy started', { workdir, port, target: config.url })

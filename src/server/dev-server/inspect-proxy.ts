@@ -2,6 +2,7 @@ import net from 'net'
 import zlib from 'zlib'
 import { logger } from '../utils/logger.js'
 import type { SessionManager } from '../session/manager.js'
+import { getProjectByWorkdir } from '../db/projects.js'
 
 const OPENFOX_BASE_PORT = Number(process.env['OPENFOX_PORT'] ?? 10369)
 const INJECT_SCRIPT = `<script src="http://127.0.0.1:${OPENFOX_BASE_PORT}/__inspect__.js"></script>`
@@ -85,28 +86,28 @@ function buildResponse(status: number, headers: Record<string, string>, body: Bu
 }
 
 function dechunk(buf: Buffer): Buffer {
-  const str = buf.toString('utf8')
-  const parts: string[] = []
+  const parts: Buffer[] = []
   let pos = 0
-  while (pos < str.length) {
-    const nlIdx = str.indexOf('\r\n', pos)
+  while (pos < buf.length) {
+    const nlIdx = buf.indexOf('\r\n', pos)
     if (nlIdx < 0) break
-    const sizeStr = str.slice(pos, nlIdx)
+    const sizeStr = buf.subarray(pos, nlIdx).toString('ascii')
     const size = parseInt(sizeStr, 16)
     if (isNaN(size) || size < 0) break
     if (size === 0) break
     const chunkStart = nlIdx + 2
     const chunkEnd = chunkStart + size
-    if (chunkEnd > str.length) break
-    parts.push(str.slice(chunkStart, chunkEnd))
+    if (chunkEnd > buf.length) break
+    parts.push(buf.subarray(chunkStart, chunkEnd))
     pos = chunkEnd + 2
   }
-  return Buffer.from(parts.join(''), 'utf8')
+  return Buffer.concat(parts)
 }
 
 export function startInspectProxy(
   target: string,
   sessionManager: SessionManager,
+  workdir?: string,
 ): { port: number; cleanup: () => void } {
   const port = getAvailablePort()
 
@@ -128,6 +129,29 @@ export function startInspectProxy(
       const { method, url, headers } = parseReqHeaders(clientHead)
       const isWS = headers['upgrade'] === 'websocket'
       clientParsed = true
+
+      if (url === '/__openfox_sessions' && method === 'GET') {
+        let sessions = sessionManager.listSessions()
+        // Filter by project if workdir is known
+        if (workdir) {
+          const project = getProjectByWorkdir(workdir)
+          if (project) {
+            sessions = sessions.filter((s) => s.projectId === project.id)
+          }
+        }
+        // Sort most recent first
+        sessions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        const mapped = sessions.map((s) => ({
+          id: s.id,
+          title: s.title ?? s.id,
+          createdAt: s.createdAt,
+        }))
+        client.write(
+          buildResponse(200, { 'Content-Type': 'application/json' }, Buffer.from(JSON.stringify({ sessions: mapped }))),
+        )
+        client.end()
+        return
+      }
 
       if (url === '/__openfox_feedback' && method === 'POST') {
         const contentLength = parseInt(headers['content-length'] || '0', 10)
@@ -180,8 +204,10 @@ export function startInspectProxy(
       }
 
       targetSocket = net.connect(targetPort, targetHost)
-      targetSocket.on('error', () => client.destroy())
-      client.on('error', () => targetSocket!.destroy())
+      targetSocket.on('error', () => {
+        respondWithError(502, 'Bad Gateway')
+      })
+      client.on('error', () => targetSocket?.destroy())
       client.on('end', () => targetSocket!.end())
 
       // Force target to close connection after response so we get on('end') promptly
@@ -201,8 +227,18 @@ export function startInspectProxy(
       let resHeaders: Record<string, string> = {}
       const bodyBuf: Buffer[] = []
       let headEnd = -1
+      let responded = false
+
+      function respondWithError(status: number, message: string) {
+        if (responded) return
+        responded = true
+        client.write(buildResponse(status, { 'Content-Type': 'text/plain' }, Buffer.from(message)))
+        client.end()
+      }
 
       targetSocket.on('data', (sChunk) => {
+        if (responded) return
+
         if (!serverParsed) {
           serverHeadBuf += sChunk.toString('utf8')
           const sHe = serverHeadBuf.indexOf('\r\n\r\n')
@@ -247,18 +283,22 @@ export function startInspectProxy(
       })
 
       targetSocket.on('end', () => {
+        if (responded) return
+
         if (!serverParsed) {
-          client.end()
+          respondWithError(502, 'Upstream connection closed prematurely')
           return
         }
 
         if (isHtml && enc) {
           const fullBody = Buffer.concat(bodyBuf)
+          const isChunked = (resHeaders['transfer-encoding'] || '').toLowerCase() === 'chunked'
+          const decoded = isChunked ? dechunk(fullBody) : fullBody
           let text: string
           try {
-            if (enc === 'gzip') text = zlib.gunzipSync(fullBody).toString('utf8')
-            else if (enc === 'deflate') text = zlib.inflateSync(fullBody).toString('utf8')
-            else text = fullBody.toString('utf8')
+            if (enc === 'gzip') text = zlib.gunzipSync(decoded).toString('utf8')
+            else if (enc === 'deflate') text = zlib.inflateSync(decoded).toString('utf8')
+            else text = decoded.toString('utf8')
           } catch {
             client.end()
             return
@@ -270,6 +310,10 @@ export function startInspectProxy(
           if (bi >= 0) modified = text.slice(0, bi) + INJECT_SCRIPT + text.slice(bi)
           else if (hi >= 0) modified = text.slice(0, hi) + INJECT_SCRIPT + text.slice(hi)
           else {
+            // No injection point found — send original body through (still compressed)
+            const headStr = buildHttpHeaders(resHeaders, status)
+            client.write(Buffer.from(headStr, 'utf8'))
+            client.write(fullBody)
             client.end()
             return
           }
@@ -282,6 +326,7 @@ export function startInspectProxy(
           const headStr = buildHttpHeaders(resHeaders, status)
           client.write(Buffer.from(headStr, 'utf8'))
           client.write(compressed)
+          client.end()
         } else if (isHtml && bodyBuf.length > 0) {
           const fullBody = Buffer.concat(bodyBuf)
           const isChunked = (resHeaders['transfer-encoding'] || '').toLowerCase() === 'chunked'
@@ -294,16 +339,24 @@ export function startInspectProxy(
           else if (hi >= 0)
             modified = Buffer.concat([dechunks.slice(0, hi), Buffer.from(INJECT_SCRIPT, 'utf8'), dechunks.slice(hi)])
           else {
+            // No injection point found — send original body through
+            const headStr = buildHttpHeaders(
+              resHeaders,
+              status,
+              Buffer.byteLength(dechunks),
+              'text/html; charset=utf-8',
+            )
+            client.write(Buffer.from(headStr, 'utf8'))
+            client.write(dechunks)
             client.end()
             return
           }
 
           const headStr = buildHttpHeaders(resHeaders, status, Buffer.byteLength(modified), 'text/html; charset=utf-8')
           client.write(Buffer.from(headStr, 'utf8'))
-          client.write(modified as Buffer)
+          client.write(modified)
+          client.end()
         }
-
-        client.end()
       })
     })
 

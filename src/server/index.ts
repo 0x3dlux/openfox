@@ -1710,15 +1710,6 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       }),
     )
 
-    // Inspect tool: serve injection script from main server with CORS
-    app.use('/__inspect__.js', (_req, res) => {
-      res.set('Access-Control-Allow-Origin', '*')
-      res.set('Content-Type', 'application/javascript')
-      readFile(join(distWebDir, '__inspect__.js'))
-        .then((content) => res.send(content))
-        .catch(() => res.status(404).send('Not found'))
-    })
-
     // Inspect tool: serve injection script with CORS so proxied dev servers can load it
     app.use('/__inspect__.js', (_req, res) => {
       res.set('Access-Control-Allow-Origin', '*')

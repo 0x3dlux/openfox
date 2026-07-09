@@ -9,6 +9,7 @@ function mountWarmupRoute(
   deps: {
     sessionManager: Pick<SessionManager, 'getSession' | 'isWarmedUp' | 'markWarmedUp'>
     getLLMClient: () => Pick<LLMClientWithModel, 'getBackend' | 'getModel'>
+    getSetting?: (key: string) => string | null
     logger?: { debug: (...args: unknown[]) => void }
   },
 ) {
@@ -19,6 +20,10 @@ function mountWarmupRoute(
     const session = deps.sessionManager.getSession(sessionId)
     if (!session) {
       return res.status(404).json({ error: 'Session not found' })
+    }
+
+    if (deps.getSetting?.('cache.warming') !== 'true') {
+      return res.json({ success: false, reason: 'disabled' })
     }
 
     if (session.messages.length > 0) {
@@ -40,17 +45,22 @@ async function fetchJson(url: string, options?: RequestInit): Promise<{ status: 
   return { status: response.status, body }
 }
 
+async function closeServer(srv: Server): Promise<void> {
+  return new Promise((resolve) => srv.close(() => resolve()))
+}
+
 describe('POST /api/sessions/:id/warmup', () => {
   let server: Server
   let baseUrl: string
   let mockSessionManager: Pick<SessionManager, 'getSession' | 'isWarmedUp' | 'markWarmedUp'>
   let mockGetLLMClient: () => Pick<LLMClientWithModel, 'getBackend' | 'getModel'>
 
-  async function startServer() {
+  async function startServer(getSettingFn?: (key: string) => string | null) {
     const app = express()
     mountWarmupRoute(app, {
       sessionManager: mockSessionManager,
       getLLMClient: mockGetLLMClient,
+      ...(getSettingFn ? { getSetting: getSettingFn } : {}),
     })
     return new Promise<void>((resolve) => {
       server = createServer(app)
@@ -88,6 +98,8 @@ describe('POST /api/sessions/:id/warmup', () => {
   })
 
   it('returns not_empty when session has messages', async () => {
+    await closeServer(server)
+    await startServer(() => 'true')
     ;(mockSessionManager.getSession as any).mockReturnValue({
       id: 'test-session',
       messages: [{ id: 'msg-1', role: 'user', content: 'hello' }],
@@ -99,6 +111,8 @@ describe('POST /api/sessions/:id/warmup', () => {
   })
 
   it('returns already_warmed when warmup was already performed', async () => {
+    await closeServer(server)
+    await startServer(() => 'true')
     ;(mockSessionManager.getSession as any).mockReturnValue({
       id: 'test-session',
       messages: [],
@@ -110,7 +124,9 @@ describe('POST /api/sessions/:id/warmup', () => {
     expect(body).toEqual({ success: false, reason: 'already_warmed' })
   })
 
-  it('returns success and marks warmed up for empty session', async () => {
+  it('returns success and marks warmed up for empty session when setting is enabled', async () => {
+    await closeServer(server)
+    await startServer(() => 'true')
     ;(mockSessionManager.getSession as any).mockReturnValue({
       id: 'test-session',
       messages: [],
@@ -120,5 +136,19 @@ describe('POST /api/sessions/:id/warmup', () => {
     expect(status).toBe(200)
     expect(body).toEqual({ success: true })
     expect(mockSessionManager.markWarmedUp).toHaveBeenCalledWith('test-session')
+  })
+
+  it('returns disabled when cache.warming setting is not enabled', async () => {
+    await closeServer(server)
+    await startServer(() => 'false')
+    ;(mockSessionManager.getSession as any).mockReturnValue({
+      id: 'test-session',
+      messages: [],
+    })
+
+    const { status, body } = await fetchJson(`${baseUrl}/api/sessions/test-session/warmup`, { method: 'POST' })
+    expect(status).toBe(200)
+    expect(body).toEqual({ success: false, reason: 'disabled' })
+    expect(mockSessionManager.markWarmedUp).not.toHaveBeenCalled()
   })
 })

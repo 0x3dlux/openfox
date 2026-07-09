@@ -676,11 +676,17 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
   // Warmup endpoint: prefills the LLM KV cache with system prompt + tools
   // so the first real message has a lower time-to-first-token.
+  // Disabled by default — enable via Settings > Advanced > Speculative Cache Warming.
   app.post('/api/sessions/:id/warmup', async (req, res) => {
     const sessionId = req.params.id
     const session = sessionManager.getSession(sessionId)
     if (!session) {
       return res.status(404).json({ error: 'Session not found' })
+    }
+
+    const { getSetting, SETTINGS_KEYS } = await import('./db/settings.js')
+    if (getSetting(SETTINGS_KEYS.CACHE_WARMING) !== 'true') {
+      return res.json({ success: false, reason: 'disabled' })
     }
 
     if (session.messages.length > 0) {

@@ -12,10 +12,12 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
 
   const showOpenInEditor = settings[SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR] === 'true'
   const dynamicSystemPrompt = settings[SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT] === 'true'
+  const cacheWarming = settings[SETTINGS_KEYS.CACHE_WARMING] === 'true'
 
   const [localToggles, setLocalToggles] = useState({
     openInEditor: showOpenInEditor,
     dynamicPrompt: dynamicSystemPrompt,
+    cacheWarming,
   })
 
   const [retryPatterns, setRetryPatterns] = useState<RetryPatternsValue>({ patterns: [], maxRetriesPerTurn: 10 })
@@ -24,12 +26,14 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
     setLocalToggles({
       openInEditor: showOpenInEditor,
       dynamicPrompt: dynamicSystemPrompt,
+      cacheWarming,
     })
-  }, [showOpenInEditor, dynamicSystemPrompt])
+  }, [showOpenInEditor, dynamicSystemPrompt, cacheWarming])
 
   useEffect(() => {
     getSetting(SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR)
     getSetting(SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT)
+    getSetting(SETTINGS_KEYS.CACHE_WARMING)
     getSetting(SETTINGS_KEYS.RETRY_PATTERNS)
   }, [getSetting])
 
@@ -64,6 +68,12 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
     setSetting(SETTINGS_KEYS.LLM_DYNAMIC_SYSTEM_PROMPT, String(newValue))
   }
 
+  const handleToggleCacheWarming = () => {
+    const newValue = !localToggles.cacheWarming
+    setLocalToggles((prev) => ({ ...prev, cacheWarming: newValue }))
+    setSetting(SETTINGS_KEYS.CACHE_WARMING, String(newValue))
+  }
+
   function handleLaunchOnboarding() {
     onClose()
     navigate('/onboarding')
@@ -76,6 +86,14 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
         description="Rebuild the system prompt on every turn. When disabled, changes are applied on demand via the context header for better cache performance."
         enabled={localToggles.dynamicPrompt}
         onToggle={handleToggleDynamicSystemPrompt}
+        boldTitle
+      />
+      <hr className="border-border" />
+      <SettingsToggle
+        title="Speculative Cache Warming"
+        description="On first keystroke in an empty session, prefill the LLM KV cache to reduce time-to-first-token."
+        enabled={localToggles.cacheWarming}
+        onToggle={handleToggleCacheWarming}
         boldTitle
       />
       <hr className="border-border" />

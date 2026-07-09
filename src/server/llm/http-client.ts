@@ -41,11 +41,7 @@ export class OpenAIHttpClient {
     }
 
     const bodyStr = JSON.stringify(params)
-    logger.debug('HTTP request to LLM', {
-      url,
-      body: bodyStr.slice(0, 2000),
-      bodyKeys: Object.keys(params),
-    })
+    logger.debug('HTTP request to LLM', { url, bodyKeys: Object.keys(params) })
 
     const response = await fetch(url, {
       method: 'POST',

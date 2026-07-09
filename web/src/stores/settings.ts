@@ -17,6 +17,7 @@ export const SETTINGS_KEYS = {
   DISPLAY_SHOW_OPEN_IN_EDITOR: 'display.showOpenInEditorLinks',
   DISPLAY_MAX_VISIBLE_ITEMS: 'display.maxVisibleItems',
   LLM_DYNAMIC_SYSTEM_PROMPT: 'llm.dynamicSystemPrompt',
+  CACHE_WARMING: 'cache.warming',
   KEYBINDINGS: 'keybindings',
   RETRY_PATTERNS: 'agent.retryPatterns',
 } as const

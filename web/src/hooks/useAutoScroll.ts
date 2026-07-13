@@ -1,6 +1,8 @@
 import { RefObject, useEffect, useRef, useState } from 'react'
 import { Session } from '@shared/types.ts'
 
+export const isUserNavigatingHistory = { current: false }
+
 export const useAutoScroll = (container_ref: RefObject<HTMLElement | null>, session: Session | null) => {
   const is_active = useRef(true)
   const startY = useRef<number | null>(null)

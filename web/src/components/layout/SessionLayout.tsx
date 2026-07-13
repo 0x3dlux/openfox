@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useSessionStore } from '../../stores/session'
 import { SessionSidebar } from '../plan/SessionSidebar'
+import { useDisplaySettings } from '../../stores/settings'
 import type { Message } from '@shared/types.js'
 import type { DisplayItem } from '../plan/groupMessages'
 
@@ -12,6 +13,7 @@ interface SessionLayoutProps {
   displayItems?: DisplayItem[]
   activeIndex?: number
   onNavigate?: (index: number) => void
+  sidebarScrollContainerRef?: React.RefObject<HTMLDivElement | null>
 }
 
 export function SessionLayout({
@@ -22,8 +24,10 @@ export function SessionLayout({
   displayItems,
   activeIndex,
   onNavigate,
+  sidebarScrollContainerRef,
 }: SessionLayoutProps) {
   const session = useSessionStore((state) => state.currentSession)
+  const { historyMode } = useDisplaySettings()
 
   return (
     <div className="relative h-full overflow-hidden">
@@ -45,6 +49,8 @@ export function SessionLayout({
               displayItems={displayItems}
               activeIndex={activeIndex}
               onNavigate={onNavigate}
+              historyMode={historyMode}
+              sidebarScrollContainerRef={sidebarScrollContainerRef}
             />
           </aside>
         ) : (
@@ -67,6 +73,8 @@ export function SessionLayout({
             displayItems={displayItems}
             activeIndex={activeIndex}
             onNavigate={onNavigate}
+            historyMode={historyMode}
+            sidebarScrollContainerRef={sidebarScrollContainerRef}
           />
         </aside>
       </div>

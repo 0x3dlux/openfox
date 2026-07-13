@@ -8,6 +8,8 @@ export const SETTINGS_KEYS = {
   DISPLAY_SHOW_THINKING: 'display.showThinking',
   DISPLAY_SHOW_VERBOSE_TOOL_OUTPUT: 'display.showVerboseToolOutput',
   DISPLAY_SHOW_STATS: 'display.showStats',
+  DISPLAY_SHOW_HISTORY_SIDEBAR: 'display.showHistorySidebar',
+  DISPLAY_HISTORY_MODE: 'display.historyMode',
   DISPLAY_SHOW_AGENT_DEFINITIONS: 'display.showAgentDefinitions',
   DISPLAY_SHOW_WORKFLOW_BARS: 'display.showWorkflowBars',
   DISPLAY_SHOW_SYNTAX_HIGHLIGHTING: 'display.showSyntaxHighlighting',
@@ -55,6 +57,8 @@ export const DISPLAY_SETTINGS_KEYS = [
   SETTINGS_KEYS.DISPLAY_SHOW_THINKING,
   SETTINGS_KEYS.DISPLAY_SHOW_VERBOSE_TOOL_OUTPUT,
   SETTINGS_KEYS.DISPLAY_SHOW_STATS,
+  SETTINGS_KEYS.DISPLAY_SHOW_HISTORY_SIDEBAR,
+  SETTINGS_KEYS.DISPLAY_HISTORY_MODE,
   SETTINGS_KEYS.DISPLAY_SHOW_AGENT_DEFINITIONS,
   SETTINGS_KEYS.DISPLAY_SHOW_WORKFLOW_BARS,
   SETTINGS_KEYS.DISPLAY_SHOW_SYNTAX_HIGHLIGHTING,
@@ -69,6 +73,11 @@ export function useDisplaySettings() {
     showVerboseToolOutput:
       useSettingsStore((state) => state.settings[SETTINGS_KEYS.DISPLAY_SHOW_VERBOSE_TOOL_OUTPUT] ?? 'true') === 'true',
     showStats: useSettingsStore((state) => state.settings[SETTINGS_KEYS.DISPLAY_SHOW_STATS] ?? 'true') === 'true',
+    showHistorySidebar:
+      useSettingsStore((state) => state.settings[SETTINGS_KEYS.DISPLAY_SHOW_HISTORY_SIDEBAR] ?? 'true') === 'true',
+    historyMode: useSettingsStore((state) => state.settings[SETTINGS_KEYS.DISPLAY_HISTORY_MODE] ?? 'fancy') as
+      | 'plain'
+      | 'fancy',
     showAgentDefinitions:
       useSettingsStore((state) => state.settings[SETTINGS_KEYS.DISPLAY_SHOW_AGENT_DEFINITIONS] ?? 'true') === 'true',
     showWorkflowBars:

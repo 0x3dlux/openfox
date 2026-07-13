@@ -46,6 +46,16 @@ export function DisplayTab() {
       description: 'Display model, tokens, and timing information',
     },
     {
+      key: SETTINGS_KEYS.DISPLAY_SHOW_HISTORY_SIDEBAR,
+      label: 'Show history sidebar',
+      description: 'Display conversation timeline in the right sidebar',
+    },
+    {
+      key: SETTINGS_KEYS.DISPLAY_HISTORY_MODE,
+      label: 'Use fancier icons/colors in history sidebar',
+      description: 'Enhanced visual styling with icons and colors for message categories',
+    },
+    {
       key: SETTINGS_KEYS.DISPLAY_SHOW_AGENT_DEFINITIONS,
       label: 'Show agent definitions',
       description: 'Display agent definition injections in the feed',

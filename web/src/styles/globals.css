@@ -34,16 +34,16 @@
     @apply bg-text-muted;
   }
 
-  /* Firefox scrollbars - hover behavior */
+  /* Firefox scrollbars - fixed width to prevent reflow */
   @supports (scrollbar-width: thin) {
-    /* Thin + hidden by default, auto-width + visible on hover (Firefox widens auto scrollbars natively) */
+    /* Thin width constant, only color changes on hover */
     * {
       scrollbar-width: thin;
       scrollbar-color: transparent transparent;
     }
     *:hover,
     *:focus-within {
-      scrollbar-width: auto;
+      scrollbar-width: thin;
       scrollbar-color: rgb(var(--color-bg-tertiary) / 0.6) transparent;
     }
   }

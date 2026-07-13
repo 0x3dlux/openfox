@@ -2,8 +2,7 @@ import { spawn } from 'node:child_process'
 import type { ServerMessage, BackgroundProcess } from '../../../shared/protocol.js'
 import * as store from './store.js'
 import { getPlatformShell } from '../../utils/platform.js'
-
-const STOP_SIGNAL_TIMEOUT = 5000
+import { killProcessTree } from '../../utils/process-tree.js'
 
 type ProcessEventListener = (processId: string, msg: ServerMessage) => void
 const listeners = new Set<ProcessEventListener>()
@@ -115,45 +114,15 @@ export async function stopProcess(processId: string, sessionId: string): Promise
 
   store.updateStatus(processId, sessionId, 'stopping')
 
-  const pid = proc.pid!
-  try {
-    try {
-      process.kill(-pid, 'SIGTERM')
-    } catch {
-      process.kill(pid, 'SIGTERM')
-    }
+  await killProcessTree(proc.pid!)
 
-    await new Promise<void>((resolve) => {
-      setTimeout(() => {
-        try {
-          process.kill(-pid, 'SIGKILL')
-        } catch {
-          try {
-            process.kill(pid, 'SIGKILL')
-          } catch {
-            // Process already dead
-          }
-        }
-        resolve()
-      }, STOP_SIGNAL_TIMEOUT)
-    })
-
-    store.updateStatus(processId, sessionId, 'exited', null)
-    emitProcessEvent(processId, {
-      type: 'backgroundProcess.removed',
-      payload: { processId },
-      sessionId,
-    })
-    store.removeProcess(processId, sessionId)
-  } catch {
-    store.updateStatus(processId, sessionId, 'exited', 1)
-    emitProcessEvent(processId, {
-      type: 'backgroundProcess.removed',
-      payload: { processId },
-      sessionId,
-    })
-    store.removeProcess(processId, sessionId)
-  }
+  store.updateStatus(processId, sessionId, 'exited', null)
+  emitProcessEvent(processId, {
+    type: 'backgroundProcess.removed',
+    payload: { processId },
+    sessionId,
+  })
+  store.removeProcess(processId, sessionId)
 }
 
 export function getProcessStatus(processId: string, sessionId: string): BackgroundProcess | undefined {

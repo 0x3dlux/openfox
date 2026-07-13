@@ -1,4 +1,5 @@
 import type { BackgroundProcess, LogLine } from './types.js'
+import { killProcessTree } from '../../utils/process-tree.js'
 
 const MAX_PER_SESSION = 5
 
@@ -153,15 +154,7 @@ export function cleanupAllProcesses(): void {
   for (const sessionProcesses of processesBySession.values()) {
     for (const proc of sessionProcesses.values()) {
       if (proc.status === 'running' && proc.pid) {
-        try {
-          process.kill(-proc.pid, 'SIGTERM')
-        } catch {
-          try {
-            process.kill(proc.pid, 'SIGTERM')
-          } catch {
-            // Process already dead
-          }
-        }
+        killProcessTree(proc.pid)
       }
     }
   }

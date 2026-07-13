@@ -9,7 +9,9 @@ import {
   foldContextState,
   foldSessionState,
   foldTurnEventsToSnapshotMessages,
+  reorderToolMessages,
 } from './folding.js'
+import type { MessageWithId } from './fold-types.js'
 
 const baseEvent = {
   seq: 1,
@@ -1585,6 +1587,244 @@ describe('event folding', () => {
 
       // Tool message for call-1 should be present
       expect(messages.some((m) => m.role === 'tool' && m.toolCallId === 'call-1')).toBe(true)
+    })
+
+    describe('parallel tool call ordering', () => {
+      it('preserves tool call order when tool.results arrive in reverse completion order', () => {
+        // Simulate parallel tool execution where B finishes before A:
+        // Events: tool.call(A), tool.call(B), tool.result(B), tool.result(A)
+        // Expected: tool messages in call order [A, B], not completion order [B, A]
+        const events: StoredEvent[] = [
+          { ...baseEvent, type: 'message.start', data: { messageId: 'm1', role: 'user', content: 'run both' } },
+          { ...baseEvent, type: 'message.done', data: { messageId: 'm1' } },
+          { ...baseEvent, type: 'message.start', data: { messageId: 'm2', role: 'assistant' } },
+          {
+            ...baseEvent,
+            type: 'tool.call',
+            data: { messageId: 'm2', toolCall: { id: 'call-a', name: 'read_file', arguments: { path: 'a.txt' } } },
+          },
+          {
+            ...baseEvent,
+            type: 'tool.call',
+            data: {
+              messageId: 'm2',
+              toolCall: { id: 'call-b', name: 'run_command', arguments: { command: 'echo b' } },
+            },
+          },
+          // B finishes first — tool.result events in REVERSE order
+          {
+            ...baseEvent,
+            type: 'tool.result',
+            data: {
+              messageId: 'm2',
+              toolCallId: 'call-b',
+              result: { success: true, output: 'b', durationMs: 1, truncated: false },
+            },
+          },
+          {
+            ...baseEvent,
+            type: 'tool.result',
+            data: {
+              messageId: 'm2',
+              toolCallId: 'call-a',
+              result: { success: true, output: 'a', durationMs: 5, truncated: false },
+            },
+          },
+          { ...baseEvent, type: 'message.done', data: { messageId: 'm2' } },
+        ]
+
+        const messages = buildContextMessagesFromStoredEvents(events)
+
+        // Assistant should have toolCalls in call order [A, B]
+        const assistant = messages.find((m) => m.role === 'assistant')
+        expect(assistant!.toolCalls).toHaveLength(2)
+        expect(assistant!.toolCalls![0]!.id).toBe('call-a')
+        expect(assistant!.toolCalls![1]!.id).toBe('call-b')
+
+        // Tool messages must be in call order [A, B], NOT completion order [B, A]
+        const toolMessages = messages.filter((m) => m.role === 'tool')
+        expect(toolMessages).toHaveLength(2)
+        expect(toolMessages[0]!.toolCallId).toBe('call-a')
+        expect(toolMessages[1]!.toolCallId).toBe('call-b')
+
+        // Content should match
+        expect(toolMessages[0]!.content).toBe('a')
+        expect(toolMessages[1]!.content).toBe('b')
+      })
+
+      it('preserves order with three parallel tool calls', () => {
+        // Three tools called in order [A, B, C], results arrive [C, A, B]
+        const events: StoredEvent[] = [
+          { ...baseEvent, type: 'message.start', data: { messageId: 'm1', role: 'assistant' } },
+          {
+            ...baseEvent,
+            type: 'tool.call',
+            data: { messageId: 'm1', toolCall: { id: 'call-a', name: 'read_file', arguments: { path: 'a.txt' } } },
+          },
+          {
+            ...baseEvent,
+            type: 'tool.call',
+            data: { messageId: 'm1', toolCall: { id: 'call-b', name: 'read_file', arguments: { path: 'b.txt' } } },
+          },
+          {
+            ...baseEvent,
+            type: 'tool.call',
+            data: { messageId: 'm1', toolCall: { id: 'call-c', name: 'read_file', arguments: { path: 'c.txt' } } },
+          },
+          // Results in reverse: C, A, B
+          {
+            ...baseEvent,
+            type: 'tool.result',
+            data: {
+              messageId: 'm1',
+              toolCallId: 'call-c',
+              result: { success: true, output: 'c', durationMs: 1, truncated: false },
+            },
+          },
+          {
+            ...baseEvent,
+            type: 'tool.result',
+            data: {
+              messageId: 'm1',
+              toolCallId: 'call-a',
+              result: { success: true, output: 'a', durationMs: 3, truncated: false },
+            },
+          },
+          {
+            ...baseEvent,
+            type: 'tool.result',
+            data: {
+              messageId: 'm1',
+              toolCallId: 'call-b',
+              result: { success: true, output: 'b', durationMs: 5, truncated: false },
+            },
+          },
+          { ...baseEvent, type: 'message.done', data: { messageId: 'm1' } },
+        ]
+
+        const messages = buildContextMessagesFromStoredEvents(events)
+
+        const assistant = messages.find((m) => m.role === 'assistant')
+        expect(assistant!.toolCalls).toHaveLength(3)
+        expect(assistant!.toolCalls!.map((tc) => tc.id)).toEqual(['call-a', 'call-b', 'call-c'])
+
+        const toolMessages = messages.filter((m) => m.role === 'tool')
+        expect(toolMessages).toHaveLength(3)
+        expect(toolMessages.map((m) => m.toolCallId)).toEqual(['call-a', 'call-b', 'call-c'])
+      })
+
+      it('does not reorder tool messages across different assistant messages', () => {
+        // Two separate assistant messages, each with parallel tool calls.
+        // Tool results from different assistants must NOT intermix.
+        const events: StoredEvent[] = [
+          { ...baseEvent, type: 'message.start', data: { messageId: 'm1', role: 'assistant' } },
+          {
+            ...baseEvent,
+            type: 'tool.call',
+            data: { messageId: 'm1', toolCall: { id: 'call-1a', name: 'read_file', arguments: { path: 'a.txt' } } },
+          },
+          {
+            ...baseEvent,
+            type: 'tool.call',
+            data: { messageId: 'm1', toolCall: { id: 'call-1b', name: 'read_file', arguments: { path: 'b.txt' } } },
+          },
+          {
+            ...baseEvent,
+            type: 'tool.result',
+            data: {
+              messageId: 'm1',
+              toolCallId: 'call-1b',
+              result: { success: true, output: 'b', durationMs: 1, truncated: false },
+            },
+          },
+          {
+            ...baseEvent,
+            type: 'tool.result',
+            data: {
+              messageId: 'm1',
+              toolCallId: 'call-1a',
+              result: { success: true, output: 'a', durationMs: 5, truncated: false },
+            },
+          },
+          { ...baseEvent, type: 'message.done', data: { messageId: 'm1' } },
+          // Second assistant message with its own tool calls
+          { ...baseEvent, type: 'message.start', data: { messageId: 'm2', role: 'assistant' } },
+          {
+            ...baseEvent,
+            type: 'tool.call',
+            data: { messageId: 'm2', toolCall: { id: 'call-2a', name: 'read_file', arguments: { path: 'c.txt' } } },
+          },
+          {
+            ...baseEvent,
+            type: 'tool.result',
+            data: {
+              messageId: 'm2',
+              toolCallId: 'call-2a',
+              result: { success: true, output: 'c', durationMs: 1, truncated: false },
+            },
+          },
+          { ...baseEvent, type: 'message.done', data: { messageId: 'm2' } },
+        ]
+
+        const messages = buildContextMessagesFromStoredEvents(events)
+
+        // First assistant + its tools
+        expect(messages[0]!.role).toBe('assistant')
+        expect(messages[0]!.toolCalls!.map((tc) => tc.id)).toEqual(['call-1a', 'call-1b'])
+        expect(messages[1]!.role).toBe('tool')
+        expect(messages[1]!.toolCallId).toBe('call-1a')
+        expect(messages[2]!.role).toBe('tool')
+        expect(messages[2]!.toolCallId).toBe('call-1b')
+
+        // Second assistant + its tools
+        expect(messages[3]!.role).toBe('assistant')
+        expect(messages[3]!.toolCalls!.map((tc) => tc.id)).toEqual(['call-2a'])
+        expect(messages[4]!.role).toBe('tool')
+        expect(messages[4]!.toolCallId).toBe('call-2a')
+      })
+
+      it('reorderToolMessages handles empty toolCalls gracefully', () => {
+        const messages: MessageWithId[] = [{ id: 'm1', role: 'assistant', content: 'no tools' }]
+        reorderToolMessages(messages)
+        expect(messages).toHaveLength(1)
+        expect(messages[0]!.content).toBe('no tools')
+      })
+
+      it('reorderToolMessages leaves single tool call unchanged', () => {
+        const messages: MessageWithId[] = [
+          {
+            id: 'm1',
+            role: 'assistant',
+            content: '',
+            toolCalls: [{ id: 'call-a', name: 'read_file', arguments: { path: 'a.txt' } }],
+          },
+          { id: 't1', role: 'tool', content: 'a', toolCallId: 'call-a' },
+        ]
+        reorderToolMessages(messages)
+        expect(messages[1]!.toolCallId).toBe('call-a')
+      })
+
+      it('reorderToolMessages skips reordering when toolCallId is unknown', () => {
+        const messages: MessageWithId[] = [
+          {
+            id: 'm1',
+            role: 'assistant',
+            content: '',
+            toolCalls: [
+              { id: 'call-a', name: 'read_file', arguments: { path: 'a.txt' } },
+              { id: 'call-b', name: 'read_file', arguments: { path: 'b.txt' } },
+            ],
+          },
+          { id: 't1', role: 'tool', content: 'b', toolCallId: 'call-b' },
+          { id: 't2', role: 'tool', content: 'a', toolCallId: 'call-a' },
+          { id: 't3', role: 'tool', content: 'unknown', toolCallId: 'call-unknown' },
+        ]
+        reorderToolMessages(messages)
+        // Should leave order as-is since call-unknown is not in toolCalls
+        expect(messages[1]!.toolCallId).toBe('call-b')
+        expect(messages[2]!.toolCallId).toBe('call-a')
+        expect(messages[3]!.toolCallId).toBe('call-unknown')
+      })
     })
 
     it('strips orphaned toolCalls from snapshot messages via buildContextMessagesFromEventHistory', () => {

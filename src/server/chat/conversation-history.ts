@@ -19,6 +19,7 @@ import {
   handleToolCall,
   handleToolResult,
   stripOrphanedToolCalls,
+  reorderToolMessages,
   type MessageWithId,
 } from '../events/folding.js'
 import type { RequestContextMessage } from './request-context.js'
@@ -168,6 +169,7 @@ function buildSubAgentContextMessages(events: StoredEvent[], scope: SubAgentScop
   }
 
   stripOrphanedToolCalls(messages, fulfilledToolCallIds)
+  reorderToolMessages(messages)
 
   return messages.map(
     ({ id: _id, subAgentId: _sa, subAgentType: _st, contextWindowId: _cw, isCompactionSummary: _ics, ...rest }) => {

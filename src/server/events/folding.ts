@@ -27,6 +27,7 @@ export {
   handleToolCall,
   handleToolResult,
   stripOrphanedToolCalls,
+  reorderToolMessages,
   buildContextMessagesFromEventHistory,
   foldTurnEventsToSnapshotMessages,
   foldTurnEventsToSnapshotMessagesFromInitial,

@@ -190,6 +190,7 @@ export function buildContextMessagesFromStoredEvents(
   }
 
   stripOrphanedToolCalls(messages, fulfilledToolCallIds)
+  reorderToolMessages(messages)
   return messages.map(({ id: _id, ...message }) => message)
 }
 
@@ -280,6 +281,52 @@ export function stripOrphanedToolCalls(messages: MessageWithId[], fulfilledToolC
       } else {
         msg.toolCalls = fulfilled
       }
+    }
+  }
+}
+
+/**
+ * Reorder tool messages to match the tool call order of their parent assistant message.
+ *
+ * When parallel tool calls are executed, tool.result events may arrive in any order
+ * (completion order). This function ensures tool messages appear in the same order
+ * as the tool calls in the assistant's toolCalls array, preserving LLM cache stability.
+ */
+export function reorderToolMessages(messages: MessageWithId[]): void {
+  let i = 0
+  while (i < messages.length) {
+    const msg = messages[i]!
+    if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 1) {
+      // Build index map: toolCallId → position in toolCalls array
+      const orderMap = new Map<string, number>()
+      msg.toolCalls.forEach((tc, idx) => orderMap.set(tc.id, idx))
+
+      // Collect tool messages that belong to this assistant
+      const toolStart = i + 1
+      let toolEnd = toolStart
+      while (toolEnd < messages.length && messages[toolEnd]!.role === 'tool') {
+        toolEnd++
+      }
+
+      if (toolEnd - toolStart > 1) {
+        const toolSlice = messages.slice(toolStart, toolEnd)
+        // Skip reordering if any tool message's toolCallId is not found in the parent's toolCalls
+        const allKnown = toolSlice.every((m) => m.toolCallId && orderMap.has(m.toolCallId))
+        if (allKnown) {
+          toolSlice.sort((a, b) => {
+            const aOrder = orderMap.get(a.toolCallId!)!
+            const bOrder = orderMap.get(b.toolCallId!)!
+            return aOrder - bOrder
+          })
+          for (let j = 0; j < toolSlice.length; j++) {
+            messages[toolStart + j] = toolSlice[j]!
+          }
+        }
+      }
+
+      i = toolEnd
+    } else {
+      i++
     }
   }
 }

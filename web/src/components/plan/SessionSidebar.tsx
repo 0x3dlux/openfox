@@ -18,16 +18,19 @@ import { BackgroundProcesses } from './BackgroundProcesses'
 import { BranchIcon, FolderIcon, ReloadIcon } from '../shared/icons'
 import { AutoUpdateModal } from '../AutoUpdateModal'
 import { DiffViewer } from './DiffViewer'
-import { BranchModal } from './BranchModal'
-import { WorkspaceModal } from './WorkspaceModal'
+import { ConversationIndex } from './ConversationIndex'
 import type { Message } from '@shared/types.js'
+import type { DisplayItem } from './groupMessages'
 
 interface SessionSidebarProps {
   messages: Message[]
   workdir?: string
+  displayItems?: DisplayItem[]
+  activeIndex?: number
+  onNavigate?: (index: number) => void
 }
 
-export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
+export function SessionSidebar({ messages, workdir, displayItems, activeIndex, onNavigate }: SessionSidebarProps) {
   const [showStatsModal, setShowStatsModal] = useState(false)
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [showBranchModal, setShowBranchModal] = useState(false)
@@ -120,6 +123,13 @@ export function SessionSidebar({ messages, workdir }: SessionSidebarProps) {
                 ))
             })()}
         </div>
+
+        {/* Timeline / Conversation Index */}
+        {displayItems && activeIndex !== undefined && onNavigate && (
+          <div className="flex-1 flex flex-col min-h-[250px] mt-6">
+            <ConversationIndex displayItems={displayItems} activeIndex={activeIndex} onNavigate={onNavigate} />
+          </div>
+        )}
       </div>
 
       {/* Workspace & branch info — above separator */}

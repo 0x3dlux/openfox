@@ -17,7 +17,6 @@ import { focusChatTextarea } from '../../lib/focusChatTextarea'
 import { CommandsModal } from '../settings/CommandsModal'
 import { WorkflowsModal } from '../settings/WorkflowsModal'
 import { QuickActionModal } from '../QuickActionModal'
-import { MessageSearchModal } from './MessageSearchModal'
 import { ChatInput } from './ChatInput'
 import { shouldCaptureMessageSearchShortcut } from './message-search-shortcut'
 
@@ -49,9 +48,10 @@ export function PlanPanel({
   const [showCommandsModal, setShowCommandsModal] = useState(false)
   const [showWorkflowsModal, setShowWorkflowsModal] = useState(false)
   const [showQuickAction, setShowQuickAction] = useState(false)
-  const [showMessageSearch, setShowMessageSearch] = useState(false)
   const [turnStatsModal, setTurnStatsModal] = useState<TurnStats | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const lastFocusedElementRef = useRef<HTMLElement | null>(null)
 
   const session = useSessionStore((state) => state.currentSession)
   const storeMessages = useSessionStore((state) => state.messages)
@@ -87,11 +87,38 @@ export function PlanPanel({
     const handler = (e: KeyboardEvent) => {
       if (shouldCaptureMessageSearchShortcut(e)) {
         e.preventDefault()
-        setShowMessageSearch(true)
+        // Toggle sidebar and focus search input
+        if (!criteriaSidebarOpen) {
+          // Open sidebar and focus search
+          onCriteriaSidebarToggle?.()
+          setTimeout(() => {
+            searchInputRef.current?.focus()
+          }, 100)
+        } else {
+          // If sidebar is open, toggle focus between search and last focused element
+          if (document.activeElement === searchInputRef.current) {
+            // Focus back to last focused element
+            lastFocusedElementRef.current?.focus()
+          } else {
+            // Focus search input
+            searchInputRef.current?.focus()
+          }
+        }
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
+  }, [criteriaSidebarOpen, onCriteriaSidebarToggle])
+
+  // Track last focused element
+  useEffect(() => {
+    const handleFocus = (e: FocusEvent) => {
+      if (e.target instanceof HTMLElement && e.target !== searchInputRef.current) {
+        lastFocusedElementRef.current = e.target
+      }
+    }
+    document.addEventListener('focusin', handleFocus)
+    return () => document.removeEventListener('focusin', handleFocus)
   }, [])
 
   const previousDisplayItemsRef = useRef<DisplayItem[]>([])
@@ -113,6 +140,44 @@ export function PlanPanel({
   const { isAutoScrollActive, setAutoScroll } = useAutoScroll(scrollContainerRef, session)
   const { sendMessage, launchWorkflow } = useScrolledSend(setAutoScroll)
 
+  // Track topmost visible display item for conversation index highlighting
+  const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined)
+  const displayItemsRef = useRef(displayItems)
+  displayItemsRef.current = displayItems
+
+  // Scroll the main chat to a specific display item index
+  const scrollToIndex = useCallback(
+    (index: number) => {
+      if (index < 0 || index >= displayItems.length) return
+
+      const element = document.querySelector(`[data-item-index="${index}"]`)
+      if (!element) return
+
+      const container = scrollContainerRef.current
+      if (!container) return
+
+      setAutoScroll(false)
+
+      const elementTop = element.getBoundingClientRect().top + container.scrollTop
+      const targetPosition = elementTop - container.clientHeight / 2
+
+      const startScrollTop = container.scrollTop
+
+      container.scrollTo({
+        top: targetPosition,
+        behavior: 'smooth',
+      })
+
+      setTimeout(() => {
+        const currentScrollTop = container.scrollTop
+        if (Math.abs(currentScrollTop - startScrollTop) < 1) {
+          setActiveIndex(index)
+        }
+      }, 100)
+    },
+    [displayItems.length, scrollContainerRef, setAutoScroll],
+  )
+
   const handleLaunchWorkflow = useCallback(
     (workflowId: string, subGroup?: string) => {
       launchWorkflow(undefined, undefined, workflowId, subGroup)
@@ -120,22 +185,9 @@ export function PlanPanel({
     [launchWorkflow],
   )
 
-  const handleTimelineNavigate = useCallback(
-    (index: number) => {
-      setAutoScroll(false)
-      const element = document.querySelector(`[data-item-index="${index}"]`)
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        element.closest('[data-testid="chat-scroll-container"]')?.scrollBy(0, -80)
-      }
-    },
-    [setAutoScroll],
-  )
-
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      const popupOpen =
-        showQuickAction || showCommandsModal || showWorkflowsModal || showMessageSearch || turnStatsModal
+      const popupOpen = showQuickAction || showCommandsModal || showWorkflowsModal || turnStatsModal
       if (e.key === 'Escape' && isRunning && !popupOpen) {
         stopGeneration()
       }
@@ -152,7 +204,6 @@ export function PlanPanel({
     showQuickAction,
     showCommandsModal,
     showWorkflowsModal,
-    showMessageSearch,
     turnStatsModal,
   ])
 
@@ -192,7 +243,10 @@ export function PlanPanel({
       <SessionLayout
         criteriaSidebarOpen={criteriaSidebarOpen}
         onCriteriaSidebarToggle={onCriteriaSidebarToggle}
-        messages={messages}
+        messages={rawMessages}
+        displayItems={displayItems}
+        activeIndex={activeIndex}
+        onNavigate={scrollToIndex}
       >
         <SessionHeader />
 
@@ -229,7 +283,7 @@ export function PlanPanel({
           selectCurrent={selectCurrent}
           isAutoScrollActive={isAutoScrollActive}
           setAutoScroll={setAutoScroll}
-          onOpenMessageSearch={() => setShowMessageSearch(true)}
+          onOpenMessageSearch={() => {}}
           onOpenCommandsModal={() => setShowCommandsModal(true)}
           onOpenWorkflowsModal={() => setShowWorkflowsModal(true)}
           onSelectWorkflow={handleSelectWorkflow}
@@ -241,7 +295,10 @@ export function PlanPanel({
         <QuickActionModal
           isOpen={showQuickAction}
           onClose={() => setShowQuickAction(false)}
-          onSearchMessages={() => setShowMessageSearch(true)}
+          onSearchMessages={() => {
+            onCriteriaSidebarToggle?.()
+            setTimeout(() => searchInputRef.current?.focus(), 100)
+          }}
           isAutoScrollActive={isAutoScrollActive}
           onToggleAutoScroll={setAutoScroll}
           textareaContent={input}
@@ -271,18 +328,6 @@ export function PlanPanel({
           }}
         />
       </SessionLayout>
-
-      {showMessageSearch && (
-        <MessageSearchModal
-          isOpen={showMessageSearch}
-          onClose={() => {
-            setShowMessageSearch(false)
-            focusChatTextarea()
-          }}
-          displayItems={displayItems}
-          onNavigate={handleTimelineNavigate}
-        />
-      )}
     </>
   )
 }

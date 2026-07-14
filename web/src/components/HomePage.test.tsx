@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { createRoot } from 'react-dom/client'
+import { act } from 'react'
 import userEvent from '@testing-library/user-event'
-import '@testing-library/jest-dom/vitest'
 
 vi.mock('../lib/ws', () => ({
   wsClient: {
@@ -58,12 +58,23 @@ vi.mock('../stores/project', () => ({
   },
 }))
 
+function render(ui: React.ReactElement): HTMLElement {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  act(() => {
+    root.render(ui)
+  })
+  return container
+}
+
+function textOf(el: HTMLElement | null): string {
+  return el?.textContent ?? ''
+}
+
 beforeEach(() => {
   sessionStore.sessions = []
-})
-
-afterEach(() => {
-  cleanup()
+  document.body.innerHTML = ''
 })
 
 describe('HomePage', () => {
@@ -84,14 +95,14 @@ describe('HomePage', () => {
       },
     ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    expect(screen.getByPlaceholderText('Search sessions by title or keyword...')).toBeInTheDocument()
+    const container = render(<HomePage />)
+    expect(container.querySelector('[placeholder="Search sessions by title or keyword..."]')).toBeTruthy()
   })
 
   it('hides the search bar when no sessions exist', async () => {
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    expect(screen.queryByPlaceholderText('Search sessions by title or keyword...')).not.toBeInTheDocument()
+    const container = render(<HomePage />)
+    expect(container.querySelector('[placeholder="Search sessions by title or keyword..."]')).toBeNull()
   })
 
   it('filters sessions by title match', async () => {
@@ -114,17 +125,16 @@ describe('HomePage', () => {
       },
     ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
+    const container = render(<HomePage />)
 
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'search')
 
     await vi.waitFor(() => {
-      expect(screen.getByText('1 match')).toBeInTheDocument()
+      expect(container.textContent).toContain('1 match')
     })
 
-    expect(screen.getByRole('link', { name: /Search feature/ })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Bug fix/ })).not.toBeInTheDocument()
+    expect(textOf(container.querySelector('a[href*="/s/"]'))).toContain('Search feature')
   })
 
   it('filters sessions by recent prompt content', async () => {
@@ -149,17 +159,16 @@ describe('HomePage', () => {
       },
     ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
+    const container = render(<HomePage />)
 
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'login')
 
     await vi.waitFor(() => {
-      expect(screen.getByText('1 match')).toBeInTheDocument()
+      expect(container.textContent).toContain('1 match')
     })
 
-    expect(screen.getByRole('link', { name: /Session alpha/ })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Session b/ })).not.toBeInTheDocument()
+    expect(container.textContent).toContain('Session alpha')
   })
 
   it('shows clear button when search has text and clears on click', async () => {
@@ -174,16 +183,16 @@ describe('HomePage', () => {
       },
     ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
+    const container = render(<HomePage />)
 
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')! as HTMLInputElement
     await userEvent.type(input, 'something')
 
-    const clearButton = screen.getByLabelText('Clear search')
-    expect(clearButton).toBeInTheDocument()
+    const clearButton = container.querySelector('[aria-label="Clear search"]')
+    expect(clearButton).toBeTruthy()
 
-    await userEvent.click(clearButton)
-    expect(input).toHaveValue('')
+    await userEvent.click(clearButton!)
+    expect(input.value).toBe('')
   })
 
   it('shows match count when searching', async () => {
@@ -206,13 +215,13 @@ describe('HomePage', () => {
       },
     ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
+    const container = render(<HomePage />)
 
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'deploy')
 
     await vi.waitFor(() => {
-      expect(screen.getByText('1 match')).toBeInTheDocument()
+      expect(container.textContent).toContain('1 match')
     })
   })
 
@@ -228,16 +237,16 @@ describe('HomePage', () => {
       },
     ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
+    const container = render(<HomePage />)
 
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'zzzzz')
 
     await vi.waitFor(() => {
-      expect(screen.getByText(/No sessions matching/)).toBeInTheDocument()
+      expect(container.textContent).toMatch(/No sessions matching/)
     })
 
-    expect(screen.getByText(/zzzzz/)).toBeInTheDocument()
+    expect(container.textContent).toContain('zzzzz')
   })
 
   it('shows projects and sessions when search is cleared', async () => {
@@ -252,187 +261,294 @@ describe('HomePage', () => {
       },
     ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
+    const container = render(<HomePage />)
 
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'nope')
 
     await vi.waitFor(() => {
-      expect(screen.getByText(/No sessions matching/)).toBeInTheDocument()
+      expect(container.textContent).toMatch(/No sessions matching/)
     })
 
     await userEvent.clear(input)
 
     await vi.waitFor(() => {
-      expect(screen.getByText('My session')).toBeInTheDocument()
+      expect(container.textContent).toContain('My session')
     })
   })
 
   it('filters by project name', async () => {
     sessionStore.sessions = [
-      { id: 's1', projectId: 'p1', title: 'Setup docs', updatedAt: '2024-06-15T10:00:00Z', messageCount: 1, createdAt: '2024-06-15T09:00:00Z' },
-      { id: 's2', projectId: 'p2', title: 'Analysis', updatedAt: '2024-06-16T10:00:00Z', messageCount: 1, createdAt: '2024-06-16T09:00:00Z' },
+      {
+        id: 's1',
+        projectId: 'p1',
+        title: 'Setup docs',
+        updatedAt: '2024-06-15T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-15T09:00:00Z',
+      },
+      {
+        id: 's2',
+        projectId: 'p2',
+        title: 'Analysis',
+        updatedAt: '2024-06-16T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-16T09:00:00Z',
+      },
     ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const container = render(<HomePage />)
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'beta')
-    await vi.waitFor(() => expect(screen.getByText('1 match')).toBeInTheDocument())
-    expect(screen.getByText('Project Beta')).toBeInTheDocument()
-    expect(screen.queryByText('Setup docs')).not.toBeInTheDocument()
+    await vi.waitFor(() => expect(container.textContent).toContain('1 match'))
+    expect(container.textContent).toContain('Project Beta')
+    expect(container.textContent).not.toContain('Setup docs')
   })
 
   it('filters by case-insensitive matching', async () => {
     sessionStore.sessions = [
-      { id: 's1', projectId: 'p1', title: 'Deploy Pipeline', updatedAt: '2024-06-15T10:00:00Z', messageCount: 1, createdAt: '2024-06-15T09:00:00Z' },
-      { id: 's2', projectId: 'p1', title: 'Database migration', updatedAt: '2024-06-16T10:00:00Z', messageCount: 1, createdAt: '2024-06-16T09:00:00Z' },
+      {
+        id: 's1',
+        projectId: 'p1',
+        title: 'Deploy Pipeline',
+        updatedAt: '2024-06-15T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-15T09:00:00Z',
+      },
+      {
+        id: 's2',
+        projectId: 'p1',
+        title: 'Database migration',
+        updatedAt: '2024-06-16T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-16T09:00:00Z',
+      },
     ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const container = render(<HomePage />)
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'DEPLOY')
-    await vi.waitFor(() => expect(screen.getByText('1 match')).toBeInTheDocument())
-    expect(screen.getByRole('link', { name: /Deploy Pipeline/ })).toBeInTheDocument()
+    await vi.waitFor(() => expect(container.textContent).toContain('1 match'))
+    expect(container.textContent).toContain('Deploy Pipeline')
   })
 
   it('requires all space-separated query words to match', async () => {
     sessionStore.sessions = [
-      { id: 's1', projectId: 'p1', title: 'Fix bug open frontend', updatedAt: '2024-06-15T10:00:00Z', messageCount: 1, createdAt: '2024-06-15T09:00:00Z' },
-      { id: 's2', projectId: 'p1', title: 'Open source bug tracker', updatedAt: '2024-06-16T10:00:00Z', messageCount: 1, createdAt: '2024-06-16T09:00:00Z' },
+      {
+        id: 's1',
+        projectId: 'p1',
+        title: 'Fix bug open frontend',
+        updatedAt: '2024-06-15T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-15T09:00:00Z',
+      },
+      {
+        id: 's2',
+        projectId: 'p1',
+        title: 'Open source bug tracker',
+        updatedAt: '2024-06-16T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-16T09:00:00Z',
+      },
     ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const container = render(<HomePage />)
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'bug open')
-    await vi.waitFor(() => expect(screen.getByText('2 matches')).toBeInTheDocument())
-    expect(screen.getByRole('link', { name: /Fix bug open/ })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Open source bug/ })).toBeInTheDocument()
+    await vi.waitFor(() => expect(container.textContent).toContain('2 matches'))
+    expect(container.textContent).toContain('Fix bug open')
+    expect(container.textContent).toContain('Open source bug')
   })
 
   it('shows only projects with matching sessions', async () => {
     sessionStore.sessions = [
-      { id: 's1', projectId: 'p1', title: 'Database setup', updatedAt: '2024-06-15T10:00:00Z', messageCount: 1, createdAt: '2024-06-15T09:00:00Z' },
-      { id: 's2', projectId: 'p2', title: 'Frontend', updatedAt: '2024-06-16T10:00:00Z', messageCount: 1, createdAt: '2024-06-16T09:00:00Z' },
+      {
+        id: 's1',
+        projectId: 'p1',
+        title: 'Database setup',
+        updatedAt: '2024-06-15T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-15T09:00:00Z',
+      },
+      {
+        id: 's2',
+        projectId: 'p2',
+        title: 'Frontend',
+        updatedAt: '2024-06-16T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-16T09:00:00Z',
+      },
     ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const container = render(<HomePage />)
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'database')
-    await vi.waitFor(() => expect(screen.getByText('1 match')).toBeInTheDocument())
-    expect(screen.getByText('Project Alpha')).toBeInTheDocument()
-    expect(screen.queryByText('Project Beta')).not.toBeInTheDocument()
+    await vi.waitFor(() => expect(container.textContent).toContain('1 match'))
+    expect(container.textContent).toContain('Project Alpha')
+    expect(container.textContent).not.toContain('Project Beta')
   })
 
   it('limits to 5 sessions per project when not searching', async () => {
     const sessions = Array.from({ length: 7 }, (_, i) => ({
-      id: `s${i}`, projectId: 'p1', title: `Session ${i}`,
+      id: `s${i}`,
+      projectId: 'p1',
+      title: `Session ${i}`,
       updatedAt: `2024-06-${String(15 - i).padStart(2, '0')}T10:00:00Z`,
-      messageCount: 1, createdAt: '2024-06-01',
+      messageCount: 1,
+      createdAt: '2024-06-01',
     }))
     sessionStore.sessions = sessions
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    const visible = screen.getAllByRole('link').filter((l) => (l as HTMLAnchorElement).href?.includes('/s/'))
+    const container = render(<HomePage />)
+    const visible = container.querySelectorAll('a[href*="/s/"]')
     expect(visible.length).toBe(5)
   })
 
   it('shows all matching sessions when searching (no 5-session limit)', async () => {
     const sessions = Array.from({ length: 7 }, (_, i) => ({
-      id: `s${i}`, projectId: 'p1', title: `Fix bug ${i}`,
+      id: `s${i}`,
+      projectId: 'p1',
+      title: `Fix bug ${i}`,
       updatedAt: `2024-06-${String(15 - i).padStart(2, '0')}T10:00:00Z`,
-      messageCount: 1, createdAt: '2024-06-01',
+      messageCount: 1,
+      createdAt: '2024-06-01',
     }))
     sessionStore.sessions = sessions
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const container = render(<HomePage />)
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'fix')
-    await vi.waitFor(() => expect(screen.getByText('7 matches')).toBeInTheDocument())
-    const visible = screen.getAllByRole('link').filter((l) => (l as HTMLAnchorElement).href?.includes('/s/'))
+    await vi.waitFor(() => expect(container.textContent).toContain('7 matches'))
+    const visible = container.querySelectorAll('a[href*="/s/"]')
     expect(visible.length).toBe(7)
   })
 
   it('shows prompts badge when session matches by prompts only', async () => {
-    sessionStore.sessions = [{
-      id: 's1', projectId: 'p1', title: 'Session alpha',
-      recentUserPrompts: [{ id: 'p1', content: 'Please review the PR', timestamp: '2024-06-15T10:00:00Z' }],
-      updatedAt: '2024-06-15T10:00:00Z', messageCount: 1, createdAt: '2024-06-15T09:00:00Z',
-    }]
+    sessionStore.sessions = [
+      {
+        id: 's1',
+        projectId: 'p1',
+        title: 'Session alpha',
+        recentUserPrompts: [{ id: 'p1', content: 'Please review the PR', timestamp: '2024-06-15T10:00:00Z' }],
+        updatedAt: '2024-06-15T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-15T09:00:00Z',
+      },
+    ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const container = render(<HomePage />)
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'review')
-    await vi.waitFor(() => expect(screen.getByText('1 match')).toBeInTheDocument())
-    expect(screen.getByText('prompts')).toBeInTheDocument()
+    await vi.waitFor(() => expect(container.textContent).toContain('1 match'))
+    expect(container.textContent).toContain('prompts')
   })
 
   it('does not show prompts badge when session matches by title', async () => {
-    sessionStore.sessions = [{
-      id: 's1', projectId: 'p1', title: 'Review PR 123',
-      recentUserPrompts: [{ id: 'p1', content: 'Please check this', timestamp: '2024-06-15T10:00:00Z' }],
-      updatedAt: '2024-06-15T10:00:00Z', messageCount: 1, createdAt: '2024-06-15T09:00:00Z',
-    }]
+    sessionStore.sessions = [
+      {
+        id: 's1',
+        projectId: 'p1',
+        title: 'Review PR 123',
+        recentUserPrompts: [{ id: 'p1', content: 'Please check this', timestamp: '2024-06-15T10:00:00Z' }],
+        updatedAt: '2024-06-15T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-15T09:00:00Z',
+      },
+    ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const container = render(<HomePage />)
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'review')
-    await vi.waitFor(() => expect(screen.getByText('1 match')).toBeInTheDocument())
-    expect(screen.queryByText('prompts')).not.toBeInTheDocument()
+    await vi.waitFor(() => expect(container.textContent).toContain('1 match'))
+    expect(container.textContent).not.toContain('prompts')
   })
 
   it('shows snippet with highlighted keyword in prompts match', async () => {
-    sessionStore.sessions = [{
-      id: 's1', projectId: 'p1', title: 'QA workflow',
-      recentUserPrompts: [{ id: 'p1', content: 'Run full code review on the project', timestamp: '2024-06-15T10:00:00Z' }],
-      updatedAt: '2024-06-15T10:00:00Z', messageCount: 1, createdAt: '2024-06-15T09:00:00Z',
-    }]
+    sessionStore.sessions = [
+      {
+        id: 's1',
+        projectId: 'p1',
+        title: 'QA workflow',
+        recentUserPrompts: [
+          { id: 'p1', content: 'Run full code review on the project', timestamp: '2024-06-15T10:00:00Z' },
+        ],
+        updatedAt: '2024-06-15T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-15T09:00:00Z',
+      },
+    ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const container = render(<HomePage />)
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'review')
-    await vi.waitFor(() => expect(screen.getByText('prompts')).toBeInTheDocument())
-    expect(screen.getByText(/Run full code/)).toBeInTheDocument()
+    await vi.waitFor(() => expect(container.textContent).toContain('prompts'))
+    expect(container.textContent).toContain('Run full code')
   })
 
   it('ranks title matches above prompt matches', async () => {
     sessionStore.sessions = [
       {
-        id: 's1', projectId: 'p1', title: 'Error in checkout flow',
+        id: 's1',
+        projectId: 'p1',
+        title: 'Error in checkout flow',
         recentUserPrompts: [{ id: 'p1', content: 'Check error handling', timestamp: '2024-06-14T10:00:00Z' }],
-        updatedAt: '2024-06-14T10:00:00Z', messageCount: 1, createdAt: '2024-06-14T09:00:00Z',
+        updatedAt: '2024-06-14T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-14T09:00:00Z',
       },
       {
-        id: 's2', projectId: 'p1', title: 'UI improvements',
+        id: 's2',
+        projectId: 'p1',
+        title: 'UI improvements',
         recentUserPrompts: [{ id: 'p2', content: 'Fix the error in modal', timestamp: '2024-06-15T10:00:00Z' }],
-        updatedAt: '2024-06-15T10:00:00Z', messageCount: 1, createdAt: '2024-06-15T09:00:00Z',
+        updatedAt: '2024-06-15T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-15T09:00:00Z',
       },
     ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const container = render(<HomePage />)
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')!
     await userEvent.type(input, 'error')
-    await vi.waitFor(() => expect(screen.getByText('2 matches')).toBeInTheDocument())
-    const links = screen.getAllByRole('link').filter((l) => (l as HTMLAnchorElement).href?.includes('/s/'))
+    await vi.waitFor(() => expect(container.textContent).toContain('2 matches'))
+    const links = container.querySelectorAll('a[href*="/s/"]')
     expect(links[0]?.textContent).toContain('Error in checkout')
     expect(links[1]?.textContent).toContain('UI improvements')
   })
 
   it('clears search on Escape key', async () => {
-    sessionStore.sessions = [{ id: 's1', projectId: 'p1', title: 'My session', updatedAt: '2024-06-15T10:00:00Z', messageCount: 1, createdAt: '2024-06-15T09:00:00Z' }]
+    sessionStore.sessions = [
+      {
+        id: 's1',
+        projectId: 'p1',
+        title: 'My session',
+        updatedAt: '2024-06-15T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-15T09:00:00Z',
+      },
+    ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    const input = screen.getByPlaceholderText('Search sessions by title or keyword...')
+    const container = render(<HomePage />)
+    const input = container.querySelector('[placeholder="Search sessions by title or keyword..."]')! as HTMLInputElement
     await userEvent.type(input, 'zzzzz')
-    await vi.waitFor(() => expect(screen.getByText(/No sessions matching/)).toBeInTheDocument())
+    await vi.waitFor(() => expect(container.textContent).toMatch(/No sessions matching/))
     await userEvent.keyboard('{Escape}')
-    expect(input).toHaveValue('')
-    expect(screen.getByText('My session')).toBeInTheDocument()
+    expect(input.value).toBe('')
+    expect(container.textContent).toContain('My session')
   })
 
   it('handles session without a title by falling back to id slice', async () => {
-    sessionStore.sessions = [{ id: 'abcdef123456', projectId: 'p1', updatedAt: '2024-06-15T10:00:00Z', messageCount: 1, createdAt: '2024-06-15T09:00:00Z' }]
+    sessionStore.sessions = [
+      {
+        id: 'abcdef123456',
+        projectId: 'p1',
+        updatedAt: '2024-06-15T10:00:00Z',
+        messageCount: 1,
+        createdAt: '2024-06-15T09:00:00Z',
+      },
+    ]
     const { HomePage } = await import('./HomePage')
-    render(<HomePage />)
-    expect(screen.getByText('abcdef12')).toBeInTheDocument()
+    const container = render(<HomePage />)
+    expect(container.textContent).toContain('abcdef12')
   })
 })

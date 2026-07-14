@@ -707,7 +707,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       return res.status(400).json({ error: 'content or attachments is required' })
     }
 
-    sessionManager.queueMessage(sessionId, 'asap', content ?? '', attachments, messageKind)
+    sessionManager.queueMessage(sessionId, 'asap', content, attachments, messageKind)
 
     res.json({ success: true, queueState: sessionManager.getQueueState(sessionId) })
   })

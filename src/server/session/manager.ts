@@ -698,7 +698,7 @@ export class SessionManager {
   queueMessage(
     sessionId: string,
     mode: 'asap' | 'completion',
-    content: string,
+    content?: string,
     attachments?: Attachment[],
     messageKind?: string,
   ): QueuedMessage {
@@ -706,14 +706,14 @@ export class SessionManager {
     const msg: QueuedMessage = {
       queueId: crypto.randomUUID(),
       mode,
-      content,
+      content: content ?? '',
       ...(attachments ? { attachments } : {}),
       ...(messageKind ? { messageKind } : {}),
       queuedAt: new Date().toISOString(),
     }
     queue.push(msg)
     this.messageQueues.set(sessionId, queue)
-    this.emit({ type: 'queue_added', sessionId, queueId: msg.queueId, mode, content })
+    this.emit({ type: 'queue_added', sessionId, queueId: msg.queueId, mode, content: content ?? '' })
     return msg
   }
 

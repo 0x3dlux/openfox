@@ -1090,6 +1090,71 @@ describe('path-security', () => {
   })
 
   // ===========================================================================
+  // False positive regression tests
+  // ===========================================================================
+
+  describe('false positive regression', () => {
+    it('does not extract / from comment lines starting with //', () => {
+      const paths = extractAbsolutePathsFromCommand('// @vitest-environment happy-dom\n')
+      expect(paths).not.toContain('/')
+      expect(paths).not.toContain('//')
+    })
+
+    it('does not extract false paths from heredoc with JSX content', () => {
+      const command = [
+        "cd /home/conrad/dev/openfox && cat > /tmp/test-minimal.tsx << 'EOF'",
+        '// @vitest-environment happy-dom',
+        "import { describe, expect, it } from 'vitest'",
+        "import { render, screen } from '@testing-library/react'",
+        "import '@testing-library/jest-dom/vitest'",
+        'function SimpleComponent() { return <div>Hello</div> }',
+        "describe('minimal', () => {",
+        "  it('renders', () => {",
+        '    render(<SimpleComponent />)',
+        "    expect(screen.getByText('Hello')).toBeInTheDocument()",
+        '  })',
+        '})',
+        'EOF',
+        'npx vitest run /tmp/test-minimal.tsx 2>&1 | tail -15',
+      ].join('\n')
+
+      const paths = extractAbsolutePathsFromCommand(command)
+
+      // Should find the legitimate paths
+      expect(paths).toContain('/home/conrad/dev/openfox')
+      expect(paths).toContain('/tmp/test-minimal.tsx')
+
+      // Should NOT contain bare root or empty string
+      expect(paths).not.toContain('/')
+      expect(paths).not.toContain('')
+    })
+
+    it('does not trigger path confirmation for heredoc command with allowed paths', async () => {
+      const command = [
+        "cat > /tmp/test-minimal.tsx << 'EOF'",
+        '// @vitest-environment happy-dom',
+        "import { describe, expect, it } from 'vitest'",
+        "import { render, screen } from '@testing-library/react'",
+        "import '@testing-library/jest-dom/vitest'",
+        'function SimpleComponent() { return <div>Hello</div> }',
+        'EOF',
+        'npx vitest run /tmp/test-minimal.tsx 2>&1 | tail -15',
+      ].join('\n')
+
+      const commandPaths = extractAbsolutePathsFromCommand(command)
+      const sensitivePaths = extractSensitivePathsFromCommand(command)
+      const pathsToCheck = [WORKDIR, ...commandPaths, ...sensitivePaths]
+
+      const result = await checkPathsAccess(pathsToCheck, WORKDIR)
+
+      // All paths should be allowed (workdir + /tmp paths)
+      expect(result.needsConfirmation).toBe(false)
+      expect(result.deniedPaths).toEqual([])
+      expect(result.sensitivePaths).toEqual([])
+    })
+  })
+
+  // ===========================================================================
   // extractGitNoVerify()
   // ===========================================================================
 

@@ -222,6 +222,14 @@ function looksLikeRegex(str: string): boolean {
 }
 
 /**
+ * Check if a string is a placeholder marker left by sanitization.
+ * These are not real paths and should be skipped.
+ */
+function isPlaceholderToken(str: string): boolean {
+  return str.includes('__URL__') || str.includes('__FILEURL__') || str.includes('__SED__')
+}
+
+/**
  * Extract absolute paths from a shell command (heuristic).
  * Handles: /absolute/paths, ~/tilde/paths, quoted paths.
  * Filters out safe paths (/dev/*) and URLs.
@@ -306,23 +314,21 @@ export function extractAbsolutePathsFromCommand(command: string): string[] {
   }
 
   // Pattern 3: Unquoted absolute paths
-  // Match / followed by path characters, at word boundary
-  // Be careful not to match paths already in quotes or parts of URLs
-  const absolutePattern = /(?:^|[\s=(])(\/?\/[a-zA-Z0-9_\-./]+)/g
+  // Strategy: boundary + broad character class + predicate pipeline.
+  // Each predicate is a small, named function with a single responsibility.
+  const absolutePattern = /(?:^|[\s=(])(\/[^\s"'|&;<>`()]+)/g
   while ((match = absolutePattern.exec(sanitized)) !== null) {
-    const pathCandidate = match[1]!
+    const candidate = match[1]!
 
-    // Skip if it's a URL marker
-    if (pathCandidate.includes('__URL__') || pathCandidate.includes('__FILEURL__')) {
-      continue
-    }
+    // Skip placeholder markers left by sanitization
+    if (isPlaceholderToken(candidate)) continue
 
     // Skip if it looks like a regex pattern with metacharacters
-    if (looksLikeRegex(pathCandidate)) {
-      continue
-    }
+    if (looksLikeRegex(candidate)) continue
 
-    const resolved = normalize(pathCandidate)
+    const resolved = normalize(candidate)
+    // Skip root or empty (e.g. "//" comment lines normalize to "/")
+    if (resolved === '/' || resolved === '') continue
     if (!isSafePath(resolved)) {
       paths.push(resolved)
     }

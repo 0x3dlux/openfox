@@ -4,6 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { readFileTool } from './read.js'
+import { processPdfContent } from './pdf-utils.js'
 import type { ToolContext } from './types.js'
 import { OUTPUT_LIMITS } from './types.js'
 
@@ -41,6 +42,48 @@ function makeMultiPagePdf(): Buffer {
 function makeEncryptedPdf(): Buffer {
   return Buffer.from(
     `%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\n3 0 obj<</Filter/Standard/V 2/Length 128/O<${'00'.repeat(16)}>/U<${'00'.repeat(16)}>/P 0>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000061 00000 n \n0000000114 00000 n \ntrailer<</Size 4/Root 1 0 R/Encrypt 3 0 R>>\nstartxref\n206\n%%EOF`,
+    'latin1',
+  )
+}
+
+function makePdfWithMetadata(title: string, author: string): Buffer {
+  const stream = 'BT /F1 12 Tf 100 700 Td (Hello World) Tj ET'
+  const streamLen = Buffer.byteLength(stream, 'latin1')
+
+  const obj1 = '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj'
+  const obj2 = '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj'
+  const obj3 =
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>endobj'
+  const obj4 = '4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj'
+  const obj5 = `5 0 obj<</Length ${streamLen}>>stream\n${stream}\nendstream`
+  const obj6 = `6 0 obj<</Title(${title})/Author(${author})>>endobj`
+
+  const header = '%PDF-1.4\n'
+  const objects = [obj1, obj2, obj3, obj4, obj5, obj6]
+  const body = objects.join('\n') + '\n'
+
+  const offsets: number[] = [0]
+  let pos = header.length
+  for (const obj of objects) {
+    offsets.push(pos)
+    pos += Buffer.byteLength(obj, 'latin1') + 1
+  }
+
+  const xrefOffset = pos
+  const xrefRows = offsets
+    .map((off, i) => `${off.toString().padStart(10, '0')} ${i === 0 ? '65535 f' : '00000 n'}`)
+    .join('\n')
+  const xref = `xref\n0 7\n${xrefRows}\n`
+  const trailer = 'trailer<</Size 7/Root 1 0 R/Info 6 0 R>>\n'
+  const startxref = `startxref\n${xrefOffset}\n%%EOF`
+
+  return Buffer.from(header + body + xref + trailer + startxref, 'latin1')
+}
+
+function makeCorruptPdf(): Buffer {
+  // References a non-existent Pages object (999), causing pdfjs to throw
+  return Buffer.from(
+    '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 999 0 R>>endobj\nxref\n0 2\n0000000000 65535 f \n0000000009 00000 n \ntrailer<</Size 2/Root 1 0 R>>\nstartxref\n20\n%%EOF',
     'latin1',
   )
 }
@@ -433,7 +476,7 @@ describe('readFileTool - Image Support', () => {
     })
 
     it('should reject PDFs larger than 20MB', async () => {
-      const oversizedSize = OUTPUT_LIMITS.read_file.maxPdfBytes + 1
+      const oversizedSize = OUTPUT_LIMITS.read_file.maxFileBytes + 1
 
       vi.mocked(stat).mockResolvedValue({
         isDirectory: () => false,
@@ -464,6 +507,46 @@ describe('readFileTool - Image Support', () => {
       expect(result.output).toContain('Page 1 content')
       expect(result.output).toContain('Page 2 content')
       expect(result.metadata?.['pageCount']).toBe(2)
+    })
+
+    it('should extract PDF metadata (title and author)', async () => {
+      const pdfBuffer = makePdfWithMetadata('Test Title', 'Test Author')
+
+      vi.mocked(readFile).mockResolvedValue(pdfBuffer as any)
+      vi.mocked(stat).mockResolvedValue({
+        isDirectory: () => false,
+        size: pdfBuffer.length,
+      } as any)
+
+      const result = await readFileTool.execute({ path: 'test.pdf' }, mockContext)
+
+      expect(result.success).toBe(true)
+      expect(result.metadata?.['title']).toBe('Test Title')
+      expect(result.metadata?.['author']).toBe('Test Author')
+    })
+
+    it('should truncate PDF text output exceeding maxBytes', () => {
+      const largeText = 'x'.repeat(OUTPUT_LIMITS.read_file.maxBytes + 10_000)
+      const result = processPdfContent(largeText, OUTPUT_LIMITS.read_file.maxBytes)
+
+      expect(result.truncated).toBe(true)
+      expect(result.output).toContain('[Output truncated due to size limit]')
+      expect(result.output.length).toBeLessThanOrEqual(OUTPUT_LIMITS.read_file.maxBytes + 100)
+    })
+
+    it('should return error for corrupt PDF', async () => {
+      const pdfBuffer = makeCorruptPdf()
+
+      vi.mocked(readFile).mockResolvedValue(pdfBuffer as any)
+      vi.mocked(stat).mockResolvedValue({
+        isDirectory: () => false,
+        size: pdfBuffer.length,
+      } as any)
+
+      const result = await readFileTool.execute({ path: 'test.pdf' }, mockContext)
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Failed to read PDF')
     })
   })
 })

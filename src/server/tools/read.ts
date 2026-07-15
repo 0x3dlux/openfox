@@ -5,7 +5,7 @@ import { createTool } from './tool-helpers.js'
 import { computeFileHash } from './file-tracker.js'
 import { detectEncoding, decodeContent } from '../utils/encoding.js'
 import { fileTypeFromBuffer } from 'file-type'
-import { isPdfBuffer, extractPdfText, processPdfContent, isPasswordError } from './pdf-utils.js'
+import { isPdfBuffer, extractPdfText, processPdfContent, formatPdfErrorMessage } from './pdf-utils.js'
 
 interface ReadFileArgs {
   path: string
@@ -212,10 +212,7 @@ export const readFileTool = createTool<ReadFileArgs>(
           },
         })
       } catch (err) {
-        if (isPasswordError(err)) {
-          return helpers.error('This PDF is password-protected. Unlock it with an external tool first.')
-        }
-        return helpers.error(`Failed to read PDF: ${err instanceof Error ? err.message : String(err)}`)
+        return helpers.error(formatPdfErrorMessage(err))
       }
     }
 

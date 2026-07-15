@@ -1,7 +1,7 @@
 import TurndownService from 'turndown'
 import { createTool, buildSignal } from './tool-helpers.js'
 import { OUTPUT_LIMITS } from './types.js'
-import { isPdfBuffer, extractPdfText, processPdfContent, isPasswordError } from './pdf-utils.js'
+import { isPdfBuffer, extractPdfText, processPdfContent, formatPdfErrorMessage } from './pdf-utils.js'
 
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024 // 5MB
 const DEFAULT_TIMEOUT_MS = 30_000
@@ -174,10 +174,7 @@ export const webFetchTool = createTool<WebFetchArgs>(
           },
         })
       } catch (err) {
-        if (isPasswordError(err)) {
-          return helpers.error('This PDF is password-protected. Unlock it with an external tool first.')
-        }
-        return helpers.error(`Failed to read PDF: ${err instanceof Error ? err.message : String(err)}`)
+        return helpers.error(formatPdfErrorMessage(err))
       }
     }
 

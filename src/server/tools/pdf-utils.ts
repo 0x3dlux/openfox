@@ -20,9 +20,20 @@ export interface ProcessedPdf {
   isScanned: boolean
 }
 
+// NOTE: This relies on pdfjs-dist error message text which is not a stable API.
+// A more robust approach would inspect the PDF's /Encrypt dictionary entry
+// directly before attempting extraction. If upgrading pdfjs-dist breaks this,
+// switch to checking `doc.catalog.get('Encrypt')` or similar.
 export function isPasswordError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
   return message.toLowerCase().includes('password') || message.toLowerCase().includes('encrypt')
+}
+
+export function formatPdfErrorMessage(err: unknown): string {
+  if (isPasswordError(err)) {
+    return 'This PDF is password-protected. Unlock it with an external tool first.'
+  }
+  return `Failed to read PDF: ${err instanceof Error ? err.message : String(err)}`
 }
 
 export function processPdfContent(text: string, maxBytes: number): ProcessedPdf {
@@ -51,15 +62,20 @@ export async function extractPdfText(buffer: Buffer): Promise<PdfResult> {
   const pages: string[] = []
   const limitedPageCount = Math.min(pageCount, OUTPUT_LIMITS.read_file.maxPdfPages)
 
-  for (let i = 1; i <= limitedPageCount; i++) {
-    const page = await doc.getPage(i)
-    const content = await page.getTextContent()
-    const pageText = content.items.map((item) => ('str' in item ? item.str : '')).join(' ')
-    pages.push(`[Page ${i}/${pageCount}]\n${pageText}`)
-    page.cleanup()
+  try {
+    for (let i = 1; i <= limitedPageCount; i++) {
+      const page = await doc.getPage(i)
+      try {
+        const content = await page.getTextContent()
+        const pageText = content.items.map((item) => ('str' in item ? item.str : '')).join(' ')
+        pages.push(`[Page ${i}/${pageCount}]\n${pageText}`)
+      } finally {
+        page.cleanup()
+      }
+    }
+  } finally {
+    doc.cleanup()
   }
-
-  doc.cleanup()
 
   let text = pages.join('\n\n')
   if (pageCount > limitedPageCount) {

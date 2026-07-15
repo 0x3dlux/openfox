@@ -57,18 +57,25 @@ function useDebouncedSave(
 function useTestButton(): [
   string,
   string,
+  boolean,
   (testFn: () => Promise<{ success: boolean; error?: string }>) => Promise<void>,
 ] {
   const [text, setText] = useState('Test')
   const [error, setError] = useState('')
+  const [isSuccess, setIsSuccess] = useState(false)
   const test = useCallback(async (testFn: () => Promise<{ success: boolean; error?: string }>) => {
     setText('Testing...')
     setError('')
+    setIsSuccess(false)
     try {
       const result = await testFn()
       if (result.success) {
-        setText('✓ OK')
-        setTimeout(() => setText('Test'), 3000)
+        setText('Success')
+        setIsSuccess(true)
+        setTimeout(() => {
+          setText('Test')
+          setIsSuccess(false)
+        }, 3000)
       } else {
         setError(result.error ?? 'Test failed')
         setText('Test')
@@ -78,7 +85,7 @@ function useTestButton(): [
       setText('Test')
     }
   }, [])
-  return [text, error, test]
+  return [text, error, isSuccess, test]
 }
 
 export function ToolsTab() {
@@ -94,8 +101,8 @@ export function ToolsTab() {
   useDebouncedSave(searxngUrl, SETTINGS_KEYS.SEARCH_SEARXNG_URL, setSetting)
   useDebouncedSave(searxngKey, SETTINGS_KEYS.SEARCH_SEARXNG_API_KEY, setSetting)
 
-  const [tavilyTestText, tavilyTestError, testTavily] = useTestButton()
-  const [searxngTestText, searxngTestError, testSearxng] = useTestButton()
+  const [tavilyTestText, tavilyTestError, tavilyTestSuccess, testTavily] = useTestButton()
+  const [searxngTestText, searxngTestError, searxngTestSuccess, testSearxng] = useTestButton()
 
   useEffect(() => {
     getSetting(SETTINGS_KEYS.SEARCH_ENGINE)
@@ -351,13 +358,25 @@ export function ToolsTab() {
                   placeholder="tvly-..."
                   className="flex-1"
                 />
-                <Button variant="secondary" onClick={handleTestTavily}>
+                <Button
+                  variant="secondary"
+                  onClick={handleTestTavily}
+                  style={tavilyTestSuccess ? { color: 'rgb(63, 185, 80)' } : undefined}
+                >
                   {tavilyTestText}
                 </Button>
               </div>
               {tavilyTestError && <p className="text-xs text-red-500 mt-1">{tavilyTestError}</p>}
               <p className="text-xs text-text-muted mt-1">
-                Get a free API key at <span className="text-accent-primary">tavily.com</span>
+                Get a free API key at{' '}
+                <a
+                  href="https://app.tavily.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent-primary hover:underline"
+                >
+                  tavily.com
+                </a>
               </p>
             </div>
           )}
@@ -385,7 +404,11 @@ export function ToolsTab() {
                   className="w-full"
                 />
               </div>
-              <Button variant="secondary" onClick={handleTestSearxng}>
+              <Button
+                variant="secondary"
+                onClick={handleTestSearxng}
+                style={searxngTestSuccess ? { color: 'rgb(63, 185, 80)' } : undefined}
+              >
                 {searxngTestText}
               </Button>
               {searxngTestError && <p className="text-xs text-red-500">{searxngTestError}</p>}

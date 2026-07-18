@@ -51,7 +51,7 @@ The agent examines the PR:
 
 - Read the diff: `git diff origin/develop...HEAD`
 - List changed files: `git diff --stat origin/develop...HEAD`
-- Run existing tests to check for regressions
+- Run full test suite: `npm run test:unit && npm run test:e2e`
 - Inspect code quality, error handling, edge cases
 - Report findings to the user with specific line references
 
@@ -137,7 +137,7 @@ gh pr checkout 103
 # ── Review ──
 git diff --stat origin/develop...HEAD
 npm run typecheck
-npm run test:unit
+npm run test:unit && npm run test:e2e
 
 # ── Fix (agent proposes → user approves) ──
 # agent applies fixes via edit_file

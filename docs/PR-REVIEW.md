@@ -52,59 +52,68 @@ The agent examines the PR:
 - Inspect code quality, error handling, edge cases
 - Report findings to the user with specific line references
 
-### Phase 3 — Fix & Iterate
+### Phase 3 — Fix
 
-The user reviews the findings and approves fixes. The agent applies them.
+The user approves the fix plan. The agent applies fixes in the workspace and commits.
 
 ```bash
 # 4. Apply fixes (agent uses write_file / edit_file tools)
-# 5. Commit changes
-git add -A
-git commit -m "review: fix <issue>"
+#    NOTE: agent does NOT commit or push until user says so
 ```
 
-#### Pushing to same-repo PRs
+### Phase 4 — User Tests
+
+The agent starts the dev server and hands off with a summary — no asking, just doing:
 
 ```bash
+# Agent starts the dev server (no question — just do it)
+dev_server start   # → http://localhost:<port>
+```
+
+Handoff format:
+
+> **"PR #N is ready at http://localhost:<port>.**
+>
+> **Metrics:** Tests X → Y (+Z), Typecheck ✅, Lint ✅
+>
+> **What I fixed:**
+> - *bullet list of specific changes*
+> - *why each matters*
+>
+> **What to test:**
+> - *specific things to click/look for*
+> - *edge cases*"
+
+The user opens the link and kicks the tires. Loop back to Phase 3 if adjustments are needed.
+
+### Phase 5 — Merge
+
+When the user says **"Merge it"**, the agent:
+
+```bash
+# 6. Switch back to the review workspace
+workspace switch review-pr-<N>
+
+# 7. Push fixes to the PR branch
+#    Same-repo:
 git push origin HEAD:<remote-branch-name>
-```
-
-#### Pushing to fork PRs
-
-Most forks have `maintainer_can_modify=true` — add the fork as a remote and push:
-
-```bash
-# Add fork as remote (one-time per PR)
+#    Fork (maintainer_can_modify=true):
 git remote add fork-<N> git@github.com:<user>/openfox.git
-
-# Push fixes to the PR branch
 git push fork-<N> HEAD:<remote-branch-name>
-
-# Clean up remote (optional)
 git remote remove fork-<N>
-```
 
-If the fork doesn't have `maintainer_can_modify=true`, fall back to the cherry-pick method (see [below](#fork-prs-without-push-access)).
-
-After pushing, the user does manual testing. Loop back to Phase 3 for any adjustments.
-
-### Phase 4 — Merge
-
-Once the PR is approved and tested:
-
-```bash
-# 6. Squash-merge via API
+# 8. Squash-merge via API
 gh api repos/co-l/openfox/pulls/<N>/merge -X PUT \
   -f merge_method=squash \
   -f commit_title="feat: description (#<N>)"
 
-# 7. Return to main project
+# 9. Return to main project
 workspace switch original
 
-# 8. Update develop locally
+# 10. Update develop locally
 git checkout develop && git pull origin develop --ff-only
 
-# 9. Clean up the review workspace
+# 11. Clean up the review workspace
 workspace delete review-pr-<N>
 ```
 
@@ -122,18 +131,21 @@ git diff --stat origin/develop...HEAD
 npm run typecheck
 npm run test:unit
 
-# ── Fix ──
-# ... agent applies fixes via edit_file ...
+# ── Fix (agent proposes → user approves) ──
+# agent applies fixes via edit_file
 git add -A && git commit -m "review: fix windows path handling in npm spawn"
 
-# ── Push ──
+# ── Agent starts dev server and hands off ──
+dev_server start
+# "PR #103 ready at http://localhost:.... Metrics: Tests 2225→2232 (+7), Typecheck ✅, Lint ✅
+#  What I fixed: ... What to test: ..."
+# ── User tests, iterates if needed ──
+
+# ── Merge (user says "merge it") ──
+workspace switch review-pr-103
 git remote add fork-103 git@github.com:RenZan/openfox.git
 git push fork-103 HEAD:feature/manage-pdf-images
 git remote remove fork-103
-
-# ── User tests, iterates if needed ──
-
-# ── Merge ──
 gh api repos/co-l/openfox/pulls/103/merge -X PUT \
   -f merge_method=squash \
   -f commit_title="feat: PDF embedded-image support (#103)"

@@ -135,7 +135,6 @@ describe('resolveAttachmentsInMessages', () => {
     expect(result[0]?.content).not.toContain('base64')
   })
 
-
   it('produces placeholder for unknown mime type when vision is supported', async () => {
     const messages: LLMMessage[] = [
       {

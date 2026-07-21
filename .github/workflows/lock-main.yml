@@ -1,0 +1,14 @@
+name: Lock main branch
+
+on:
+  pull_request_target:
+    branches: [main]
+
+jobs:
+  block:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::error::PRs targeting \`main\` are not allowed."
+          echo "::error::Please retarget this PR to the \`develop\` branch."
+          exit 1

@@ -132,6 +132,7 @@ _Vision Fallback — Image processing configuration_
 | `OPENFOX_LLM_URL`                    | `http://localhost:8000/v1` | LLM API base URL                                                |
 | `OPENFOX_VLLM_URL`                   | —                          | Deprecated alias for `OPENFOX_LLM_URL`                          |
 | `OPENFOX_BACKEND`                    | `unknown`                  | Backend type: `vllm`, `sglang`, `ollama`, `llamacpp`, `unknown` |
+| `OPENFOX_BASE_PATH`                  | `/`                        | Web app base path for subpath deployments (e.g. `/openfox/`)    |
 | `OPENFOX_MODEL_NAME`                 | `''`                       | Override default model name                                     |
 | `OPENFOX_MAX_CONTEXT`                | `200000`                   | Max context window in tokens                                    |
 | `OPENFOX_LLM_TIMEOUT`                | `300000`                   | LLM request timeout in ms                                       |

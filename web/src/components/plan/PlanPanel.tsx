@@ -243,7 +243,7 @@ export function PlanPanel({
       <SessionLayout
         criteriaSidebarOpen={criteriaSidebarOpen}
         onCriteriaSidebarToggle={onCriteriaSidebarToggle}
-        messages={rawMessages}
+        messages={storeMessages}
         displayItems={displayItems}
         activeIndex={activeIndex}
         onNavigate={scrollToIndex}

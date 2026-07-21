@@ -10,6 +10,14 @@ import { createChatPathConfirmationMessage } from '../ws/protocol.js'
 import { getEventStore } from '../events/index.js'
 
 /**
+ * Counter for generating unique confirmation callIds within a single tool invocation.
+ * Each call to requestUserConfirmation increments this counter and appends it to
+ * the toolCallId, ensuring each confirmation has a unique ID while preserving the
+ * association with the parent tool call for frontend matching.
+ */
+let confirmationSeqCounter = 0
+
+/**
  * Helper utilities provided to tool handlers by createTool.
  * These encapsulate common patterns like path resolution and result formatting.
  */
@@ -73,9 +81,12 @@ export function requestUserConfirmation(context: ToolContext, toolLabel: string,
   // Already handled by dangerous check above; in normal mode, deny (fail closed).
   if (context.isSubAgent) return Promise.resolve(false)
   if (typeof context.onEvent !== 'function') return Promise.resolve(false)
-  // Use the tool call ID so the frontend can match this confirmation to the tool call UI.
+  // Generate a unique callId by appending a sequence counter to the toolCallId.
+  // This ensures each confirmation has a unique ID while preserving the association
+  // with the parent tool call for frontend matching (via prefix matching).
   // Fall back to a fresh UUID if no toolCallId is available.
-  const callId = context.toolCallId ?? randomUUID()
+  const seq = ++confirmationSeqCounter
+  const callId = context.toolCallId ? `${context.toolCallId}-${seq}` : randomUUID()
   // Persist to EventStore so the confirmation survives navigation/reload
   try {
     const eventStore = getEventStore()

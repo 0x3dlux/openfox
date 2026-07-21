@@ -1,8 +1,22 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { resolve } from 'node:path'
-import { createTool } from './tool-helpers.js'
+import { createTool, requestUserConfirmation } from './tool-helpers.js'
 import type { ToolContext } from './types.js'
 import { PathAccessDeniedError } from './path-security.js'
+
+// Track callIds passed to registerPathConfirmation across tests
+const capturedCallIds: string[] = []
+
+vi.mock('./path-security.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./path-security.js')>()
+  return {
+    ...actual,
+    registerPathConfirmation: (callId: string, ..._args: unknown[]) => {
+      capturedCallIds.push(callId)
+      return Promise.resolve(true)
+    },
+  }
+})
 
 describe('createTool', () => {
   // Mock sessionManager for test context
@@ -150,5 +164,38 @@ describe('createTool', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('Unknown error')
+  })
+})
+
+describe('requestUserConfirmation', () => {
+  const mockSessionManager = {
+    recordFileRead: vi.fn(),
+    getReadFiles: vi.fn().mockReturnValue({}),
+    updateFileHash: vi.fn(),
+  } as any
+
+  beforeEach(() => {
+    capturedCallIds.length = 0
+  })
+
+  it('generates unique callId for each confirmation even when toolCallId is reused [KNOWN BUG]', async () => {
+    const mockOnEvent = vi.fn()
+
+    const context: ToolContext = {
+      sessionManager: mockSessionManager,
+      workdir: '/test/workdir',
+      sessionId: 'test-session',
+      toolCallId: 'same-tool-call-id',
+      onEvent: mockOnEvent,
+    }
+
+    await requestUserConfirmation(context, 'command', 'first confirmation')
+    await requestUserConfirmation(context, 'command', 'second confirmation')
+
+    // Both calls should have produced a confirmation
+    expect(capturedCallIds).toHaveLength(2)
+    // BUG: currently both use context.toolCallId ('same-tool-call-id'), so they're identical.
+    // Fix: each call should generate its own unique callId.
+    expect(capturedCallIds[0]).not.toBe(capturedCallIds[1])
   })
 })

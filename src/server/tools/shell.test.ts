@@ -278,6 +278,14 @@ describe('detectEscapePattern', () => {
   it('still allows cd with dot-prefixed relative path', () => {
     expect(detectEscapePattern('cd ./src')).toBeNull()
   })
+
+  it('allows cd to absolute path within workdir', () => {
+    // cd to the workdir itself or a subdirectory should not be flagged as escape
+    expect(detectEscapePattern('cd /home/conrad/dev/openfox && npm run test', '/home/conrad/dev/openfox')).toBeNull()
+    expect(
+      detectEscapePattern('cd /home/conrad/dev/openfox/src && npm run test', '/home/conrad/dev/openfox'),
+    ).toBeNull()
+  })
 })
 
 describe('detectGitMutation', () => {

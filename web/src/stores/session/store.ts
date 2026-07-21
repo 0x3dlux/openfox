@@ -706,11 +706,15 @@ export const useSessionStore = create<SessionState>((set, get) => {
       if (!sessionId) return
 
       try {
-        await authFetch(`/api/sessions/${sessionId}/confirm-path`, {
+        const res = await authFetch(`/api/sessions/${sessionId}/confirm-path`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ callId, approved, alwaysAllow }),
         })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          console.error('Error confirming path:', body.error ?? `HTTP ${res.status}`)
+        }
       } catch (error) {
         console.error('Error confirming path:', error)
       }

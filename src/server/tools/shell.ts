@@ -28,18 +28,66 @@ const ESCAPE_PATTERNS = [
 ]
 
 /**
+ * Extract the directory argument from a `cd` command segment.
+ * Returns the resolved absolute path or null if it can't be determined.
+ */
+function extractCdTarget(segment: string): string | null {
+  const trimmed = segment.trim()
+  const match = trimmed.match(/^cd\s+(.+)$/)
+  if (!match) return null
+  return match[1]!.replace(/^['"]|['"]$/g, '').trim()
+}
+
+/**
+ * Check if a `cd` target path is within the given workdir.
+ * Only checks absolute paths (starting with /). Relative paths like `..` are
+ * always considered escapes regardless of workdir.
+ */
+function isCdTargetWithinWorkdir(cdTarget: string, workdir: string): boolean {
+  if (!cdTarget.startsWith('/')) return false
+  const resolvedTarget = resolve(cdTarget)
+  const normalizedWorkdir = resolve(workdir).replace(/\/+$/, '')
+  return resolvedTarget === normalizedWorkdir || resolvedTarget.startsWith(normalizedWorkdir + '/')
+}
+
+/**
+ * Check if a command segment represents a cd to an absolute path that is
+ * within the given workdir (and therefore not an escape).
+ */
+function isCdToWithinWorkdir(segment: string, workdir: string): boolean {
+  const trimmed = segment.trim()
+  if (!/^cd\s+['"]?\//.test(trimmed)) return false
+  const cdTarget = extractCdTarget(trimmed)
+  return cdTarget !== null && isCdTargetWithinWorkdir(cdTarget, workdir)
+}
+
+/**
  * Check if a command contains workspace escape patterns.
  * Strips quotes globally so patterns like cd "$PWD/.." are caught (becomes cd $PWD/..).
  * Then checks individual segments against the original command for variable/substitution
  * patterns that are masked by quoted strings.
+ *
+ * @param command - The shell command to check
+ * @param workdir - Optional working directory. When provided, `cd` to absolute paths
+ *                  within this directory are NOT considered escapes.
  */
-export function detectEscapePattern(command: string): string | null {
+export function detectEscapePattern(command: string, workdir?: string): string | null {
   // Strip quotes to normalize paths before matching
   const normalized = command.replace(/'[^']*'/g, ' ').replace(/"[^"]*"/g, ' ')
   for (const pattern of ESCAPE_PATTERNS) {
     const match = normalized.match(pattern)
     if (match) {
-      return match[0].trim()
+      const matched = match[0].trim()
+      // Defer cd /... decisions to segment-based check when workdir is available
+      if (workdir && (matched.startsWith('cd /') || matched.startsWith('cd "'))) {
+        // Check all segments — if the only cd-to-absolute is within workdir, skip this pattern
+        const segments = command.split(/[;&|]|&&|\|\|/)
+        const allCdsWithinWorkdir = segments.every(
+          (seg) => !/^cd\s+['"]?\//.test(seg.trim()) || isCdToWithinWorkdir(seg, workdir),
+        )
+        if (allCdsWithinWorkdir) continue
+      }
+      return matched
     }
   }
   // Catch indirect escapes like cd sub && cd ../.. and cd "$PWD/.."
@@ -59,6 +107,8 @@ export function detectEscapePattern(command: string): string | null {
       /^cd\s+.*`/.test(trimmed) || // cd with backtick substitution
       /^cd\s+.*\$\{?[A-Za-z_]/.test(trimmed) // cd with variable expansion
     ) {
+      // If this is a cd to an absolute path and we have a workdir, check if it's within bounds
+      if (workdir && isCdToWithinWorkdir(trimmed, workdir)) continue
       return trimmed
     }
   }
@@ -141,7 +191,7 @@ export const runCommandTool = createTool<RunCommandArgs>(
     function: {
       name: 'run_command',
       description:
-        'Execute a shell command. Returns stdout, stderr, and exit code. Does NOT support trailing "&" for backgrounding — use background_process tool instead.\nCommands run from your working directory automatically — do NOT prepend "cd /path/" to change to a directory you are already in. Doing so triggers unnecessary security confirmations.',
+        'Execute a shell command. Returns stdout, stderr, and exit code. Does NOT support trailing "&" for backgrounding — use background_process tool instead.\nCommands run from your working directory automatically, so prefer relative paths.',
       parameters: {
         type: 'object',
         properties: {
@@ -172,7 +222,7 @@ export const runCommandTool = createTool<RunCommandArgs>(
     }
 
     // Detect workspace escape patterns (cd ../.., git -C, GIT_DIR, etc.)
-    const escapeMatch = detectEscapePattern(args.command)
+    const escapeMatch = detectEscapePattern(args.command, context.workdir)
     if (escapeMatch) {
       const desc = `Command "${args.command}" contains workspace escape pattern "${escapeMatch}". Allow this command?`
       const approved = await requestUserConfirmation(context, 'command', desc)

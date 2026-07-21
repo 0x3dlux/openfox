@@ -2044,6 +2044,78 @@ describe('cross-session path confirmations', () => {
   })
 })
 
+describe('confirmPath error handling', () => {
+  beforeEach(() => {
+    wsSendMock.mockClear()
+    wsSubscribeMock.mockClear()
+    wsConnectMock.mockClear()
+    wsDisconnectMock.mockClear()
+    wsStatusMock.mockClear()
+    playNotificationMock.mockClear()
+    playAchievementMock.mockClear()
+    playInterventionMock.mockClear()
+    playWaitingForUserMock.mockClear()
+    playNewMessageMock.mockClear()
+    fetchMock.mockClear()
+  })
+
+  it('surfaces errors when server returns non-ok response [KNOWN BUG: silently swallowed]', async () => {
+    const useSessionStore = await loadSessionStore()
+
+    // Spy on console.error
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    // Set up a session with a pending confirmation
+    useSessionStore.setState((state) => ({
+      ...state,
+      currentSession: {
+        id: 'session-1',
+        projectId: 'project-1',
+        workdir: '/tmp/project-1',
+        mode: 'builder',
+        phase: 'build',
+        isRunning: true,
+        criteria: [],
+        summary: null,
+      } as any,
+      pendingPathConfirmations: [
+        {
+          callId: 'call-123',
+          tool: 'run_command',
+          paths: ['/tmp/some-path'],
+          workdir: '/tmp/project-1',
+          reason: 'outside_workdir' as const,
+        },
+      ],
+    }))
+
+    // Mock fetch to return 404 (non-ok response)
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: () => Promise.resolve({ success: false, error: 'No pending path confirmation with that ID' }),
+    })
+
+    await useSessionStore.getState().confirmPath('call-123', true, false)
+
+    // BUG: confirmPath doesn't check res.ok, so errors are silently swallowed.
+    // The confirmation should remain in pendingPathConfirmations when the
+    // server returns an error, and the error should be surfaced.
+    // Currently the function only logs in the catch block (network errors),
+    // not for non-ok HTTP responses.
+
+    // The confirmation should NOT be removed since the server didn't process it
+    const state = useSessionStore.getState()
+    expect(state.pendingPathConfirmations).toHaveLength(1)
+    expect(state.pendingPathConfirmations[0]!.callId).toBe('call-123')
+
+    // An error should be surfaced (either console.error or store.error)
+    expect(consoleSpy).toHaveBeenCalled()
+
+    consoleSpy.mockRestore()
+  })
+})
+
 describe('cross-tab sidebar sync', () => {
   beforeEach(() => {
     wsSendMock.mockClear()

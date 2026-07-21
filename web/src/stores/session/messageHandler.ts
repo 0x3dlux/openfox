@@ -104,7 +104,13 @@ function mergeSessionIntoSummary(
 }
 
 function dedupeByCallId<T extends { callId: string }>(list: T[], item: T): T[] {
-  return list.some((x) => x.callId === item.callId) ? list : [...list, item]
+  const existingIndex = list.findIndex((x) => x.callId === item.callId)
+  if (existingIndex >= 0) {
+    const updated = [...list]
+    updated[existingIndex] = item
+    return updated
+  }
+  return [...list, item]
 }
 
 function mergeSessionList(

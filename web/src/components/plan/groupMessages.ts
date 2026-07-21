@@ -9,19 +9,24 @@ export type DisplayItem =
   | { type: 'context-divider'; windowSequence: number }
 
 /**
- * Group messages into display items, collapsing consecutive sub-agent messages
- * and inserting context window dividers.
+ * Group messages into display items, collecting sub-agent messages by
+ * subAgentId within each context window and emitting complete groups
+ * in order of first occurrence.
+ *
+ * Unlike the previous adjacency-based approach, this correctly handles
+ * interleaved messages from parallel sub-agent executions — all messages
+ * for one sub-agent within a context window end up in a single group
+ * regardless of interleaving.
+ *
+ * Context window boundaries split sub-agent groups: messages before and
+ * after a compaction are in fundamentally different contexts and belong
+ * in separate groups.
  *
  * This function preserves object identity for unchanged display items when given
  * a previousItems array, allowing React's memo() to skip unnecessary re-renders.
  */
 export function groupMessages(messages: Message[], previousItems: DisplayItem[] = []): DisplayItem[] {
-  const items: DisplayItem[] = []
-  let currentSubAgentGroup: { subAgentId: string; subAgentType: string; messages: Message[] } | null = null
-  let lastContextWindowId: string | undefined
-  let windowSequence = 1
-
-  // Create a map of message IDs to previous display items for identity preservation
+  // Create identity maps from previous items
   const previousItemsByMessageId = new Map<string, DisplayItem>()
   const previousItemsBySubAgentId = new Map<string, DisplayItem>()
 
@@ -33,79 +38,94 @@ export function groupMessages(messages: Message[], previousItems: DisplayItem[] 
     }
   }
 
-  const flushSubAgentGroup = () => {
-    if (!currentSubAgentGroup) return
+  const items: DisplayItem[] = []
+  let lastContextWindowId: string | undefined
+  let windowSequence = 1
 
-    const group = currentSubAgentGroup
+  // Per-window sub-agent buckets: subAgentId → { subAgentType, messages }
+  // Reset at each context window boundary so groups don't span compactions.
+  let windowBuckets: Map<string, { subAgentType: string; messages: Message[] }> | null = null
 
-    // Try to find a previous sub-agent item with the same ID
-    const previousSubAgentItem = previousItemsBySubAgentId.get(group.subAgentId)
+  const flushWindowBuckets = () => {
+    if (!windowBuckets || windowBuckets.size === 0) return
 
-    // Check if all messages in the group are the same (by ID)
-    const messagesMatch =
-      previousSubAgentItem &&
-      previousSubAgentItem.type === 'subagent' &&
-      previousSubAgentItem.messages.length === group.messages.length &&
-      previousSubAgentItem.messages.every((m, i) => m === group.messages[i])
-
-    if (messagesMatch) {
-      // Reuse the previous item
-      items.push(previousSubAgentItem)
-    } else {
-      // Create new item
-      items.push({
-        type: 'subagent',
-        subAgentId: group.subAgentId,
-        subAgentType: group.subAgentType,
-        messages: group.messages,
-      })
+    // Track first occurrence index of each subAgentId within this window
+    // to emit groups in chronological order
+    const firstOccurrence = new Map<string, number>()
+    let idx = 0
+    for (const msg of messages) {
+      if (msg.role === 'tool') continue
+      if (msg.contextWindowId !== lastContextWindowId) continue
+      if (msg.subAgentId && !firstOccurrence.has(msg.subAgentId)) {
+        firstOccurrence.set(msg.subAgentId, idx)
+      }
+      idx++
     }
 
-    currentSubAgentGroup = null
+    // Sort buckets by first occurrence and emit
+    const sorted = [...windowBuckets.entries()].sort(
+      (a, b) => (firstOccurrence.get(a[0]) ?? 0) - (firstOccurrence.get(b[0]) ?? 0),
+    )
+
+    for (const [subAgentId, bucket] of sorted) {
+      const previousItem = previousItemsBySubAgentId.get(subAgentId)
+      const messagesMatch =
+        previousItem?.type === 'subagent' &&
+        previousItem.messages.length === bucket.messages.length &&
+        previousItem.messages.every((m, j) => m === bucket.messages[j])
+
+      if (messagesMatch) {
+        items.push(previousItem)
+      } else {
+        items.push({
+          type: 'subagent',
+          subAgentId,
+          subAgentType: bucket.subAgentType,
+          messages: bucket.messages,
+        })
+      }
+    }
+
+    windowBuckets = null
   }
 
-  for (const msg of messages) {
-    // Skip tool messages - they're displayed within assistant messages
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i]!
     if (msg.role === 'tool') continue
 
-    // Detect context window boundary - insert divider when window changes
-    // Only insert if we've seen a previous window (not for the first window)
+    // Detect context window boundary
     if (msg.contextWindowId && lastContextWindowId && msg.contextWindowId !== lastContextWindowId) {
-      flushSubAgentGroup()
+      flushWindowBuckets()
       windowSequence++
       items.push({ type: 'context-divider', windowSequence })
     }
     lastContextWindowId = msg.contextWindowId
 
     if (msg.subAgentId && msg.subAgentType) {
-      // Part of a sub-agent run
-      if (currentSubAgentGroup && currentSubAgentGroup.subAgentId === msg.subAgentId) {
-        // Add to existing group
-        currentSubAgentGroup.messages.push(msg)
-      } else {
-        // Start new group
-        flushSubAgentGroup()
-        currentSubAgentGroup = { subAgentId: msg.subAgentId, subAgentType: msg.subAgentType!, messages: [msg] }
+      // Collect into per-window bucket
+      if (!windowBuckets) windowBuckets = new Map()
+      let bucket = windowBuckets.get(msg.subAgentId)
+      if (!bucket) {
+        bucket = { subAgentType: msg.subAgentType, messages: [] }
+        windowBuckets.set(msg.subAgentId, bucket)
       }
+      bucket.messages.push(msg)
     } else {
-      // Regular message - flush any pending group
-      flushSubAgentGroup()
+      // Regular message — flush pending buckets first so groups appear
+      // before the next non-sub-agent message
+      flushWindowBuckets()
 
-      // Try to find a previous item for this message
       const previousItem = previousItemsByMessageId.get(msg.id)
-
-      if (previousItem && previousItem.type === 'message' && previousItem.message === msg) {
-        // Reuse the previous item (message reference is identical)
+      if (previousItem?.type === 'message' && previousItem.message === msg) {
         items.push(previousItem)
       } else {
-        // Create new item
         items.push({ type: 'message', message: msg })
       }
     }
   }
 
-  // Flush final group
-  flushSubAgentGroup()
+  // Flush remaining buckets
+  flushWindowBuckets()
 
   return items
 }

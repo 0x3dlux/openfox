@@ -1454,6 +1454,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       ...(m.topP !== undefined && { topP: m.topP }),
       ...(m.topK !== undefined && { topK: m.topK }),
       ...(m.maxTokens !== undefined && { maxTokens: m.maxTokens }),
+      ...(m.compactionThreshold !== undefined && { compactionThreshold: m.compactionThreshold }),
       ...(m.selected !== undefined && { selected: m.selected }),
     }))
   }

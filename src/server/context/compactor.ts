@@ -33,15 +33,20 @@ export function appendCompactionPrompt(
 }
 
 /**
- * Check if automatic compaction should be triggered.
+ * Hard ceiling: compaction always fires when fewer than 5K tokens remain,
+ * regardless of the configured threshold. Also capped at 85% of the
+ * context window for large models.
  */
-export function shouldCompact(currentTokens: number, maxTokens: number, threshold: number): boolean {
-  return currentTokens > maxTokens * threshold
-}
+export const COMPACTION_HEADROOM_TOKENS = 5_000
+export const COMPACTION_MAX_RATIO = 0.85
 
 /**
- * Calculate the target token count for compaction.
+ * Check if automatic compaction should be triggered.
+ * Applies a hard ceiling to guarantee headroom before the context fills up.
  */
-export function getCompactionTarget(maxTokens: number, targetRatio: number): number {
-  return Math.floor(maxTokens * targetRatio)
+export function shouldCompact(currentTokens: number, maxTokens: number, threshold: number): boolean {
+  if (threshold <= 0) return false
+  const ceilingRatio = Math.min(1, Math.max(0, (maxTokens - COMPACTION_HEADROOM_TOKENS) / maxTokens))
+  const effectiveThreshold = Math.min(threshold, ceilingRatio, COMPACTION_MAX_RATIO)
+  return currentTokens > maxTokens * effectiveThreshold
 }

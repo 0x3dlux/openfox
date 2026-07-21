@@ -5,6 +5,14 @@ beforeEach(() => {
   document.head.innerHTML = ''
   document.body.innerHTML = ''
   vi.resetModules()
+
+  // happy-dom logs DOMException to console.error when script loading is disabled;
+  // tell it to treat disabled loading as success instead — the script tags are only
+  // present for detectBasePath() to parse, actual loading is irrelevant.
+  const win = window as unknown as { happyDOM?: { settings: Record<string, boolean> } }
+  if (win.happyDOM?.settings) {
+    win.happyDOM.settings.handleDisabledFileLoadingAsSuccess = true
+  }
 })
 
 describe('detectBasePath', () => {

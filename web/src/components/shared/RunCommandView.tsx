@@ -15,6 +15,7 @@ interface RunCommandViewProps {
   result?: string // final output (shown after completion)
   error?: string
   durationMs?: number
+  hideCountdown?: boolean // if true, hide the timeout indicator and progress bar
 }
 
 /**
@@ -29,27 +30,49 @@ export const RunCommandView = memo(function RunCommandView({
   result,
   error,
   durationMs,
+  hideCountdown = false,
 }: RunCommandViewProps) {
   const outputRef = useRef<HTMLPreElement>(null)
   const [elapsed, setElapsed] = useState(0)
+  const actualStartedAtRef = useRef<number | null>(null)
+  const effectiveStartedAtRef = useRef<number | null>(null)
+  const hasInitializedRef = useRef(false)
 
-  // Auto-scroll to bottom when new output arrives
+  // Parse streaming output for EXEC_START marker
   useEffect(() => {
-    if (outputRef.current && status === 'pending') {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight
+    if (!streamingOutput?.length || hasInitializedRef.current) return
+
+    for (const chunk of streamingOutput) {
+      const match = chunk.content?.match(/\[EXEC_START:(\d+)\]/)
+      if (match) {
+        const timestamp = parseInt(match[1]!, 10)
+        actualStartedAtRef.current = timestamp
+        hasInitializedRef.current = true
+        break
+      }
     }
-  }, [streamingOutput, status])
+  }, [streamingOutput])
 
-  // Update elapsed time while pending
+  // Compute effectiveStartedAt once and store in ref to prevent re-computation
+  if (!effectiveStartedAtRef.current) {
+    effectiveStartedAtRef.current = actualStartedAtRef.current ?? startedAt ?? null
+  }
+
+  const effectiveStartedAt = effectiveStartedAtRef.current
+
+  // Update elapsed time while pending - always run when tool is pending, regardless of hideCountdown
   useEffect(() => {
-    if (status !== 'pending' || !startedAt) return
+    if (status !== 'pending' || !effectiveStartedAt) return
+
+    // Set initial elapsed time immediately
+    setElapsed(Date.now() - effectiveStartedAt)
 
     const interval = setInterval(() => {
-      setElapsed(Date.now() - startedAt)
+      setElapsed(Date.now() - effectiveStartedAt)
     }, 100)
 
     return () => clearInterval(interval)
-  }, [status, startedAt])
+  }, [status, effectiveStartedAt])
 
   // Format timeout display
   const timeoutSec = timeout / 1000
@@ -67,18 +90,20 @@ export const RunCommandView = memo(function RunCommandView({
           <code className="text-text-primary break-all">{command}</code>
         </div>
 
-        {/* Timeout indicator - fixed width to prevent layout shifts */}
-        <div className="flex items-center gap-2 text-xs text-text-muted flex-shrink-0">
-          {status === 'pending' && <span className="animate-pulse text-accent-warning">running</span>}
-          {status === 'interrupted' && <span className="text-red-400">interrupted</span>}
-          <span className={status === 'pending' ? 'text-text-secondary' : 'text-text-muted'}>
-            {elapsedSec.toFixed(1)}s / {timeoutSec}s
-          </span>
-        </div>
+        {/* Timeout indicator - only shown when not hiding countdown */}
+        {!hideCountdown && (
+          <div className="flex items-center gap-2 text-xs text-text-muted flex-shrink-0">
+            {status === 'pending' && <span className="animate-pulse text-accent-warning">running</span>}
+            {status === 'interrupted' && <span className="text-red-400">interrupted</span>}
+            <span className={status === 'pending' ? 'text-text-secondary' : 'text-text-muted'}>
+              {elapsedSec.toFixed(1)}s / {timeoutSec}s
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Progress bar for pending */}
-      {status === 'pending' && (
+      {/* Progress bar for pending - only shown when not hiding countdown */}
+      {!hideCountdown && status === 'pending' && (
         <div className="h-1 bg-bg-tertiary rounded overflow-hidden">
           <div
             className="h-full bg-accent-warning transition-all duration-100"

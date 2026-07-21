@@ -472,6 +472,7 @@ export interface PendingPathConfirmation {
   paths: string[]
   workdir: string
   reason: 'outside_workdir' | 'sensitive_file' | 'both' | 'dangerous_command' | 'git_no_verify'
+  command?: string
 }
 
 export interface CompactionRecord {

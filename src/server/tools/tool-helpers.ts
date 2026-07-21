@@ -91,6 +91,8 @@ export function requestUserConfirmation(context: ToolContext, toolLabel: string,
     callId,
     [desc],
     context.sessionId,
+    context.agentTimeout,
+    undefined,
     toolLabel,
     context.workdir,
     'dangerous_command',
@@ -206,6 +208,7 @@ export function createTool<TArgs>(name: string, definition: LLMToolDefinition, h
               context.dangerLevel,
               command,
               context.isSubAgent,
+              context.agentTimeout,
             )
           }
         },

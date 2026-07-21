@@ -155,7 +155,7 @@ export const runCommandTool = createTool<RunCommandArgs>(
           },
           timeout: {
             type: 'number',
-            description: 'Timeout in milliseconds (default: 120000)',
+            description: 'Timeout in milliseconds (default: 5000)',
           },
         },
         required: ['command'],
@@ -163,7 +163,16 @@ export const runCommandTool = createTool<RunCommandArgs>(
     },
   },
   async (args, context, helpers) => {
-    const timeout = args.timeout ?? 120_000
+    const timeout = args.timeout ?? 5_000
+
+    const safeCallId = context.toolCallId || crypto.randomUUID()
+    console.log('[DEBUG shell.ts] Executing run_command:', {
+      command: args.command,
+      toolCallId: context.toolCallId,
+      generatedCallId: safeCallId,
+      sessionId: context.sessionId,
+      hasToolCallId: !!context.toolCallId,
+    })
 
     if (hasBackgroundAmpersand(args.command)) {
       return helpers.error(
@@ -200,6 +209,11 @@ export const runCommandTool = createTool<RunCommandArgs>(
     const pathsToCheck: string[] = [workingDir]
 
     const commandPaths = extractAbsolutePathsFromCommand(args.command)
+    console.log('[DEBUG shell.ts] Extracted paths:', {
+      command: args.command,
+      extractedPaths: commandPaths,
+      pathCount: commandPaths.length,
+    })
     for (const cmdPath of commandPaths) {
       const resolved = isAbsolute(cmdPath) ? cmdPath : resolve(workingDir, cmdPath)
       pathsToCheck.push(resolved)
@@ -216,10 +230,26 @@ export const runCommandTool = createTool<RunCommandArgs>(
     const tailInfo = stripTailPipe(args.command)
     const execCommand = tailInfo ? tailInfo.command : args.command
 
+    // Capture execution start time AFTER path confirmation approval
+    const processStartedAt = Date.now()
+
+    // Send execution start time to UI (for accurate countdown during execution)
+    if (context.onProgress) {
+      context.onProgress(`[EXEC_START:${processStartedAt}]`)
+    }
+
     const useRtk = getSetting(SETTINGS_KEYS.TOOLS_USE_RTK) === 'true'
     const finalCommand = useRtk ? await tryRtkRewrite(execCommand) : execCommand
 
-    const result = await executeCommand(finalCommand, workingDir, timeout, context.signal, context.onProgress)
+    const result = await executeCommand(finalCommand, workingDir, timeout, context.signal, context.onProgress).catch(
+      (err) => {
+        return {
+          stdout: '',
+          stderr: err.message || 'Command failed',
+          exitCode: -1,
+        }
+      },
+    )
 
     let output = ''
 
@@ -264,6 +294,7 @@ export const runCommandTool = createTool<RunCommandArgs>(
     return helpers.success(output, truncated, {
       success: result.exitCode === 0,
       ...(result.exitCode !== 0 && !wasInterrupted ? { error: `Command exited with code ${result.exitCode}` } : {}),
+      metadata: { timeout, processStartedAt }, // Pass actual timeout and execution start time to UI
     })
   },
 )

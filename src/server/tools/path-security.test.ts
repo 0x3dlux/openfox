@@ -901,6 +901,8 @@ describe('path-security', () => {
         'call-approve',
         ['/tmp/secret'],
         'session-1',
+        300_000,
+        undefined,
         'read_file',
         '/tmp',
         'outside_workdir',
@@ -919,6 +921,8 @@ describe('path-security', () => {
         'call-cancel',
         ['/tmp/other'],
         'session-2',
+        300_000,
+        undefined,
         'read_file',
         '/tmp',
         'outside_workdir',
@@ -934,6 +938,8 @@ describe('path-security', () => {
         'call-a',
         ['/tmp/a'],
         'session-1',
+        300_000,
+        undefined,
         'read_file',
         '/tmp',
         'outside_workdir',
@@ -942,6 +948,8 @@ describe('path-security', () => {
         'call-b',
         ['/tmp/b'],
         'session-1',
+        300_000,
+        undefined,
         'read_file',
         '/tmp',
         'outside_workdir',
@@ -950,6 +958,8 @@ describe('path-security', () => {
         'call-c',
         ['/tmp/c'],
         'session-2',
+        300_000,
+        undefined,
         'read_file',
         '/tmp',
         'outside_workdir',
@@ -1036,7 +1046,16 @@ describe('path-security', () => {
       const callId = 'always-allow-false'
       const path = '/tmp/secret-once'
 
-      registerPathConfirmation(callId, [path], 'session-once', 'read_file', '/tmp', 'outside_workdir')
+      registerPathConfirmation(
+        callId,
+        [path],
+        'session-once',
+        300_000,
+        undefined,
+        'read_file',
+        '/tmp',
+        'outside_workdir',
+      )
 
       const result = providePathConfirmation(callId, true, false)
       expect(result.found).toBe(true)
@@ -1049,7 +1068,16 @@ describe('path-security', () => {
       const callId = 'always-allow-undefined'
       const path = '/tmp/secret-default'
 
-      registerPathConfirmation(callId, [path], 'session-default', 'read_file', '/tmp', 'outside_workdir')
+      registerPathConfirmation(
+        callId,
+        [path],
+        'session-default',
+        300_000,
+        undefined,
+        'read_file',
+        '/tmp',
+        'outside_workdir',
+      )
 
       const result = providePathConfirmation(callId, true)
       expect(result.found).toBe(true)
@@ -1062,7 +1090,16 @@ describe('path-security', () => {
       const callId = 'always-allow-true'
       const path = '/tmp/secret-persist'
 
-      registerPathConfirmation(callId, [path], 'session-persist', 'read_file', '/tmp', 'outside_workdir')
+      registerPathConfirmation(
+        callId,
+        [path],
+        'session-persist',
+        300_000,
+        undefined,
+        'read_file',
+        '/tmp',
+        'outside_workdir',
+      )
 
       const result = providePathConfirmation(callId, true, true)
       expect(result.found).toBe(true)
@@ -1447,20 +1484,20 @@ describe('path-security', () => {
         'git commit --no-verify -m "skip hooks"',
       )
 
-      await waitForPending('call-git')
-      expect(hasPendingPathConfirmation('call-git')).toBe(true)
+      await waitForPending('call-git:git_no_verify')
+      expect(hasPendingPathConfirmation('call-git:git_no_verify')).toBe(true)
       expect(onEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'chat.path_confirmation',
           payload: expect.objectContaining({
-            callId: 'call-git',
+            callId: 'call-git:git_no_verify',
             tool: 'run_command',
             paths: ['git --no-verify detected'],
             reason: 'git_no_verify',
           }),
         }),
       )
-      providePathConfirmation('call-git', true)
+      providePathConfirmation('call-git:git_no_verify', true)
       await expect(promise).resolves.toBeUndefined()
     })
 
@@ -1484,8 +1521,8 @@ describe('path-security', () => {
         'git push --no-verify',
       )
 
-      await waitForPending('call-deny')
-      providePathConfirmation('call-deny', false)
+      await waitForPending('call-deny:git_no_verify')
+      providePathConfirmation('call-deny:git_no_verify', false)
       await expect(promise).rejects.toThrow('must not use --no-verify')
       await expect(promise).rejects.toMatchObject({
         name: 'PathAccessDeniedError',
@@ -1519,7 +1556,16 @@ describe('path-security', () => {
     it('does not add paths to allowlist for dangerous_command confirmations', () => {
       const callId = 'cmd-confirm-1'
 
-      registerPathConfirmation(callId, ['rm -rf /'], 'session-cmd', 'run_command', WORKDIR, 'dangerous_command')
+      registerPathConfirmation(
+        callId,
+        ['rm -rf /'],
+        'session-cmd',
+        300_000,
+        undefined,
+        'run_command',
+        WORKDIR,
+        'dangerous_command',
+      )
 
       expect(hasPendingPathConfirmation(callId)).toBe(true)
 
@@ -1538,6 +1584,8 @@ describe('path-security', () => {
         callId,
         ['git --no-verify detected'],
         'session-git',
+        300_000,
+        undefined,
         'run_command',
         WORKDIR,
         'git_no_verify',

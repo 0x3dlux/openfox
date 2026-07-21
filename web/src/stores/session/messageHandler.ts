@@ -560,12 +560,20 @@ export function handleServerMessage(
       const eventSessionId = message.sessionId
       const isCurrentSession = eventSessionId === (get().currentSession?.id ?? null)
       const payload = message.payload as ChatPathConfirmationPayload
+      console.log('[DEBUG messageHandler] chat.path_confirmation received:', {
+        callId: payload.callId,
+        tool: payload.tool,
+        reason: payload.reason,
+        command: payload.command,
+      })
       const newConfirmation = {
         callId: payload.callId,
         tool: payload.tool,
         paths: payload.paths,
         workdir: payload.workdir,
         reason: payload.reason,
+        ...(payload.command && { command: payload.command }),
+        ...(payload.timeoutMs !== undefined && { timeoutMs: payload.timeoutMs }),
       }
 
       if (!isCurrentSession) {

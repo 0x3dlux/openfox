@@ -182,6 +182,7 @@ export interface PendingPathConfirmationPayload {
   paths: string[]
   workdir: string
   reason: 'outside_workdir' | 'sensitive_file' | 'both' | 'dangerous_command' | 'git_no_verify'
+  command?: string
 }
 
 export interface SessionListPayload {
@@ -310,6 +311,8 @@ export interface ChatPathConfirmationPayload {
   paths: string[] // The paths requiring confirmation
   workdir: string // For context in UI
   reason: PathConfirmationReason // Why confirmation is needed
+  command?: string // The command that triggered this confirmation
+  timeoutMs?: number // Timeout duration for the confirmation
 }
 
 // Client payload for path confirmation response

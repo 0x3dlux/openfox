@@ -91,8 +91,13 @@ These processes run independently of agent turns and persist across session comp
           )
         }
 
+        // Security check: validate path access and dangerous commands
+        await helpers.checkPathAccess([cwd], args.command)
+
+        const timeout = args.timeout ?? 120_000
+
         const name = args.name ?? args.command?.split(' ')[0] ?? 'process'
-        const process = manager.createProcess(sessionId, name, args.command!, cwd, args.timeout)
+        const process = manager.createProcess(sessionId, name, args.command!, cwd, timeout)
 
         if (!process) {
           return helpers.error(`Failed to create process. Maximum limit may have been reached.`)
@@ -116,6 +121,8 @@ These processes run independently of agent turns and persist across session comp
             null,
             2,
           ),
+          false,
+          { metadata: { timeout, processStartedAt: Date.now() } }, // Pass actual timeout and execution start time to UI
         )
       }
 

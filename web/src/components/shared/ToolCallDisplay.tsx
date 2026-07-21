@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useState, useEffect } from 'react'
 import type { Diagnostic, EditContextRegion } from '@shared/types.js'
 import { ToolIcon } from './ToolIcon'
 import { DiffView, FilePreview, EditContextView, ReadFileView } from './DiffView'
@@ -90,6 +90,19 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
   const config = statusConfig[status]
   const showEditorLink = useSettingsStore((s) => s.settings[SETTINGS_KEYS.DISPLAY_SHOW_OPEN_IN_EDITOR]) === 'true'
 
+  // Track elapsed time for background_process countdown
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    const processStartedAt = metadata?.processStartedAt as number | undefined
+    if (tool !== 'background_process' || status !== 'pending' || !processStartedAt) return
+
+    const interval = setInterval(() => {
+      setElapsed(Date.now() - processStartedAt)
+    }, 100)
+
+    return () => clearInterval(interval)
+  }, [tool, status, metadata])
+
   const editorLine =
     tool === 'edit_file'
       ? editContext?.regions[0]?.startLine
@@ -103,17 +116,38 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
 
   // Check if there's a pending path confirmation matching this tool call
   const pendingPathConfirmations = useSessionStore((state) => state.pendingPathConfirmations)
+  // For dangerous commands and git --no-verify, the confirmation callId has a suffix
   const pendingConfirmation: PendingPathConfirmation | null =
-    callId ? (pendingPathConfirmations.find((pc) => pc.callId === callId) ?? null) : null
-  // step_done is a simple completion signal — minimal inline pill, no collapsible, no args
-  if (tool === 'step_done') {
-    return (
-      <div className="flex items-center gap-1.5 text-xs bg-secondary rounded px-2 py-1.5">
-        <span className={`${config.color} ${config.animate ? 'animate-pulse' : ''}`}>{config.icon}</span>
-        <span className="font-mono text-accent-primary text-sm">{tool}</span>
-      </div>
-    )
-  }
+    status === 'pending' && callId
+      ? (pendingPathConfirmations.find(
+          (pc) =>
+            pc.callId === callId ||
+            pc.callId === `${callId}:dangerous_command` ||
+            pc.callId === `${callId}:git_no_verify`,
+        ) ?? null)
+      : null
+
+  console.log('[DEBUG ToolCallDisplay] pendingConfirmation status:', {
+    status,
+    callId,
+    pendingConfirmation: pendingConfirmation?.callId,
+    hasConfirmation: !!pendingConfirmation,
+  })
+
+  // Debug log
+  useEffect(() => {
+    if (status === 'pending' && callId) {
+      console.log('[DEBUG ToolCallDisplay] Looking for confirmation:', {
+        callId,
+        tool,
+        pendingCount: pendingPathConfirmations.length,
+        pendingConfirmations: pendingPathConfirmations.map((pc) => pc.callId),
+        matchedConfirmation: pendingConfirmation?.callId,
+      })
+    }
+  }, [callId, status, pendingPathConfirmations, pendingConfirmation])
+
+  // Compact variant - single line, no expansion
   if (variant === 'compact') {
     return (
       <div className="flex items-center gap-1.5 text-xs bg-secondary rounded px-2 py-1.5">
@@ -147,17 +181,59 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
       {expanded && (
         <div className="p-2 bg-primary border-t border-border space-y-2 min-w-0">
           {/* Specialized rendering for run_command with streaming output */}
+          {/* Hide countdown when waiting for path confirmation, but always show the command */}
           {tool === 'run_command' && (
             <RunCommandView
-              command={String(args.command ?? '')}
-              timeout={(args.timeout as number | undefined) ?? 120_000}
-              startedAt={startedAt}
+              command={String((args as { command?: unknown }).command ?? '')}
+              timeout={(args.timeout as number) ?? (metadata?.timeout as number) ?? 5_000}
+              startedAt={(metadata?.processStartedAt as number) ?? startedAt}
               streamingOutput={streamingOutput}
               status={status}
               result={result}
               error={error}
               durationMs={durationMs}
+              hideCountdown={!!pendingConfirmation}
             />
+          )}
+
+          {/* Specialized rendering for background_process with timeout display */}
+          {/* Hide countdown when waiting for path confirmation, but always show the command */}
+          {tool === 'background_process' && metadata?.timeout && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-xs flex-1 min-w-0">
+                  <span className="text-text-muted flex-shrink-0">$</span>
+                  <code className="text-text-primary break-all">
+                    background_process start:{' '}
+                    {String(
+                      (args as { name?: string; command?: string }).name ??
+                        (args as { name?: string; command?: string }).command ??
+                        'process',
+                    )}
+                  </code>
+                </div>
+                {!pendingConfirmation && (
+                  <div className="flex items-center gap-2 text-xs text-text-muted flex-shrink-0">
+                    <span className="animate-pulse text-accent-warning">running</span>
+                    <span className="text-text-secondary">
+                      {(elapsed / 1000).toFixed(1)}s /{(metadata.timeout as number) / 1000}s
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Progress bar - only shown when not waiting for path confirmation */}
+              {!pendingConfirmation && (
+                <div className="h-1 bg-bg-tertiary rounded overflow-hidden">
+                  <div
+                    className="h-full bg-accent-warning transition-all duration-100"
+                    style={{
+                      width: `${Math.min(100, (elapsed / (metadata.timeout as number)) * 100)}%`,
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           )}
 
           {/* Specialized rendering for file edit operations */}

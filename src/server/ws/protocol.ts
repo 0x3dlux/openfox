@@ -293,8 +293,16 @@ export function createChatPathConfirmationMessage(
   paths: string[],
   workdir: string,
   reason: ChatPathConfirmationPayload['reason'],
+  command?: string,
 ): ServerMessage<ChatPathConfirmationPayload> {
-  return createServerMessage('chat.path_confirmation', { callId, tool, paths, workdir, reason })
+  return createServerMessage('chat.path_confirmation', {
+    callId,
+    tool,
+    paths,
+    workdir,
+    reason,
+    ...(command && { command }),
+  })
 }
 
 // Ask user messages

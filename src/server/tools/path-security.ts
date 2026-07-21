@@ -515,20 +515,21 @@ export async function checkPathsAccess(
 // ============================================================================
 
 const DANGEROUS_PATTERNS = [
-  /sudo\s/,
-  /rm\s+(-rf?|--recursive)\s+[~]/,
-  /chmod\s+777/,
-  />\s*\/dev\/sd/,
-  /mkfs\s/,
-  /dd\s+if=/,
-  /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;/,
+  { pattern: /sudo\s/, description: 'sudo command' },
+  { pattern: /rm\s+(-rf?|--recursive)\s+[~]/, description: 'recursive delete' },
+  { pattern: /chmod\s+777/, description: 'chmod 777' },
+  { pattern: />\s*\/dev\/sd/, description: 'disk write' },
+  { pattern: /mkfs\s/, description: 'format disk' },
+  { pattern: /dd\s+if=/, description: 'dd command' },
+  { pattern: /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;/, description: 'fork bomb' },
 ]
 
 export function extractDangerousPatterns(command: string): string[] {
   const dangerous: string[] = []
-  for (const pattern of DANGEROUS_PATTERNS) {
-    if (pattern.test(command)) {
-      dangerous.push(pattern.source)
+  for (const { pattern, description } of DANGEROUS_PATTERNS) {
+    const match = command.match(pattern)
+    if (match) {
+      dangerous.push(match[0].trim() || description)
     }
   }
   return dangerous
@@ -579,6 +580,7 @@ export async function requestPathAccess(
   dangerLevel?: string,
   command?: string,
   isSubAgent?: boolean,
+  configTimeout?: number,
 ): Promise<void> {
   // Sub-agent shortcut: skip all confirmation dialogs since they don't render
   // properly in the small sub-agent window. Fail closed in normal mode;
@@ -605,12 +607,21 @@ export async function requestPathAccess(
   const emitPendingEvent = (
     confirmationPaths: string[],
     confirmationReason: 'outside_workdir' | 'sensitive_file' | 'both' | 'dangerous_command' | 'git_no_verify',
+    confirmationCommand?: string,
+    confirmationCallId?: string,
   ) => {
     try {
       const eventStore = getEventStore()
       eventStore.append(sessionId, {
         type: 'path.confirmation_pending',
-        data: { callId, tool, paths: confirmationPaths, workdir, reason: confirmationReason },
+        data: {
+          callId: confirmationCallId || callId,
+          tool,
+          paths: confirmationPaths,
+          workdir,
+          reason: confirmationReason,
+          ...(confirmationCommand && { command: confirmationCommand }),
+        },
       })
     } catch {
       // Event store might not be initialized in tests
@@ -620,9 +631,28 @@ export async function requestPathAccess(
   // Check for git --no-verify - ALWAYS requires confirmation, even in dangerous mode
   // This ensures the user is aware the agent is bypassing hooks/pre-commit checks
   if (command && extractGitNoVerify(command)) {
-    emitPendingEvent([workdir], 'git_no_verify')
-    const confirmationPromise = registerPathConfirmation(callId, [workdir], sessionId, tool, workdir, 'git_no_verify')
-    onEvent(createChatPathConfirmationMessage(callId, tool, ['git --no-verify detected'], workdir, 'git_no_verify'))
+    const gitNoVerifyCallId = `${callId}:git_no_verify`
+    emitPendingEvent([workdir], 'git_no_verify', command, gitNoVerifyCallId)
+    const confirmationPromise = registerPathConfirmation(
+      gitNoVerifyCallId,
+      [workdir],
+      sessionId,
+      configTimeout,
+      undefined,
+      tool,
+      workdir,
+      'git_no_verify',
+    )
+    onEvent(
+      createChatPathConfirmationMessage(
+        gitNoVerifyCallId,
+        tool,
+        ['git --no-verify detected'],
+        workdir,
+        'git_no_verify',
+        command,
+      ),
+    )
     const approved = await confirmationPromise
     if (!approved) {
       throw new PathAccessDeniedError(
@@ -637,23 +667,63 @@ export async function requestPathAccess(
   // Check for dangerous commands that need confirmation even without path access
   if (dangerLevel !== 'dangerous' && command) {
     const dangerousPatterns = extractDangerousPatterns(command)
+    console.log('[DEBUG path-security] Dangerous command patterns extracted:', {
+      command,
+      patterns: dangerousPatterns,
+      patternCount: dangerousPatterns.length,
+    })
     if (dangerousPatterns.length > 0) {
-      emitPendingEvent([workdir], 'dangerous_command')
-      const confirmationPromise = registerPathConfirmation(
+      const dangerousCallId = `${callId}:dangerous_command`
+      emitPendingEvent(dangerousPatterns, 'dangerous_command', command, dangerousCallId)
+      console.log('[DEBUG path-security] Dangerous command check:', {
         callId,
-        [workdir],
+        dangerousCallId,
+        tool,
+        patterns: dangerousPatterns,
+      })
+      const confirmationPromise = registerPathConfirmation(
+        dangerousCallId,
+        dangerousPatterns,
         sessionId,
+        configTimeout,
+        undefined,
         tool,
         workdir,
         'dangerous_command',
       )
+      console.log('[DEBUG path-security] Confirmation event sent:', {
+        dangerousCallId,
+        tool,
+        paths: dangerousPatterns,
+        workdir,
+        reason: 'dangerous_command',
+        command,
+      })
       onEvent(
-        createChatPathConfirmationMessage(callId, tool, [dangerousPatterns.join(', ')], workdir, 'dangerous_command'),
+        createChatPathConfirmationMessage(
+          dangerousCallId,
+          tool,
+          dangerousPatterns,
+          workdir,
+          'dangerous_command',
+          command,
+        ),
       )
       const approved = await confirmationPromise
+      console.log('[DEBUG path-security] Dangerous command confirmation result:', {
+        dangerousCallId,
+        approved,
+      })
       if (!approved) {
         throw new PathAccessDeniedError(dangerousPatterns, tool, 'dangerous_command')
       }
+      // Auto-approve path access after approving dangerous command
+      // This prevents a second confirmation dialog for the same command
+      console.log('[DEBUG path-security] Auto-approving all paths after dangerous command approval:', {
+        callId,
+        paths,
+      })
+      addAllowedPaths(sessionId, paths)
     }
   }
 
@@ -693,13 +763,15 @@ export async function requestPathAccess(
     callId,
     allPathsNeedingConfirmation,
     sessionId,
+    configTimeout,
+    undefined,
     tool,
     workdir,
     reason,
   )
 
   // Send path confirmation event to client (this shows the modal)
-  onEvent(createChatPathConfirmationMessage(callId, tool, allPathsNeedingConfirmation, workdir, reason))
+  onEvent(createChatPathConfirmationMessage(callId, tool, allPathsNeedingConfirmation, workdir, reason, command))
 
   // Suspend tool execution until user responds
   const approved = await confirmationPromise
@@ -756,23 +828,56 @@ const pendingConfirmations = new Map<
     tool: string
     workdir: string
     reason: 'outside_workdir' | 'sensitive_file' | 'both' | 'dangerous_command' | 'git_no_verify'
+    timeoutId?: NodeJS.Timeout
   }
 >()
 
 /**
- * Register a pending path confirmation.
+ * Register a pending path confirmation with timeout.
  * Stores the paths and sessionId so they can be added to allowlist on approval.
+ * Automatically rejects after timeoutMs milliseconds and broadcasts timeout event.
  */
 export function registerPathConfirmation(
   callId: string,
   paths: string[],
   sessionId: string,
-  tool: string,
-  workdir: string,
-  reason: 'outside_workdir' | 'sensitive_file' | 'both' | 'dangerous_command' | 'git_no_verify',
+  timeoutMs: number = 300_000,
+  onTimeout?: (callId: string) => void,
+  tool?: string,
+  workdir?: string,
+  reason?: 'outside_workdir' | 'sensitive_file' | 'both' | 'dangerous_command' | 'git_no_verify',
 ): Promise<boolean> {
+  console.log('[DEBUG path-security] registerPathConfirmation:', {
+    callId,
+    paths,
+    sessionId,
+    timeoutMs,
+    pendingCount: pendingConfirmations.size + 1,
+  })
   return new Promise((resolve, reject) => {
-    pendingConfirmations.set(callId, { resolve, reject, paths, sessionId, tool, workdir, reason })
+    const timeoutId = setTimeout(() => {
+      console.log('[DEBUG path-security] Path confirmation timed out:', { callId, timeoutMs })
+      reject(new Error(`Path confirmation timed out after ${timeoutMs}ms`))
+      pendingConfirmations.delete(callId)
+      onTimeout?.(callId)
+    }, timeoutMs)
+
+    pendingConfirmations.set(callId, {
+      resolve: (approved: boolean) => {
+        clearTimeout(timeoutId)
+        resolve(approved)
+      },
+      reject: (error: Error) => {
+        clearTimeout(timeoutId)
+        reject(error)
+      },
+      paths,
+      sessionId,
+      tool: tool ?? 'unknown',
+      workdir: workdir ?? '',
+      reason: reason ?? 'outside_workdir',
+      timeoutId,
+    })
   })
 }
 
@@ -798,8 +903,17 @@ export function providePathConfirmation(
 } {
   const pending = pendingConfirmations.get(callId)
   if (!pending) {
+    console.log('[DEBUG path-security] providePathConfirmation not found:', { callId })
     return { found: false }
   }
+
+  console.log('[DEBUG path-security] providePathConfirmation resolved:', {
+    callId,
+    approved,
+    alwaysAllow,
+    paths: pending.paths,
+    sessionId: pending.sessionId,
+  })
 
   // Emit path.confirmation_responded event for persistence
   try {
@@ -815,8 +929,9 @@ export function providePathConfirmation(
   if (approved && alwaysAllow) {
     // Add real filesystem paths to the allowlist only when alwaysAllow is true.
     // One-time approvals (alwaysAllow=false or undefined) must not persist.
-    // Skip non-path confirmations (dangerous_command, git_no_verify).
-    if (pending.reason !== 'dangerous_command' && pending.reason !== 'git_no_verify') {
+    // Skip non-path confirmations (dangerous_command, git_no_verify) by checking if paths are actual filesystem paths.
+    const isPathConfirmation = pending.paths.some((p) => p.startsWith('/') || p.includes('\\') || p.includes('.'))
+    if (isPathConfirmation) {
       addAllowedPaths(pending.sessionId, pending.paths)
     }
   }
@@ -837,9 +952,16 @@ export function providePathConfirmation(
 export function cancelPathConfirmation(callId: string, reason: string): boolean {
   const pending = pendingConfirmations.get(callId)
   if (!pending) {
+    console.log('[DEBUG path-security] cancelPathConfirmation not found:', { callId, reason })
     return false
   }
 
+  console.log('[DEBUG path-security] cancelPathConfirmation rejected:', {
+    callId,
+    reason,
+    paths: pending.paths,
+    sessionId: pending.sessionId,
+  })
   pending.reject(new Error(reason))
   pendingConfirmations.delete(callId)
   return true

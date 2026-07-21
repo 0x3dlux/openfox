@@ -979,11 +979,10 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     const sessionId = req.params.id
     const { callId, approved, alwaysAllow } = req.body
 
-    if (!callId || typeof approved !== 'boolean') {
-      return res.status(400).json({ error: 'callId and approved (boolean) are required' })
-    }
-    if (alwaysAllow !== undefined && typeof alwaysAllow !== 'boolean') {
-      return res.status(400).json({ error: 'alwaysAllow must be a boolean if provided' })
+    console.log('[DEBUG confirm-path] Request:', { sessionId, callId, approved, alwaysAllow })
+
+    if (!callId || approved === undefined) {
+      return res.status(400).json({ error: 'callId and approved are required' })
     }
 
     const { providePathConfirmation, getConfirmationSessionId } = await import('./tools/index.js')
@@ -998,6 +997,13 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     }
 
     const result = providePathConfirmation(callId, approved, alwaysAllow)
+
+    console.log('[DEBUG confirm-path] Result:', {
+      found: result.found,
+      sessionId: result.sessionId,
+      approved: result.approved,
+    })
+
     if (!result.found) {
       return res.status(404).json({ error: 'No pending path confirmation with that ID' })
     }

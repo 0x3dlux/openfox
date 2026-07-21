@@ -18,6 +18,8 @@ export interface PendingPathConfirmation {
   workdir: string
   reason: 'outside_workdir' | 'sensitive_file' | 'both' | 'dangerous_command' | 'git_no_verify'
   alwaysAllow?: boolean
+  command?: string
+  timeoutMs?: number
 }
 
 export interface PendingQuestion {

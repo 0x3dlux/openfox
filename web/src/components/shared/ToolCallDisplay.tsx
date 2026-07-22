@@ -110,7 +110,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
   // step_done is a simple completion signal — minimal inline pill, no collapsible, no args
   if (tool === 'step_done') {
     return (
-      <div className="flex items-center gap-1.5 text-xs bg-secondary rounded px-2 py-1.5">
+      <div className="flex items-center gap-1.5 text-xs bg-secondary border border-border rounded px-2 py-1.5 my-1">
         <span className={`${config.color} ${config.animate ? 'animate-pulse' : ''}`}>{config.icon}</span>
         <span className="font-mono text-accent-primary text-sm">{tool}</span>
       </div>

@@ -219,4 +219,31 @@ describe('Header', () => {
     const btn = container.querySelector('[title^="Toggle session list"]')
     expect(btn).toBeNull()
   })
+
+  it('truncates long session name in header dropdown trigger', async () => {
+    const { useProjectStore } = await import('../../stores/project')
+    ;(useProjectStore as unknown as MockStore).setState({
+      currentProject: { id: 'p1', name: 'Test Project', workdir: '/tmp' },
+      projects: [{ id: 'p1', name: 'Test Project', workdir: '/tmp' }],
+    })
+
+    const { useSessionStore } = await import('../../stores/session')
+    const longTitle = 'a'.repeat(100)
+    ;(useSessionStore as unknown as MockStore).setState({
+      currentSession: { id: 's1', metadata: { title: longTitle } },
+      sessions: [{ id: 's1', projectId: 'p1', title: longTitle, updatedAt: new Date().toISOString() }],
+    })
+
+    const { useLocation } = await import('wouter')
+    vi.mocked(useLocation).mockReturnValue(['/p/p1/s/s1', vi.fn()])
+
+    const { Header } = await import('./Header')
+    const container = render(<Header />)
+    const btn = container.querySelector('[data-testid="header-session-dropdown"]')
+    expect(btn).toBeTruthy()
+    // Button text should be truncated (50 chars + '...')
+    expect(btn!.textContent).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...')
+    // Title attribute should still contain the full name
+    expect(btn!.getAttribute('title')).toBe(longTitle)
+  })
 })

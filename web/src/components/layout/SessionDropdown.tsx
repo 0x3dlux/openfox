@@ -3,6 +3,7 @@ import { useSessionStore } from '../../stores/session'
 import { DropdownMenu, type DropdownMenuItem } from '../shared/DropdownMenu'
 import { ChevronDownIcon, PlusIcon, CheckIcon } from '../shared/icons'
 import { groupSessionsByDate, formatDateHeader, formatTime } from '../../lib/format-date'
+import { trimContent } from '../../lib/cross-session-history'
 import type { SessionSummary } from '@shared/types.js'
 
 interface SessionDropdownProps {
@@ -21,6 +22,7 @@ export function SessionDropdown({
   onOpenChange,
 }: SessionDropdownProps) {
   const loadSession = useSessionStore((state) => state.loadSession)
+  const MAX_TITLE_LEN = 50
 
   const projectSessions = sessions.filter((session) => session.projectId === currentProject.id).slice(0, 15)
   const groupedSessions = groupSessionsByDate(projectSessions)
@@ -56,7 +58,9 @@ export function SessionDropdown({
         result.push({
           label: (
             <div className="min-w-[160px]">
-              <div className="truncate text-sm">{session.title ?? session.id.slice(0, 8)}</div>
+              <div className="truncate text-sm">
+                {trimContent(session.title ?? session.id.slice(0, 8), MAX_TITLE_LEN)}
+              </div>
               <div className="text-text-muted text-xs">{formatTime(session.updatedAt)}</div>
             </div>
           ),
@@ -72,9 +76,8 @@ export function SessionDropdown({
     return result
   }, [currentProject.id, groupedSessions, currentSession?.id])
 
-  const triggerLabel = currentSession
-    ? (currentSession.metadata?.title ?? currentSession.id.slice(0, 8))
-    : 'No session selected'
+  const rawTitle = currentSession?.metadata?.title ?? (currentSession ? currentSession.id.slice(0, 8) : null)
+  const triggerLabel = rawTitle ? trimContent(rawTitle, MAX_TITLE_LEN) : 'No session selected'
 
   return (
     <DropdownMenu
@@ -84,7 +87,7 @@ export function SessionDropdown({
       trigger={
         <button
           className="text-text-secondary hover:text-text-primary hover:underline text-sm truncate flex items-center gap-1"
-          title={triggerLabel}
+          title={rawTitle ?? ''}
           data-testid="header-session-dropdown"
         >
           {triggerLabel}

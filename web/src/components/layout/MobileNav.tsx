@@ -2,6 +2,7 @@ import { Link } from 'wouter'
 import type { SessionSummary } from '@shared/types.js'
 import { InlineDropdown, type InlineDropdownItem } from '../shared/InlineDropdown'
 import { PlusIcon, CheckIcon, ArchiveIcon } from '../shared/icons'
+import { trimContent } from '../../lib/cross-session-history'
 
 interface MobileNavProps {
   currentProject: { id: string; name: string; workdir: string } | null
@@ -32,7 +33,7 @@ export function MobileNav({ currentProject, sessions, currentSession, projectIdF
     ...projectSessions.map((session) => ({
       label: (
         <Link href={`/p/${currentProject.id}/s/${session.id}`} className="flex items-center gap-2 truncate text-sm">
-          <span>{session.title ?? session.id.slice(0, 8)}</span>
+          <span>{trimContent(session.title ?? session.id.slice(0, 8), 50)}</span>
         </Link>
       ),
       icon: session.id === currentSession?.id ? <CheckIcon className="w-3 h-3" /> : undefined,

@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.89 - 2026-07-23
+
+### Features
+
+- **Fork a session from any message** — right-click any user or assistant message and choose "Fork session from here" to create a new session preserving all history up to that point. The forked session inherits provider, model, workspace, cached system prompt, and read-files cache for instant warm-up.
+
+### Enhancements
+
+- **Copy now available on assistant messages via right-click** — previously only user messages had a copy button; now right-click any assistant message to copy its content.
+
+### Bug Fixes
+
+- **Creating a new workspace branch no longer crashes** — the system now creates branches from HEAD instead of fetching the default branch from the remote, which caused crashes on offline or slow connections.
+
 ## 2.0.88 - 2026-07-23
 
 ### Features

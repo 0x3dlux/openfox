@@ -210,7 +210,7 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
               <Link
                 href={`/p/${projectId}/new`}
                 className="flex-1 block text-center rounded font-medium transition-colors bg-accent-primary/25 text-text-primary hover:bg-accent-primary/40 px-3 py-1.5 text-sm"
-                data-testid="sidebar-new-session-button"
+                data-testid="sidebar--new-session-button"
               >
                 + New Session
               </Link>
@@ -228,6 +228,7 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
                 ]}
                 trigger={
                   <button
+                    data-testid="sidebar--options-button"
                     className="flex-shrink-0 p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
                     title="Options"
                   >
@@ -333,7 +334,7 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
               />
             </Modal>
 
-            <div className="flex-1 overflow-y-auto scrollbar-stable">
+            <div id="session-list-panel" className="flex-1 overflow-y-auto scrollbar-stable">
               {filteredSessions.length === 0 ? (
                 <div className="p-4 text-center text-text-muted text-xs">
                   {isSearching ? 'No matching sessions' : 'No sessions'}
@@ -366,6 +367,7 @@ export function Sidebar({ projectId, isOpen = true, onClose }: SidebarProps) {
 
         return (
           <aside
+            id="sidebar-navigation"
             className={`
             ${isOpen ? 'md:w-[300px] md:shrink-0' : 'md:w-0 md:shrink-0 md:overflow-hidden md:border-r-0'}
             md:relative md:h-auto md:translate-x-0
@@ -423,6 +425,7 @@ function renderSessionGroups(
           return (
             <div
               key={session.id}
+              data-testid="session-item"
               data-sidx={idx}
               className={`w-full px-4 py-3 text-left hover:bg-bg-tertiary/50 transition-colors group ${
                 isActive ? 'bg-bg-tertiary' : ''
@@ -434,6 +437,7 @@ function renderSessionGroups(
               >
                 <div className="flex justify-between items-center mb-1">
                   <span
+                    data-testid="session-item--title"
                     className={`font-medium truncate text-sm ${isActive ? 'text-accent-primary' : 'text-text-primary'}`}
                   >
                     {searchQuery

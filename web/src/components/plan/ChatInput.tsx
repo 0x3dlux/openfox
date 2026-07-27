@@ -357,13 +357,14 @@ export function ChatInput({
   }, [])
 
   return (
-    <form onSubmit={handleSubmit} className="relative p-2 md:p-4 bg-secondary">
+    <form id="chat-input-form" onSubmit={handleSubmit} className="relative p-2 md:p-4 bg-secondary">
       {isRunning && (
         <div className="absolute -top-8 left-2 md:left-4 z-10">
           <RunningIndicator />
         </div>
       )}
       <div
+        id="chat-input-controls"
         className={`absolute -top-8 right-2 md:right-4 z-10 flex items-center gap-2 border${!isAutoScrollActive ? ' rounded backdrop-blur-xl saturate-150 border-border' : ' border-transparent'}`}
       >
         <AutoScrollToggle
@@ -374,6 +375,7 @@ export function ChatInput({
         <button
           type="button"
           onClick={onOpenMessageSearch}
+          data-testid="chat-input--browse-history-button"
           className="text-sm text-text-muted hover:text-text-primary flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-bg-tertiary transition-colors"
           aria-label="Browse history"
         >
@@ -391,13 +393,16 @@ export function ChatInput({
       />
 
       {errorMessage && (
-        <div className="mb-2 p-2 bg-red-500/10 border border-red-500/50 rounded text-red-300 text-sm">
+        <div
+          data-testid="chat-input--error-message"
+          className="mb-2 p-2 bg-red-500/10 border border-red-500/50 rounded text-red-300 text-sm"
+        >
           {errorMessage}
         </div>
       )}
 
       {attachments.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div id="chat-input-attachments" className="mb-3 flex flex-wrap gap-2">
           {attachments.map((attachment) => (
             <AttachmentPreview key={attachment.id} attachment={attachment} onRemove={handleRemoveAttachment} />
           ))}
@@ -406,6 +411,7 @@ export function ChatInput({
 
       {showHistory && (
         <PromptHistoryList
+          data-testid="chat-input--history-list"
           history={history}
           selectedIndex={selectedIndex}
           onSelect={(content) => {
@@ -423,6 +429,7 @@ export function ChatInput({
       <QueuedMessages messages={queuedMessages} onCancel={cancelQueued} />
 
       <div
+        id="chat-input-container"
         className={`flex items-end gap-3 p-3 rounded transition-colors ${
           dragOver ? 'bg-accent-primary/10' : 'bg-primary'
         }`}
@@ -440,7 +447,7 @@ export function ChatInput({
             onSelect={handleSelect}
             onKeyUp={handleKeyUp}
             placeholder="What would you like to build?"
-            data-testid="chat-input-textarea"
+            data-testid="chat-input--textarea"
             className="w-full bg-transparent text-sm placeholder:text-text-muted resize-none overflow-y-auto focus:outline-none"
             style={{ minHeight: '24px', maxHeight: '200px' }}
             spellCheck={false}
@@ -458,7 +465,7 @@ export function ChatInput({
             <button
               type="button"
               onClick={() => stopGeneration()}
-              data-testid="chat-stop-button"
+              data-testid="chat-input--abort-button"
               className="flex items-center gap-1 px-4 py-1.5 rounded bg-accent-error/20 text-sm text-accent-error font-medium hover:bg-accent-error/30 transition-colors whitespace-nowrap"
             >
               <StopIcon />
@@ -470,7 +477,7 @@ export function ChatInput({
               type="button"
               onClick={handleSend}
               disabled={!input.trim() && attachments.length === 0}
-              data-testid="chat-send-button"
+              data-testid="chat-input--send-button"
               className="px-4 py-1.5 rounded-l bg-accent-primary/20 text-sm text-accent-primary font-medium hover:bg-accent-primary/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               Send
@@ -503,7 +510,7 @@ export function ChatInput({
           </div>
         </div>
       </div>
-      <div className="mt-3 flex items-center justify-between">
+      <div id="chat-input-selectors" className="mt-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <AgentSelector />
           <DangerLevelSelector />

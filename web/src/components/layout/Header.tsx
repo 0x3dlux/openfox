@@ -70,11 +70,12 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
   }, [startAutoRefresh, stopAutoRefresh])
 
   return (
-    <header className="h-8 bg-secondary border-b border-border flex items-center justify-between px-2">
+    <header id="app-header" className="h-8 bg-secondary border-b border-border flex items-center justify-between px-2">
       <div className="flex items-center gap-2 flex-1 min-w-0">
         {onMenuClick && isSessionPage && (
           <button
             onClick={onMenuClick}
+            data-testid="header--menu-button"
             className="flex-shrink-0 p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
             title={
               keybindings.sessionSearch
@@ -139,6 +140,7 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
                 document.documentElement.requestFullscreen?.()
               }
             }}
+            data-testid="header--fullscreen-toggle"
             className="max-sm:block hidden p-2 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
             title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
           >
@@ -149,6 +151,7 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
         {isProjectPage && (
           <button
             onClick={() => setTerminalOpen(!terminalIsOpen)}
+            data-testid="header--terminal-toggle"
             className={`p-2.5 rounded hover:bg-bg-tertiary transition-colors ${
               terminalIsOpen ? 'text-accent-primary' : 'text-text-muted hover:text-text-primary'
             }`}
@@ -160,6 +163,7 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
 
         <button
           onClick={() => setShowSettings(true)}
+          data-testid="header--settings-button"
           className="relative p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
           title={updateAvailable ? 'Settings — update available' : 'Settings'}
         >
@@ -172,6 +176,7 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
             localStorage.removeItem('openfox_token')
             setLocation('/')
           }}
+          data-testid="header--logout-button"
           className="p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
           title="Logout"
         >
@@ -181,6 +186,7 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
         {onCriteriaToggle && isSessionPage && (
           <button
             onClick={onCriteriaToggle}
+            data-testid="header--criteria-toggle"
             className="p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
             title={
               keybindings.criteriaSidebar

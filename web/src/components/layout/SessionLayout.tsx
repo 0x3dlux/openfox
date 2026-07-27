@@ -19,19 +19,22 @@ export function SessionLayout({
   const session = useSessionStore((state) => state.currentSession)
 
   return (
-    <div className="relative h-full overflow-hidden">
+    <div id="session-layout" className="relative h-full overflow-hidden">
       {/* Backdrop - mobile only, when sidebar is open */}
       {criteriaSidebarOpen && (
         <div className="fixed md:hidden inset-0 bg-secondary/50 z-40" onClick={onCriteriaSidebarToggle} />
       )}
 
       {/* Main Content */}
-      <div className="flex h-full">
+      <div id="session-main-content" className="flex h-full">
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-secondary">{children}</div>
 
         {/* Session Sidebar - mobile: fixed overlay, desktop: flex item */}
         {criteriaSidebarOpen ? (
-          <aside className="hidden md:block w-[320px] shrink-0 border-l border-border p-4 overflow-y-auto bg-secondary scrollbar-stable">
+          <aside
+            id="criteria-sidebar"
+            className="hidden md:block w-[320px] shrink-0 border-l border-border p-4 overflow-y-auto bg-secondary scrollbar-stable"
+          >
             <SessionSidebar messages={messages} workdir={session?.workspace ?? session?.workdir} />
           </aside>
         ) : (
@@ -40,6 +43,7 @@ export function SessionLayout({
 
         {/* Mobile sidebar - always rendered but conditionally visible */}
         <aside
+          id="criteria-sidebar-mobile"
           className={`
             md:hidden
             p-4 overflow-y-auto bg-secondary

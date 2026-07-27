@@ -205,44 +205,46 @@ export function PlanPanel({
         {turnStatsModal && <TurnStatsModal stats={turnStatsModal} onClose={() => setTurnStatsModal(null)} />}
         <ConnectionStatusBar />
 
-        <MessageList
-          displayItems={displayItems}
-          scrollContainerRef={scrollContainerRef}
-          highlightedMessageId={null}
-          onLaunchWorkflow={handleLaunchWorkflow}
-          onScrollToTop={() => setAutoScroll(false)}
-          hiddenCount={hiddenCount}
-        />
+        <div id="chat-scroll-container">
+          <MessageList
+            displayItems={displayItems}
+            scrollContainerRef={scrollContainerRef}
+            highlightedMessageId={null}
+            onLaunchWorkflow={handleLaunchWorkflow}
+            onScrollToTop={() => setAutoScroll(false)}
+            hiddenCount={hiddenCount}
+          />
 
-        <ChatInput
-          input={input}
-          setInput={setInput}
-          attachments={attachments}
-          setAttachments={setAttachments}
-          dragOver={dragOver}
-          setDragOver={setDragOver}
-          errorMessage={errorMessage}
-          setErrorMessage={setErrorMessage}
-          scrollContainerRef={scrollContainerRef}
-          sessionId={session?.id}
-          sessionMode={session?.mode}
-          showHistory={showHistory}
-          history={history}
-          selectedIndex={selectedIndex}
-          openHistory={openHistory}
-          closeHistory={closeHistory}
-          navigateUp={navigateUp}
-          navigateDown={navigateDown}
-          selectCurrent={selectCurrent}
-          isAutoScrollActive={isAutoScrollActive}
-          setAutoScroll={setAutoScroll}
-          onOpenMessageSearch={() => setShowMessageSearch(true)}
-          onOpenCommandsModal={() => setShowCommandsModal(true)}
-          onOpenWorkflowsModal={() => setShowWorkflowsModal(true)}
-          onSelectWorkflow={handleSelectWorkflow}
-          onSelectWorkflowWithSubGroup={handleSelectWorkflowWithSubGroup}
-          clearInput={clearInput}
-        />
+          <ChatInput
+            input={input}
+            setInput={setInput}
+            attachments={attachments}
+            setAttachments={setAttachments}
+            dragOver={dragOver}
+            setDragOver={setDragOver}
+            errorMessage={errorMessage}
+            setErrorMessage={setErrorMessage}
+            scrollContainerRef={scrollContainerRef}
+            sessionId={session?.id}
+            sessionMode={session?.mode}
+            showHistory={showHistory}
+            history={history}
+            selectedIndex={selectedIndex}
+            openHistory={openHistory}
+            closeHistory={closeHistory}
+            navigateUp={navigateUp}
+            navigateDown={navigateDown}
+            selectCurrent={selectCurrent}
+            isAutoScrollActive={isAutoScrollActive}
+            setAutoScroll={setAutoScroll}
+            onOpenMessageSearch={() => setShowMessageSearch(true)}
+            onOpenCommandsModal={() => setShowCommandsModal(true)}
+            onOpenWorkflowsModal={() => setShowWorkflowsModal(true)}
+            onSelectWorkflow={handleSelectWorkflow}
+            onSelectWorkflowWithSubGroup={handleSelectWorkflowWithSubGroup}
+            clearInput={clearInput}
+          />
+        </div>
         <CommandsModal isOpen={showCommandsModal} onClose={() => setShowCommandsModal(false)} />
         <WorkflowsModal isOpen={showWorkflowsModal} onClose={() => setShowWorkflowsModal(false)} />
         <QuickActionModal

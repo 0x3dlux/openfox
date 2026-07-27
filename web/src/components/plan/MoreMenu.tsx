@@ -160,6 +160,7 @@ export function MoreMenu({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
+        data-testid="chat-input--more-menu-button"
         className="px-1.5 py-2 rounded-r bg-bg-secondary text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors border-l border-border/50"
         title="More options"
       >
@@ -167,10 +168,14 @@ export function MoreMenu({
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full right-0 mb-1 w-80 max-w-[calc(100vw-2rem)] bg-bg-secondary border border-border rounded-lg shadow-xl z-50 overflow-hidden">
+        <div
+          id="send-command-menu"
+          className="absolute bottom-full right-0 mb-1 w-80 max-w-[calc(100vw-2rem)] bg-bg-secondary border border-border rounded-lg shadow-xl z-50 overflow-hidden"
+        >
           <div className="flex border-b border-border">
             <button
               type="button"
+              data-testid="send-command-menu--commands-tab"
               onClick={() => {
                 setTab('commands')
                 setSearch('')
@@ -186,6 +191,7 @@ export function MoreMenu({
             </button>
             <button
               type="button"
+              data-testid="send-command-menu--workflows-tab"
               onClick={() => {
                 setTab('workflows')
                 setSearch('')
@@ -201,6 +207,7 @@ export function MoreMenu({
             </button>
             <button
               type="button"
+              data-testid="send-command-menu--attach-tab"
               onClick={() => setTab('attach')}
               className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
                 tab === 'attach'
@@ -216,6 +223,7 @@ export function MoreMenu({
             <div className="p-2 border-b border-border">
               <input
                 ref={searchRef}
+                data-testid="send-command-menu--search-input"
                 value={search}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -235,6 +243,7 @@ export function MoreMenu({
                 filteredCommands.map((command, index) => (
                   <div
                     key={command.id}
+                    data-testid="send-command-menu--command-item"
                     className={`flex items-center gap-1 px-3 py-2 rounded transition-colors group ${
                       index === selectedIndex ? 'bg-accent-primary/20' : 'hover:bg-bg-tertiary'
                     }`}
@@ -261,6 +270,7 @@ export function MoreMenu({
                   return (
                     <div
                       key={workflow.id}
+                      data-testid="send-command-menu--workflow-item"
                       className={`flex items-center gap-2 px-3 py-2 rounded transition-colors group ${
                         index === selectedIndex ? 'bg-accent-primary/20' : 'hover:bg-bg-tertiary'
                       }`}
@@ -303,6 +313,7 @@ export function MoreMenu({
               <div className="p-4 flex flex-col items-center gap-3">
                 <button
                   type="button"
+                  data-testid="send-command-menu--attach-button"
                   onClick={() => {
                     onAttach()
                     setIsOpen(false)

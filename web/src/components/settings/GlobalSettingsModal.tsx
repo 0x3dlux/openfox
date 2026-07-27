@@ -33,29 +33,56 @@ export function GlobalSettingsModal({ isOpen, onClose }: GlobalSettingsModalProp
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Settings" size="xl" minHeight="500px">
-      <div data-global-settings className="flex flex-col h-full">
+      <div id="settings-modal" className="flex flex-col h-full">
         {/* Tab bar - horizontally scrollable on mobile */}
-        <div className="flex border-b border-border mb-4 -mt-1 overflow-x-auto scrollbar-hide">
+        <div
+          id="settings-modal--tab-bar"
+          className="flex border-b border-border mb-4 -mt-1 overflow-x-auto scrollbar-hide"
+        >
           <TabButton
+            data-testid="settings-modal--tab-instructions"
             label="Instructions"
             active={activeTab === 'instructions'}
             onClick={() => setActiveTab('instructions')}
           />
-          <TabButton label="Tools" active={activeTab === 'tools'} onClick={() => setActiveTab('tools')} />
-          <TabButton label="Skills" active={activeTab === 'skills'} onClick={() => setActiveTab('skills')} />
-          <TabButton label="Plugins" active={activeTab === 'plugins'} onClick={() => setActiveTab('plugins')} />
           <TabButton
+            data-testid="settings-modal--tab-tools"
+            label="Tools"
+            active={activeTab === 'tools'}
+            onClick={() => setActiveTab('tools')}
+          />
+          <TabButton
+            data-testid="settings-modal--tab-skills"
+            label="Skills"
+            active={activeTab === 'skills'}
+            onClick={() => setActiveTab('skills')}
+          />
+          <TabButton
+            data-testid="settings-modal--tab-plugins"
+            label="Plugins"
+            active={activeTab === 'plugins'}
+            onClick={() => setActiveTab('plugins')}
+          />
+          <TabButton
+            data-testid="settings-modal--tab-notifications"
             label="Notifications"
             active={activeTab === 'notifications'}
             onClick={() => setActiveTab('notifications')}
           />
-          <TabButton label="Display" active={activeTab === 'display'} onClick={() => setActiveTab('display')} />
           <TabButton
+            data-testid="settings-modal--tab-display"
+            label="Display"
+            active={activeTab === 'display'}
+            onClick={() => setActiveTab('display')}
+          />
+          <TabButton
+            data-testid="settings-modal--tab-keybindings"
             label="Keybindings"
             active={activeTab === 'keybindings'}
             onClick={() => setActiveTab('keybindings')}
           />
           <TabButton
+            data-testid="settings-modal--tab-advanced"
             label="Advanced"
             active={activeTab === 'advanced'}
             onClick={() => setActiveTab('advanced')}
@@ -67,19 +94,19 @@ export function GlobalSettingsModal({ isOpen, onClose }: GlobalSettingsModalProp
         {activeTab === 'instructions' && <InstructionsTab isOpen={isOpen} />}
         {activeTab === 'skills' && <SkillsContent isOpen={isOpen} />}
         {activeTab === 'plugins' && (
-          <div className="max-h-[60vh] overflow-y-auto">
+          <div id="settings-modal--panel-plugins" className="max-h-[60vh] overflow-y-auto">
             <PluginsTab />
           </div>
         )}
         {activeTab === 'notifications' && (
-          <div className="max-h-[60vh] overflow-y-auto">
+          <div id="settings-modal--panel-notifications" className="max-h-[60vh] overflow-y-auto">
             <NotificationSettings />
           </div>
         )}
         {activeTab === 'display' && <DisplayTab />}
         {activeTab === 'keybindings' && <KeybindingsTab />}
         {activeTab === 'tools' && (
-          <div className="max-h-[60vh] overflow-y-auto">
+          <div id="settings-modal--panel-tools" className="max-h-[60vh] overflow-y-auto">
             <ToolsTab />
           </div>
         )}

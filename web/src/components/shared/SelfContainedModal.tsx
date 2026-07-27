@@ -88,12 +88,13 @@ export function Modal({
       {isOpen &&
         (typeof document !== 'undefined'
           ? createPortal(
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div id="modal-portal" className="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div
                   className="absolute inset-0 bg-black/60 backdrop-blur-sm"
                   onClick={closeOnBackdropClick ? close : undefined}
                 />
                 <div
+                  id="modal-dialog"
                   role="dialog"
                   className={`relative w-full ${sizeClasses[size]} max-h-[90vh] bg-bg-secondary border border-border rounded shadow-xl flex flex-col`}
                 >

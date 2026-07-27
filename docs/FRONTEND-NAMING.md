@@ -68,25 +68,26 @@ Use **kebab-case** descriptive names that indicate the component's purpose:
 
 ### Settings & Modals
 
-| Component            | ID                     | Description                     |
-| -------------------- | ---------------------- | ------------------------------- |
-| Settings Modal       | `settings-modal`       | Main settings window            |
-| Commands Modal       | `commands-modal`       | Commands management             |
-| Workflows Modal      | `workflows-modal`      | Workflow editor                 |
-| Workspace Modal      | `workspace-modal`      | Workspace selection             |
-| Branch Modal         | `branch-modal`         | Git branch selection            |
-| Stats Modal          | `stats-modal`          | Session statistics              |
-| Message Search Modal | `message-search-modal` | Message search interface        |
-| Theme Editor         | `theme-editor`         | Theme customization panel       |
-| Provider Selector    | `provider-selector`    | LLM provider selection          |
-| Instructions Panel   | `instructions-panel`   | Custom instructions editor      |
-| Tools Panel          | `tools-panel`          | Tool configuration              |
-| Skills Panel         | `skills-panel`         | Skills management               |
-| Plugins Panel        | `plugins-panel`        | Plugin settings                 |
-| Notifications Panel  | `notifications-panel`  | Notification preferences        |
-| Display Panel        | `display-panel`        | Display settings                |
-| Keybindings Panel    | `keybindings-panel`    | Keyboard shortcut configuration |
-| Advanced Panel       | `advanced-panel`       | Advanced settings               |
+| Component              | ID                        | Description                     |
+| ---------------------- | ------------------------- | ------------------------------- |
+| Settings Modal         | `settings-modal`          | Main settings window            |
+| Settings Modal Tab Bar | `settings-modal--tab-bar` | Tab navigation bar              |
+| Commands Modal         | `commands-modal`          | Commands management             |
+| Workflows Modal        | `workflows-modal`         | Workflow editor                 |
+| Workspace Modal        | `workspace-modal`         | Workspace selection             |
+| Branch Modal           | `branch-modal`            | Git branch selection            |
+| Stats Modal            | `stats-modal`             | Session statistics              |
+| Message Search Modal   | `message-search-modal`    | Message search interface        |
+| Theme Editor           | `theme-editor`            | Theme customization panel       |
+| Provider Selector      | `provider-selector`       | LLM provider selection          |
+| Instructions Panel     | `instructions-panel`      | Custom instructions editor      |
+| Tools Panel            | `tools-panel`             | Tool configuration              |
+| Skills Panel           | `skills-panel`            | Skills management               |
+| Plugins Panel          | `plugins-panel`           | Plugin settings                 |
+| Notifications Panel    | `notifications-panel`     | Notification preferences        |
+| Display Panel          | `display-panel`           | Display settings                |
+| Keybindings Panel      | `keybindings-panel`       | Keyboard shortcut configuration |
+| Advanced Panel         | `advanced-panel`          | Advanced settings               |
 
 ### Terminal Components
 
@@ -98,14 +99,16 @@ Use **kebab-case** descriptive names that indicate the component's purpose:
 
 ### Shared Components
 
-| Component         | ID                  | Description           |
-| ----------------- | ------------------- | --------------------- |
-| Modal Shell       | `modal-shell`       | Generic modal wrapper |
-| Confirm Modal     | `confirm-modal`     | Confirmation dialog   |
-| Tooltip Container | `tooltip-container` | Tooltip wrapper       |
-| Dropdown Menu     | `dropdown-menu`     | Dropdown container    |
-| Context Menu      | `context-menu`      | Right-click menu      |
-| Portal Container  | `portal-container`  | React portal wrapper  |
+| Component         | ID                  | Description            |
+| ----------------- | ------------------- | ---------------------- |
+| Modal Shell       | `modal-shell`       | Generic modal wrapper  |
+| Modal Portal      | `modal-portal`      | Modal portal container |
+| Modal Dialog      | `modal-dialog`      | Modal dialog wrapper   |
+| Confirm Modal     | `confirm-modal`     | Confirmation dialog    |
+| Tooltip Container | `tooltip-container` | Tooltip wrapper        |
+| Dropdown Menu     | `dropdown-menu`     | Dropdown container     |
+| Context Menu      | `context-menu`      | Right-click menu       |
+| Portal Container  | `portal-container`  | React portal wrapper   |
 
 ### Onboarding
 
@@ -170,7 +173,21 @@ Use **double-dash separator** to denote hierarchy:
 <button data-testid="send-command-menu--attach-button">
 
 <!-- Modals -->
+<div id="modal-portal">
+<div id="modal-dialog">
 <button data-testid="settings-modal--save-button">
+<button data-testid="settings-modal--tab-instructions">
+<button data-testid="settings-modal--tab-tools">
+<button data-testid="settings-modal--tab-skills">
+<button data-testid="settings-modal--tab-plugins">
+<button data-testid="settings-modal--tab-notifications">
+<button data-testid="settings-modal--tab-display">
+<button data-testid="settings-modal--tab-keybindings">
+<button data-testid="settings-modal--tab-advanced">
+<div id="settings-modal--panel-plugins">
+<div id="settings-modal--panel-notifications">
+<div id="settings-modal--panel-tools">
+<div id="settings-modal--tab-bar">
 <button data-testid="commands-modal--create-button">
 <button data-testid="workflows-modal--save-button">
 
@@ -209,11 +226,11 @@ Use **double-dash separator** to denote hierarchy:
 - [x] Layout components (Header, Sidebar, SessionLayout)
 - [x] Chat components (ChatInput, MoreMenu, PlanPanel)
 - [ ] Message components (ChatMessage, AssistantMessage, MessageList)
-- [ ] Settings components (GlobalSettingsModal, all tabs)
-- [ ] Modal components (all modals)
+- [x] Settings components (GlobalSettingsModal, all tabs)
+- [x] Modal components (SelfContainedModal, modal-portal, modal-dialog)
 - [ ] Terminal components
 - [ ] Onboarding components
-- [ ] Shared components (Modal, Dropdown, Tooltip, etc.)
+- [ ] Shared components (Dropdown, Tooltip, etc.)
 - [ ] Add data-testid to all interactive elements
 - [ ] Update existing tests to use new selectors
 - [ ] Document any component-specific conventions

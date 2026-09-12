@@ -180,6 +180,12 @@ Data streamed during real-time operations must be identical in shape to data fet
 
 **Rationale:** If streaming attaches `toolCall.result` inline, then `session.state` must also have `toolCall.result` attached. No conditional frontend logic to reconcile different data shapes.
 
+### No Proxy in web_fetch
+
+`web_fetch` fetches URLs directly (`src/server/tools/web-fetch.ts`): no proxy or relay service, HTML→Markdown conversion is local (Turndown), Cloudflare-style 403s are retried once with UA `openfox`, 5 MB body cap.
+
+**Rationale:** Privacy guarantee; worth stating explicitly because the self-hosted model sometimes "recalls" past fetches as fabricated provider-style proxy URLs that never existed in the pipeline.
+
 ### Event Sourcing
 
 Session state is derived from EventStore, not persisted directly:

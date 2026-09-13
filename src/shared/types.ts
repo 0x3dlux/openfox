@@ -787,6 +787,8 @@ export interface ModelConfig {
   defaultTopP?: number
   defaultTopK?: number
   defaultMaxTokens?: number
+  /** Metadata contributed by plugins (pricing, capabilities, badges). */
+  pluginMetadata?: import('./plugin.js').PluginModelMetadataView
 }
 
 /** LLM provider configuration */

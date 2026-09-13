@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ToolsTab } from './ToolsTab'
+import { clearCache } from '../../../lib/resourceCache'
 
 const { mockSettings, mockSetSetting } = vi.hoisted(() => ({
   mockSettings: {} as Record<string, string>,
@@ -240,5 +241,42 @@ describe('ToolsTab RTK shell hint (Windows)', () => {
     render(<ToolsTab />)
     await screen.findByText('Enable RTK auto-rewrite')
     expect(screen.queryByText(HINT_PATTERN)).toBeNull()
+  })
+})
+
+describe('ToolsTab plugin tools', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    clearCache()
+  })
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('lists plugin-contributed tools with their owning plugin', async () => {
+    const { authFetch } = await import('../../../lib/api')
+    vi.mocked(authFetch).mockImplementation((async (url: string) => ({
+      ok: true,
+      json: async () =>
+        url.includes('/api/plugins/tools')
+          ? { tools: [{ name: 'hello_plugin_greet', description: 'Says hi', pluginId: 'openfox-hello-plugin' }] }
+          : { servers: [] },
+    })) as never)
+
+    render(<ToolsTab />)
+    expect(await screen.findByText('hello_plugin_greet')).toBeDefined()
+    expect(screen.getByText('openfox-hello-plugin')).toBeDefined()
+  })
+
+  it('hides the plugin tools section when no plugin contributes tools', async () => {
+    const { authFetch } = await import('../../../lib/api')
+    vi.mocked(authFetch).mockImplementation((async (url: string) => ({
+      ok: true,
+      json: async () => (url.includes('/api/plugins/tools') ? { tools: [] } : { servers: [] }),
+    })) as never)
+
+    render(<ToolsTab />)
+    await screen.findByTestId('mcp-servers-heading')
+    expect(screen.queryByTestId('plugin-tools-section')).toBeNull()
   })
 })

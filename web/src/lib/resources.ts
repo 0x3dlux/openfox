@@ -1,5 +1,13 @@
 import { authFetch } from './api'
 import { resource, snapshot } from './resourceCache'
+import {
+  fetchPluginList,
+  fetchNotifications,
+  fetchPluginDiagnostics,
+  fetchPluginRegistry,
+  fetchPluginTools,
+  fetchPluginSettings,
+} from './plugin-actions'
 import type { AgentInfo } from './agents-actions'
 import type { AgentFull } from './agents-actions'
 import type { CommandInfo, CommandFull } from './commands-actions'
@@ -817,5 +825,51 @@ export async function fetchAgentDefaultContent(agentId: string): Promise<AgentFu
 export const agentDefaultResource = resource<AgentFull | null, [string]>({
   key: (agentId) => `agent-default:${agentId}`,
   fetch: fetchAgentDefaultContent,
+  maxAgeMs: 0,
+})
+
+/** Installed plugins plus their declarative UI contributions (single fetch). */
+export const pluginListResource = resource<import('./plugin-actions').PluginListData, []>({
+  key: () => 'plugins:list',
+  fetch: fetchPluginList,
+})
+
+/** Plugin-emitted notifications (bell + toast source of truth). */
+export const notificationsResource = resource<import('./plugin-actions').NotificationsData, []>({
+  key: () => 'plugins:notifications',
+  fetch: fetchNotifications,
+})
+
+/** Per-plugin settings schema + masked values, keyed by plugin and scope. */
+export const pluginSettingsResource = resource<
+  import('./plugin-actions').PluginSettingsData,
+  [string, import('@shared/plugin.js').PluginSettingScope, string | undefined]
+>({
+  key: (pluginId, scope, projectId) => `plugins:settings:${pluginId}:${scope}:${projectId ?? ''}`,
+  fetch: fetchPluginSettings,
+  maxAgeMs: 0,
+})
+
+/** Curated plugin registry shipped with OpenFox (core-controlled). */
+export const pluginRegistryResource = resource<{ plugins: import('./plugin-actions').RegistryPlugin[] }, []>({
+  key: () => 'plugins:registry',
+  fetch: fetchPluginRegistry,
+  maxAgeMs: 300_000,
+})
+
+/** Load diagnostics for every discovered plugin (loaded, failed, disabled). */
+export const pluginDiagnosticsResource = resource<
+  { diagnostics: import('./plugin-actions').PluginDiagnosticInfo[] },
+  []
+>({
+  key: () => 'plugins:diagnostics',
+  fetch: fetchPluginDiagnostics,
+  maxAgeMs: 0,
+})
+
+/** Tools contributed by enabled plugins, with their owning plugin id. */
+export const pluginToolsResource = resource<{ tools: import('./plugin-actions').PluginToolInfo[] }, []>({
+  key: () => 'plugins:tools',
+  fetch: fetchPluginTools,
   maxAgeMs: 0,
 })

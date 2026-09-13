@@ -34,6 +34,7 @@ import { hasStoredToken, downloadSessionExport, importSession } from '../../lib/
 import { useResizable } from '../../hooks/useResizable'
 import { ResizeHandle } from '../shared/ResizeHandle'
 import { useSidebarStore } from '../../stores/sidebar'
+import { PluginBadges } from '../plugins/PluginBadges'
 
 interface SidebarProps {
   projectId: string
@@ -652,6 +653,7 @@ function renderSessionList(
             <span className="text-text-muted text-xs flex-shrink-0">
               {t({ en: '{{count}} messages', fr: '{{count}} messages' }, { count: session.messageCount })}
             </span>
+            <PluginBadges slot="session.row.badges" context={{ sessionId: session.id, projectId }} />
           </div>
         </Link>
       </div>

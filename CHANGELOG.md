@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.146 - 2026-09-12
+
+### Bug Fixes
+
+- **Sidebar stats now cover the entire session** — AI time, speeds, and totals count every response across all context windows, including after compaction; stats load instantly from a server-computed headline, with the full response log available on demand.
+
 ## 2.0.145 - 2026-09-11
 
 ### Bug Fixes

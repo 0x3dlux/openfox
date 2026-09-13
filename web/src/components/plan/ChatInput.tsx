@@ -32,6 +32,7 @@ import { AgentSelector } from './AgentSelector'
 import { DangerLevelSelector } from './DangerLevelSelector'
 import { ProviderSelector } from '../settings/ProviderSelector'
 import { McpSelector } from './McpSelector'
+import { PluginSlot } from '../plugins/PluginSlot'
 import { SETTINGS_KEYS } from '../../lib/resources'
 import { useSetting } from '../../hooks/useSetting'
 import {
@@ -751,6 +752,14 @@ export function ChatInput({
         <QueuedMessages
           messages={queuedMessages}
           onCancel={(queueId) => sessionId && cancelQueued(sessionId, queueId)}
+        />
+
+        <PluginSlot
+          slot="composer.actions"
+          context={{
+            ...(sessionId ? { sessionId } : {}),
+            ...(workdir ? { workdir } : {}),
+          }}
         />
 
         <div

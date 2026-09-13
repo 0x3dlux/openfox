@@ -5,8 +5,9 @@ import { Button } from '../../shared/Button'
 import { Toggle } from '../../shared/Toggle'
 import { Input } from '../../shared/Input'
 import { mcpStatusColor, mcpStatusDot } from '../../../lib/mcp-utils'
-import { SETTINGS_KEYS, setSetting, mcpServersResource } from '../../../lib/resources'
+import { SETTINGS_KEYS, setSetting, mcpServersResource, pluginToolsResource } from '../../../lib/resources'
 import { useSetting } from '../../../hooks/useSetting'
+import { useResource } from '../../../hooks/useResource'
 import { useTestButton } from '../../../hooks/useTestButton'
 import { CRUDListView } from '../CRUDListView'
 import { useConfirmDialog, FormField, ErrorBanner } from '../CRUDModal'
@@ -357,6 +358,8 @@ export function ToolsTab() {
   const confirmWorkspaceSetting = useSetting(SETTINGS_KEYS.CONFIRM_ON_WORKSPACE_ACTIONS).value
   const shellSetting = useSetting(SETTINGS_KEYS.TOOLS_SHELL).value
   const perSessionMcpSetting = useSetting(SETTINGS_KEYS.FEATURES_PER_SESSION_MCP).value
+  const { data: pluginToolsData } = useResource(pluginToolsResource)
+  const pluginTools = pluginToolsData?.tools ?? []
 
   // ── Search Engine state ──
   const [searchEngine, setSearchEngine] = useState('')
@@ -938,6 +941,46 @@ export function ToolsTab() {
       </div>
 
       <hr className="border-border" />
+
+      {/* ── Plugin Tools Section ── */}
+      {pluginTools.length > 0 ? (
+        <>
+          <div data-testid="plugin-tools-section">
+            <h3 className="text-sm font-medium text-text-primary mb-3">
+              {t({ en: 'Plugin tools', fr: 'Outils des plugins' })}
+            </h3>
+            <p className="text-sm text-text-muted mb-3">
+              {t({
+                en: 'Tools contributed by enabled plugins. Add a tool to an agent’s allowed tools to make it callable.',
+                fr: 'Outils fournis par les plugins activés. Ajoutez un outil aux outils autorisés d’un agent pour le rendre appelable.',
+              })}
+            </p>
+            <div className="flex flex-col gap-2">
+              {pluginTools.map((tool) => (
+                <div
+                  key={`${tool.pluginId}:${tool.name}`}
+                  className="flex items-center justify-between p-3 rounded border border-border bg-bg-tertiary"
+                >
+                  <div className="min-w-0 flex-1 mr-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-text-primary">{tool.name}</span>
+                      <span
+                        data-plugin-tool-owner
+                        className="text-[10px] px-1.5 py-0.5 rounded border border-border bg-bg-secondary text-text-muted"
+                      >
+                        {tool.pluginId}
+                      </span>
+                    </div>
+                    <p className="text-xs text-text-muted mt-0.5">{tool.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <hr className="border-border" />
+        </>
+      ) : null}
 
       {/* ── MCP Servers Section ── */}
       <div>

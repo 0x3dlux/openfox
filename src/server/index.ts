@@ -937,7 +937,9 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
   app.get('/api/sessions/:id', async (req, res) => {
     const { getEventStore, combineEventsWithSnapshot } = await import('./events/index.js')
-    const { buildMessagesFromStoredEvents, foldPendingConfirmations } = await import('./events/folding.js')
+    const { buildMessagesFromStoredEvents, buildSessionStatsMessages, foldPendingConfirmations } =
+      await import('./events/folding.js')
+    const { computeSessionStatsSummary } = await import('../shared/stats.js')
     const { getPendingQuestionsForSession } = await import('./tools/index.js')
     const { getMaxVisibleItems } = await import('./db/settings.js')
 
@@ -955,6 +957,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
 
     const maxVisibleItems = req.query['full'] === 'true' ? undefined : getMaxVisibleItems() || undefined
     const { messages, hiddenCount } = buildMessagesFromStoredEvents(events, maxVisibleItems)
+    const sessionStats = computeSessionStatsSummary(buildSessionStatsMessages(events))
     const contextState = sessionManager.getContextState(req.params.id)
     const queueState = sessionManager.getQueueState(req.params.id)
     const pendingQuestions = getPendingQuestionsForSession(req.params.id)
@@ -965,6 +968,7 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       session: toClientSession(session!),
       messages,
       hiddenCount,
+      sessionStats,
       contextState,
       queueState,
       pendingQuestions,
@@ -1009,6 +1013,16 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     })
 
     res.json(status)
+  })
+
+  // Full session stats (headline + per-response and per-call progression) for
+  // the StatsModal's on-demand detail load. Cheap: extracted from snapshot
+  // messages + later message.done events, no message rebuild. The always-on
+  // session payload only carries the lean summary; this endpoint is hit once
+  // when the user asks to see the full response log.
+  app.get('/api/sessions/:id/stats', async (req, res) => {
+    const { handleGetSessionStats } = await import('./routes/session-stats.js')
+    await handleGetSessionStats(sessionManager, req, res)
   })
 
   app.delete('/api/sessions/:id', async (req, res) => {

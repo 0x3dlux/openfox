@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.147 - 2026-09-14
+
+### Features
+
+- **Parallel workflow steps** — run sub-agent and shell steps concurrently inside one workflow step, capped by max concurrency, with per-child output keys to branch on.
+- **Parallel step editor** — build parallel steps in the workflow UI with a child list, per-child sub-agent/shell configuration, and slug-safe child ids.
+- **Project dropdown on session rows** — switch projects, start sessions, or open tasks directly from the home session list.
+
+### Enhancements
+
+- **Agent steps honor per-agent model overrides** — workflow steps pinned to a specific model (e.g. builder on Qwen) now actually run on it, matching the existing sub-agent behavior.
+
+### Bug Fixes
+
+- **Background process logs stream live** — the log viewer shows new output as it arrives without reopening the panel.
+
 ## 2.0.146 - 2026-09-12
 
 ### Bug Fixes

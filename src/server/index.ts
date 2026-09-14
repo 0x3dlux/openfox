@@ -68,6 +68,7 @@ import { createPluginRoutes } from './routes/plugins.js'
 import { createNotificationRoutes } from './routes/notifications.js'
 import { pluginAssetToken } from './plugins/asset-auth.js'
 import { registerSessionFavoriteRoute } from './routes/session-favorite.js'
+import { registerSessionEndRoutes } from './routes/session-end.js'
 import { logger, setLogLevel } from './utils/logger.js'
 import { VERSION } from '../constants.js'
 import {
@@ -1036,13 +1037,9 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     await handleGetSessionStats(sessionManager, req, res)
   })
 
-  app.delete('/api/sessions/:id', async (req, res) => {
-    const sessionId = req.params['id'] as string
-    const session = sessionManager.getSession(sessionId)
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' })
-    }
-
+  // The destructive session teardown, shared by DELETE /api/sessions/:id and the
+  // end-of-session route when the closing routine is disabled.
+  const performSessionDelete = async (sessionId: string): Promise<void> => {
     // Cancel any active execution before deleting — mirrors /stop endpoint
     const { stopSessionExecution } = await import('./session/chat-handler.js')
     const { cancelQuestionsForSession, cancelPathConfirmationsForSession } = await import('./tools/index.js')
@@ -1059,8 +1056,29 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
       sessionId,
       payload: { sessionId },
     })
+  }
+
+  app.delete('/api/sessions/:id', async (req, res) => {
+    const sessionId = req.params['id'] as string
+    const session = sessionManager.getSession(sessionId)
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' })
+    }
+
+    await performSessionDelete(sessionId)
     res.json({ success: true })
   })
+
+  // Two-phase delete: run the end-of-session command inside the session first,
+  // and let the chat confirm the actual deletion afterwards.
+  const sessionEndRouter = express.Router()
+  registerSessionEndRoutes(sessionEndRouter, {
+    sessionManager,
+    configDir,
+    hardDelete: performSessionDelete,
+    broadcast: (message) => wssExports.broadcastAll(message),
+  })
+  app.use('/api', sessionEndRouter)
 
   app.delete('/api/projects/:projectId/sessions', (req, res) => {
     const projectId = req.params['projectId'] as string

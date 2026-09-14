@@ -10,6 +10,8 @@ import { DropdownMenu } from '../shared/DropdownMenu'
 import { ScrollArea } from '../shared/ScrollArea'
 import { CloseButton } from '../shared/CloseButton'
 import { ConfirmModal } from '../shared/ConfirmModal'
+import { SETTINGS_KEYS } from '../../lib/resources'
+import { useSetting } from '../../hooks/useSetting'
 import { Modal } from '../shared/Modal'
 import { ModalFooter } from '../shared/ModalFooter'
 import {
@@ -49,6 +51,8 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
   const [, navigate] = useLocation()
   const [showSettings, setShowSettings] = useState(false)
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
+  // True when the confirm dialog was opened from "Delete now" on a closing session.
+  const [deleteNowMode, setDeleteNowMode] = useState(false)
   const [sessionToRename, setSessionToRename] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [showDeleteAll, setShowDeleteAll] = useState(false)
@@ -67,6 +71,7 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
   const sessionsWithPendingConfirmations = useSessionStore((state) => state.sessionsWithPendingConfirmations)
   const pendingPathConfirmations = useSessionStore((state) => state.pendingPathConfirmations)
   const toggleFavorite = useSessionStore((state) => state.toggleFavorite)
+  const endOfSessionCommand = (useSetting(SETTINGS_KEYS.END_OF_SESSION_COMMAND).value ?? '').trim()
 
   const currentProject = useCurrentProject()
 
@@ -174,16 +179,43 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
 
   const handleDeleteSession = (sessionId: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
+    setDeleteNowMode(false)
     setSessionToDelete(sessionId)
   }
 
-  const handleConfirmDeleteSession = () => {
+  // Escape hatch on an already-closing session: still needs a confirmation.
+  const handleDeleteNow = (sessionId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    setDeleteNowMode(true)
+    setSessionToDelete(sessionId)
+  }
+
+  const handleConfirmDeleteSession = async () => {
     if (!sessionToDelete) return
-    deleteSession(sessionToDelete)
-    if (currentSession?.id === sessionToDelete) {
-      navigate(`/p/${projectId}`)
-    }
+    const sessionId = sessionToDelete
+    const deleteNow = deleteNowMode
     setSessionToDelete(null)
+    setDeleteNowMode(false)
+    if (deleteNow) {
+      await deleteSession(sessionId)
+      if (currentSession?.id === sessionId) navigate(`/p/${projectId}`)
+      return
+    }
+    const result = await useSessionStore.getState().endSession(sessionId)
+    if (result === 'deleted') {
+      if (currentSession?.id === sessionId) navigate(`/p/${projectId}`)
+    } else if (currentSession?.id !== sessionId) {
+      // Closing: show the session so the routine and its final confirm are visible.
+      navigate(`/p/${projectId}/s/${sessionId}`)
+    }
+  }
+
+  const handleSkipEndOfSession = () => {
+    if (!sessionToDelete) return
+    const sessionId = sessionToDelete
+    setSessionToDelete(null)
+    deleteSession(sessionId)
+    if (currentSession?.id === sessionId) navigate(`/p/${projectId}`)
   }
 
   const handleRenameSession = (sessionId: string, e?: React.MouseEvent) => {
@@ -408,15 +440,45 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
 
             <ConfirmModal
               isOpen={sessionToDelete !== null}
-              onClose={() => setSessionToDelete(null)}
-              onConfirm={handleConfirmDeleteSession}
-              title={t({ en: 'Delete session?', fr: 'Supprimer la session ?' })}
-              message={t({
-                en: 'This session will be permanently deleted.',
-                fr: 'Cette session sera définitivement supprimée.',
-              })}
-              confirmLabel={t({ en: 'Delete session', fr: 'Supprimer la session' })}
+              onClose={() => {
+                setSessionToDelete(null)
+                setDeleteNowMode(false)
+              }}
+              onConfirm={() => void handleConfirmDeleteSession()}
+              title={
+                deleteNowMode
+                  ? t({ en: 'Delete closing session now?', fr: 'Supprimer maintenant ?' })
+                  : t({ en: 'Delete session?', fr: 'Supprimer la session ?' })
+              }
+              message={
+                deleteNowMode
+                  ? t({
+                      en: 'This stops the closing routine and permanently deletes the session.',
+                      fr: 'Cela arrête la routine de fermeture et supprime définitivement la session.',
+                    })
+                  : endOfSessionCommand
+                    ? t({
+                        en: `If it is available, the /${endOfSessionCommand} command runs first and reports its findings in this session's chat, where you confirm the actual delete; otherwise the session is deleted right away.`,
+                        fr: `Si elle est disponible, la commande /${endOfSessionCommand} s'exécute d'abord et rend compte de ses conclusions dans le chat de cette session, où vous confirmez la suppression ; sinon la session est supprimée immédiatement.`,
+                      })
+                    : t({
+                        en: 'This session will be permanently deleted.',
+                        fr: 'Cette session sera définitivement supprimée.',
+                      })
+              }
+              confirmLabel={
+                deleteNowMode
+                  ? t({ en: 'Delete now', fr: 'Supprimer maintenant' })
+                  : endOfSessionCommand
+                    ? t({ en: 'Run & close', fr: 'Exécuter et fermer' })
+                    : t({ en: 'Delete session', fr: 'Supprimer la session' })
+              }
               confirmVariant="danger"
+              altAction={
+                !deleteNowMode && endOfSessionCommand
+                  ? { label: t({ en: 'Skip & close', fr: 'Passer et fermer' }), onClick: handleSkipEndOfSession }
+                  : undefined
+              }
             />
 
             <ConfirmModal
@@ -482,6 +544,7 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
                       currentSession,
                       unreadSessionIds,
                       handleDeleteSession,
+                      handleDeleteNow,
                       handleRenameSession,
                       handleToggleFavorite,
                       handleExportSession,
@@ -535,6 +598,7 @@ function renderSessionList(
   currentSession: { id: string | null } | null,
   unreadSessionIds: string[],
   handleDeleteSession: (sessionId: string, e?: React.MouseEvent) => void,
+  handleDeleteNow: (sessionId: string, e?: React.MouseEvent) => void,
   handleRenameSession: (sessionId: string, e?: React.MouseEvent) => void,
   handleToggleFavorite: (sessionId: string, isFavorite: boolean) => void,
   handleExportSession: (sessionId: string) => void,
@@ -573,11 +637,20 @@ function renderSessionList(
           className={`block ${isActive ? 'text-accent-primary' : 'text-text-primary'} hover:text-accent-primary`}
         >
           <div className="flex justify-between items-center mb-1">
-            <span className={`font-medium truncate text-sm ${isActive ? 'text-accent-primary' : 'text-text-primary'}`}>
-              {searchQuery
-                ? highlightMatches(session.title ?? session.id.slice(0, 6), searchQuery)
-                : (session.title ?? session.id.slice(0, 6))}
-            </span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span
+                className={`font-medium truncate text-sm ${isActive ? 'text-accent-primary' : 'text-text-primary'}`}
+              >
+                {searchQuery
+                  ? highlightMatches(session.title ?? session.id.slice(0, 6), searchQuery)
+                  : (session.title ?? session.id.slice(0, 6))}
+              </span>
+              {session.closingAt && (
+                <span className="shrink-0 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                  {t({ en: 'closing', fr: 'fermeture' })}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1">
               <DropdownMenu
                 items={[
@@ -609,12 +682,31 @@ function renderSessionList(
                           },
                         },
                       ]),
-                  {
-                    label: t({ en: 'Delete session', fr: 'Supprimer la session' }),
-                    icon: <TrashIcon className="w-3.5 h-3.5" />,
-                    onClick: (e?: React.MouseEvent) => handleDeleteSession(session.id, e),
-                    danger: true,
-                  },
+                  ...(session.closingAt
+                    ? [
+                        {
+                          label: t({ en: 'Delete now', fr: 'Supprimer maintenant' }),
+                          icon: <TrashIcon className="w-3.5 h-3.5" />,
+                          onClick: (e?: React.MouseEvent) => handleDeleteNow(session.id, e),
+                          danger: true,
+                        },
+                        {
+                          label: t({ en: 'Cancel closing', fr: 'Annuler la fermeture' }),
+                          icon: <XCloseIcon className="w-3.5 h-3.5" />,
+                          onClick: (e?: React.MouseEvent) => {
+                            e?.stopPropagation()
+                            void useSessionStore.getState().cancelEndSession(session.id)
+                          },
+                        },
+                      ]
+                    : [
+                        {
+                          label: t({ en: 'Delete session', fr: 'Supprimer la session' }),
+                          icon: <TrashIcon className="w-3.5 h-3.5" />,
+                          onClick: (e?: React.MouseEvent) => handleDeleteSession(session.id, e),
+                          danger: true,
+                        },
+                      ]),
                 ]}
                 trigger={
                   <button

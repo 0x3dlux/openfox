@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.148 - 2026-09-14
+
+### Bug Fixes
+
+- **Sub-agent responses no longer truncate in long sessions** — sub-agent output is now budgeted against its own context instead of the parent session's, so plans and reviews run to completion even when the orchestrator session is huge.
+
 ## 2.0.147 - 2026-09-14
 
 ### Features

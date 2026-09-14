@@ -5,8 +5,9 @@ import { useT } from '../../../hooks/useT'
 import { Button } from '../../shared/Button'
 import { Input } from '../../shared/Input'
 import { Toggle } from '../../shared/Toggle'
-import { SETTINGS_KEYS, setSetting } from '../../../lib/resources'
+import { SETTINGS_KEYS, setSetting, commandsResource } from '../../../lib/resources'
 import { useSetting } from '../../../hooks/useSetting'
+import { useResource } from '../../../hooks/useResource'
 import { useTestButton } from '../../../hooks/useTestButton'
 import { RetryPatternsEditor, type RetryPatternsValue } from '../RetryPatternsEditor'
 import { useConfig } from '../../../hooks/useConfig'
@@ -26,6 +27,7 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
   const retryPatternsSetting = useSetting(SETTINGS_KEYS.RETRY_PATTERNS).value
   const proxyUrlSetting = useSetting(SETTINGS_KEYS.PROXY_URL).value
   const defaultAgentSetting = useSetting(SETTINGS_KEYS.DEFAULT_AGENT).value
+  const endOfSessionCommandSetting = useSetting(SETTINGS_KEYS.END_OF_SESSION_COMMAND).value
   const showChangelogSetting = useSetting(SETTINGS_KEYS.DISPLAY_SHOW_CHANGELOG_ON_UPDATE, 'true').value
 
   const [localToggles, setLocalToggles] = useState({
@@ -40,6 +42,7 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
   const [proxyUrl, setProxyUrl] = useState('')
   const [defaultAgent, setDefaultAgent] = useState('')
   const [defaultAgentLoaded, setDefaultAgentLoaded] = useState(false)
+  const [endOfSessionCommand, setEndOfSessionCommand] = useState<string | null>(null)
   const [proxyTestText, proxyTestError, proxyTestSuccess, testProxy] = useTestButton()
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [showChangelogModal, setShowChangelogModal] = useState(false)
@@ -53,6 +56,16 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
   const [manuallyChecked, setManuallyChecked] = useState(false)
   const { agents } = useAgents()
   const topLevelAgents = agents.filter((a) => !a.subagent)
+  const { data: commandsData } = useResource(commandsResource)
+  const commandIds = [
+    ...new Set(
+      [
+        ...(commandsData?.defaults ?? []),
+        ...(commandsData?.userItems ?? []),
+        ...(commandsData?.projectItems ?? []),
+      ].map((c) => c.id),
+    ),
+  ].sort()
 
   useEffect(() => {
     setLocalToggles({
@@ -86,6 +99,17 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
       setDefaultAgentLoaded(true)
     }
   }, [defaultAgentSetting])
+
+  useEffect(() => {
+    if (endOfSessionCommandSetting !== undefined && endOfSessionCommand === null) {
+      setEndOfSessionCommand(endOfSessionCommandSetting)
+    }
+  }, [endOfSessionCommandSetting, endOfSessionCommand])
+
+  const handleEndOfSessionCommandChange = (value: string) => {
+    setEndOfSessionCommand(value)
+    void setSetting(SETTINGS_KEYS.END_OF_SESSION_COMMAND, value)
+  }
 
   const handleRetryPatternsChange = useCallback((value: RetryPatternsValue) => {
     setRetryPatterns(value)
@@ -249,6 +273,30 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
             })}
           </p>
         )}
+      </div>
+      <hr className="border-border" />
+      <div>
+        <h3 className="text-sm font-medium text-text-primary mb-1">
+          {t({ en: 'End-of-session Command', fr: 'Commande de fin de session' })}
+        </h3>
+        <p className="text-sm text-text-muted mb-3">
+          {t({
+            en: 'Command run inside a session when you click “Delete session”: it summarizes the session and reports its findings, and the chat then offers the final delete. Leave empty to delete immediately.',
+            fr: 'Commande exécutée dans une session quand vous cliquez sur « Supprimer la session » : elle résume la session et rapporte ses conclusions, puis le chat propose la suppression finale. Laissez vide pour supprimer immédiatement.',
+          })}
+        </p>
+        <Input
+          list="end-of-session-commands"
+          value={endOfSessionCommand ?? ''}
+          onChange={(e) => handleEndOfSessionCommandChange(e.target.value.trim().replace(/^\//, ''))}
+          placeholder={t({ en: 'end-of-session', fr: 'end-of-session' })}
+          className="w-full px-3 py-2 text-sm bg-bg-primary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+        />
+        <datalist id="end-of-session-commands">
+          {commandIds.map((id) => (
+            <option key={id} value={id} />
+          ))}
+        </datalist>
       </div>
       <hr className="border-border" />
       <div>

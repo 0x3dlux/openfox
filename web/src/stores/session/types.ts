@@ -141,6 +141,10 @@ export interface SessionState {
   listHomeSessions: () => Promise<void>
   ensureFullSessionList: () => Promise<void>
   deleteSession: (sessionId: string) => Promise<boolean>
+  /** Two-phase close: runs the end-of-session command (or deletes outright when disabled). */
+  endSession: (sessionId: string) => Promise<'closing' | 'deleted'>
+  /** Cancel a pending close so the session keeps living. */
+  cancelEndSession: (sessionId: string) => Promise<void>
   renameSession: (sessionId: string, title: string) => Promise<boolean>
   toggleFavorite: (sessionId: string, isFavorite: boolean) => Promise<boolean>
   deleteAllSessions: (projectId: string) => Promise<boolean>

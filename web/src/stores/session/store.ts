@@ -809,6 +809,10 @@ export const useSessionStore = create<SessionState>((set, get) => {
       let deleted: boolean | null = null
       try {
         const res = await authFetch(`/api/sessions/${sessionId}/end-session`, { method: 'POST' })
+        // A 409 is the server refusing to close because the configured command
+        // cannot run: nothing was queued and nothing was deleted, so say so
+        // instead of guessing from a session list that never changed.
+        if (res.status === 409) return 'error'
         set({ searchSessions: null })
         if (res.status === 404) deleted = true
         else if (res.ok) {

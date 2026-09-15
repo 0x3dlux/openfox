@@ -3,8 +3,9 @@
  *
  * "Delete session" is two-phase: POST /api/sessions/:id/end-session runs the
  * configured end-of-session command inside the session and marks it closing;
- * the client then offers an explicit final delete. With the setting empty or an
- * unresolvable command id, end-session degrades to today's immediate delete.
+ * the client then offers an explicit final delete. An empty setting means the
+ * routine is off and the delete is immediate; a command that is configured but
+ * cannot run answers 409 and leaves the session alone.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
@@ -20,7 +21,7 @@ import { initEventStore } from '../events/index.js'
 import { SessionManager } from '../session/manager.js'
 import { setSetting, SETTINGS_KEYS } from '../db/settings.js'
 import { getSession, listSessionsByProject } from '../db/sessions.js'
-import { registerSessionEndRoutes } from './session-end.js'
+import { registerSessionEndRoutes, resolveEndOfSessionCommand } from './session-end.js'
 
 const mockProviderManager = {
   getCurrentModelContext: () => 200000,
@@ -104,8 +105,10 @@ describe('POST /api/sessions/:id/end-session', () => {
   afterEach(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     closeDatabase()
-    await rm(configDir, { recursive: true, force: true })
-    await rm(workdir, { recursive: true, force: true })
+    // Windows keeps the directory in "pending delete" after the files are
+    // unlinked, so rmdir returns EBUSY; fs.rm does not retry unless asked.
+    await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    await rm(workdir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('queues the resolved command and marks the session closing', async () => {
@@ -153,15 +156,26 @@ describe('POST /api/sessions/:id/end-session', () => {
     expect(hardDeleted).toEqual([sessionId])
   })
 
-  it('deletes right away when the configured command does not exist', async () => {
+  it('refuses to delete when the configured command cannot run', async () => {
     setSetting(SETTINGS_KEYS.END_OF_SESSION_COMMAND, 'no-such-command')
+    const queueSpy = vi.spyOn(sessionManager, 'queueMessage')
 
-    const res = await fetch(`${baseUrl}/api/sessions/:id`.replace(':id', sessionId) + '/end-session', {
-      method: 'POST',
-    })
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ deleted: true })
-    expect(hardDeleted).toEqual([sessionId])
+    const res = await fetch(`${baseUrl}/api/sessions/${sessionId}/end-session`, { method: 'POST' })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ reason: 'not_found', command: 'no-such-command' })
+    expect(queueSpy).not.toHaveBeenCalled()
+    expect(hardDeleted).toEqual([])
+    expect(sessionManager.getSession(sessionId)?.closingAt).toBeUndefined()
+  })
+
+  it('refuses to delete a command that needs parameters', async () => {
+    await writeCommand(configDir, 'needs', '---\nid: needs\nname: Needs\n---\nDo {{thing}} now.')
+    setSetting(SETTINGS_KEYS.END_OF_SESSION_COMMAND, 'needs')
+
+    const res = await fetch(`${baseUrl}/api/sessions/${sessionId}/end-session`, { method: 'POST' })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ reason: 'needs_params', command: 'needs' })
+    expect(hardDeleted).toEqual([])
   })
 
   it('404s for an unknown session', async () => {
@@ -244,8 +258,10 @@ describe('DELETE /api/sessions/:id/end-session (cancel closing)', () => {
   afterEach(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     closeDatabase()
-    await rm(configDir, { recursive: true, force: true })
-    await rm(workdir, { recursive: true, force: true })
+    // Windows keeps the directory in "pending delete" after the files are
+    // unlinked, so rmdir returns EBUSY; fs.rm does not retry unless asked.
+    await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    await rm(workdir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   it('clears closingAt so the session keeps living', async () => {
@@ -275,5 +291,59 @@ describe('DELETE /api/sessions/:id/end-session (cancel closing)', () => {
     await fetch(`${baseUrl}/api/sessions/${sessionId}/end-session`, { method: 'DELETE' })
 
     expect(sessionManager.getQueueState(sessionId)).toEqual([])
+  })
+})
+
+describe('resolveEndOfSessionCommand', () => {
+  let configDir: string
+
+  beforeEach(async () => {
+    closeDatabase()
+    const config = loadConfig()
+    config.database.path = ':memory:'
+    initDatabase(config)
+    initEventStore(getDatabase())
+    configDir = await mkdtemp(join(tmpdir(), 'openfox-eos-resolve-'))
+  })
+
+  afterEach(async () => {
+    closeDatabase()
+    // Windows keeps the directory in "pending delete" after the files are
+    // unlinked, so rmdir returns EBUSY; fs.rm does not retry unless asked.
+    await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  })
+
+  it('reports the routine as disabled when the setting is empty', async () => {
+    setSetting(SETTINGS_KEYS.END_OF_SESSION_COMMAND, '')
+    expect(await resolveEndOfSessionCommand(configDir)).toEqual({ available: false, reason: 'disabled' })
+  })
+
+  it('reports not_found for a command that does not exist', async () => {
+    setSetting(SETTINGS_KEYS.END_OF_SESSION_COMMAND, 'ghost')
+    expect(await resolveEndOfSessionCommand(configDir)).toEqual({
+      available: false,
+      reason: 'not_found',
+      commandId: 'ghost',
+    })
+  })
+
+  it('reports needs_params for a command that demands arguments', async () => {
+    await writeCommand(configDir, 'params', '---\nid: params\nname: Params\n---\nRun {{thing}}.')
+    setSetting(SETTINGS_KEYS.END_OF_SESSION_COMMAND, 'params')
+    expect(await resolveEndOfSessionCommand(configDir)).toEqual({
+      available: false,
+      reason: 'needs_params',
+      commandId: 'params',
+    })
+  })
+
+  it('resolves the bundled default with its prompt and agent mode', async () => {
+    const resolved = await resolveEndOfSessionCommand(configDir)
+    expect(resolved.available).toBe(true)
+    if (resolved.available) {
+      expect(resolved.commandId).toBe('end-of-session')
+      expect(resolved.prompt).toContain('End-of-session routine')
+      expect(resolved.agentMode).toBe('builder')
+    }
   })
 })

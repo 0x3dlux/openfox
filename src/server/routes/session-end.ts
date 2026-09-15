@@ -7,8 +7,9 @@
  * and the user confirms the actual delete from the chat. Cancelling the closing
  * (DELETE) just lets the session live on.
  *
- * When the setting is empty or names an unknown command the routine is
- * disabled, and end-session degrades to today's immediate delete.
+ * When the setting is empty the routine is off and end-session deletes right
+ * away; a configured command that cannot run is a 409 instead, because deleting
+ * silently is not what the user clicked.
  */
 
 import { Router, type Request, type Response } from 'express'
@@ -38,31 +39,39 @@ export interface EndOfSessionLaunch {
   agentMode?: string
 }
 
+export type EndOfSessionReason = 'disabled' | 'not_found' | 'needs_params'
+
+export type EndOfSessionResolution =
+  | ({ available: true; reason?: undefined } & EndOfSessionLaunch)
+  | { available: false; reason: EndOfSessionReason; commandId?: string }
+
 /**
- * Resolve the configured end-of-session command for a project. Returns null
- * when disabled (empty setting) or the id resolves to no runnable command
- * (unknown id, or a command with unfilled parameters).
+ * Resolve the configured end-of-session command for a project, told as an
+ * availability verdict rather than a bare null: "the user switched it off" and
+ * "the configured command cannot run" must not look the same to the client,
+ * since one deletes right away and the other is a broken setting to report.
  */
 export async function resolveEndOfSessionCommand(
   configDir: string,
   projectDir?: string,
-): Promise<EndOfSessionLaunch | null> {
+): Promise<EndOfSessionResolution> {
   const configured = (getSetting(SETTINGS_KEYS.END_OF_SESSION_COMMAND) ?? DEFAULT_END_OF_SESSION_COMMAND).trim()
-  if (!configured) return null
+  if (!configured) return { available: false, reason: 'disabled' }
 
   const command = findCommandById(configured, await loadAllCommands(configDir, projectDir))
   if (!command) {
     logger.warn(`End-of-session command "${configured}" not found - running the plain close instead`, { projectDir })
-    return null
+    return { available: false, reason: 'not_found', commandId: configured }
   }
 
   const { prompt, unfilledParams } = expandCommandPrompt(command.prompt, [])
   if (unfilledParams.length > 0) {
     logger.warn(`End-of-session command "${configured}" needs parameters - running the plain close instead`)
-    return null
+    return { available: false, reason: 'needs_params', commandId: configured }
   }
 
   return {
+    available: true,
     commandId: configured,
     prompt,
     ...(command.metadata.agentMode ? { agentMode: command.metadata.agentMode } : {}),
@@ -85,23 +94,36 @@ export function registerSessionEndRoutes(router: Router, deps: SessionEndRoutesD
     if (!target) return
     const { sessionId, session } = target
 
-    let launch: EndOfSessionLaunch | null
+    let resolution: EndOfSessionResolution
     try {
-      launch = await resolveEndOfSessionCommand(deps.configDir, session.workdir)
+      resolution = await resolveEndOfSessionCommand(deps.configDir, session.workdir)
     } catch (error) {
       // A broken command definition must never block closing a session.
       logger.error('Failed to resolve the end-of-session command', {
         sessionId,
         error: error instanceof Error ? error.message : String(error),
       })
-      launch = null
+      resolution = { available: false, reason: 'not_found' }
     }
 
-    if (!launch) {
+    if (!resolution.available) {
+      if (resolution.reason !== 'disabled') {
+        // The user asked for the routine; deleting instead would be a silent
+        // surprise, so nothing moves and the client shows the reason.
+        return res.status(409).json({
+          error: serverT({
+            en: `End-of-session command "${resolution.commandId ?? ''}" cannot run`,
+            fr: `La commande de fin de session « ${resolution.commandId ?? ''} » ne peut pas s'exécuter`,
+          }),
+          reason: resolution.reason,
+          command: resolution.commandId,
+        })
+      }
       await deps.hardDelete(sessionId)
       return res.json({ deleted: true })
     }
 
+    const launch = resolution
     if (launch.agentMode) {
       try {
         deps.sessionManager.setMode(sessionId, launch.agentMode)
@@ -129,7 +151,7 @@ export function registerSessionEndRoutes(router: Router, deps: SessionEndRoutesD
     // Withdraw the routine when it never got its turn (the session was busy, so
     // the prompt is still queued): a kept session must not wrap itself up later.
     const launch = await resolveEndOfSessionCommand(deps.configDir, session.workdir).catch(() => null)
-    if (launch) {
+    if (launch?.available) {
       for (const queued of deps.sessionManager.getQueueState(sessionId)) {
         if (queued.messageKind === 'command' && queued.content === launch.prompt) {
           deps.sessionManager.cancelQueuedMessage(sessionId, queued.queueId)

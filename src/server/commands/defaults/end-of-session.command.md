@@ -14,12 +14,29 @@ End-of-session routine: the user asked to close this session. Summarize it, then
 
 3. **Mine learnings** — review the ENTIRE session above (user messages, reasoning, tool calls) for durable, reusable knowledge: gotchas and the fixes that worked, environment facts, conventions and preferences the user expressed, working commands/recipes. Exclude ephemeral one-offs, things already documented, and secrets (reference their location instead).
 
-4. **Persist** each durable learning in the project's own memory: append a terse line to `<project-root>/AGENTS.md` (dedupe first — skip facts already there) and prepend a dated entry to `<project-root>/Changelog.md` when user-visible state changed. Do NOT touch machine-global configuration, credential stores, or other repositories from this routine.
+4. **Persist** each durable learning where it belongs:
+
+   - **Project memory** — append a terse line to `<project-root>/AGENTS.md` (dedupe first: skip facts already there) and prepend a dated entry to `<project-root>/Changelog.md` when user-visible state changed.
+
+   - **Machine-global memory** — a fact that outlives this repository (an environment quirk, a working command, a user preference) belongs in OpenFox's own global instructions, which are a line database on its API. Reach the server that owns this session:
+
+     ```bash
+     BASE=${OPENFOX_API:-http://127.0.0.1:${OPENFOX_PORT:-10369}}
+     curl -s  "$BASE/api/settings/global_instructions"                                          # read the lines
+     curl -s -X POST   "$BASE/api/settings/global_instructions"  -H 'Content-Type: application/json' -d '{"line":"- <fact>"}'
+     curl -s -X PATCH  "$BASE/api/settings/global_instructions"  -H 'Content-Type: application/json' -d '{"match":"- <old line>","line":"- <new line>"}'
+     curl -s -X DELETE "$BASE/api/settings/global_instructions"  -H 'Content-Type: application/json' -d '{"line":"- <obsolete fact>"}'
+     ```
+
+     Read first and dedupe — `POST` reports `changed:false` when the line is already there. Send one line per call; `PATCH`/`DELETE` name the line they mean (no numbering) and answer 404 with `matched: 0` when nothing matches. Never rewrite the whole value, never PUT it, and never edit the `settings` row in SQLite: the verbs exist precisely so that adding one fact cannot damage the rest.
+
+   - Do NOT touch credential stores, other repositories, or any other setting from this routine.
 
 5. **Report** what was persisted in the same numbered table the global routine uses, so both variants read alike:
 
-   | #   | Retained             | Store                      |
-   | --- | -------------------- | -------------------------- |
-   | 1   | <the fact, one line> | `<project-root>/AGENTS.md` |
+   | #   | Retained             | Store                             |
+   | --- | -------------------- | --------------------------------- |
+   | 1   | <the fact, one line> | `<project-root>/AGENTS.md`        |
+   | 2   | <the fact, one line> | global instructions (`API: POST`) |
 
    List anything skipped as a duplicate separately (below the table), plus what is still outstanding. Then stop — the user confirms the delete from the chat.

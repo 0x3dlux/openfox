@@ -15,6 +15,7 @@ import { useUpdateStore } from '../../../stores/update'
 import { AutoUpdateModal } from '../../AutoUpdateModal'
 import { ChangelogModal } from '../../ChangelogModal'
 import { useAgents } from '../../../hooks/useAgents'
+import { resolveCommandAvailability } from '../../../lib/command-availability'
 
 export function AdvancedTab({ onClose }: { onClose: () => void }) {
   const t = useT()
@@ -99,6 +100,13 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
       setDefaultAgentLoaded(true)
     }
   }, [defaultAgentSetting])
+
+  // Whether the configured command could actually run, judged from the very
+  // list the delete dialog reads, so the two never disagree.
+  const endOfSessionAvailability = resolveCommandAvailability(
+    commandsData,
+    endOfSessionCommand ?? endOfSessionCommandSetting ?? '',
+  )
 
   useEffect(() => {
     if (endOfSessionCommandSetting !== undefined && endOfSessionCommand === null) {
@@ -297,6 +305,29 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
             <option key={id} value={id} />
           ))}
         </datalist>
+        {endOfSessionAvailability.state !== 'loading' && (
+          <p
+            className={`text-xs mt-1 ${
+              endOfSessionAvailability.state === 'available' || endOfSessionAvailability.state === 'disabled'
+                ? 'text-text-muted'
+                : 'text-red-500'
+            }`}
+          >
+            {endOfSessionAvailability.state === 'available'
+              ? t({ en: 'Runs when a session closes', fr: "S'exécute à la fermeture d'une session" })
+              : endOfSessionAvailability.state === 'disabled'
+                ? t({
+                    en: 'Disabled - sessions are deleted immediately',
+                    fr: 'Désactivée - les sessions sont supprimées immédiatement',
+                  })
+                : endOfSessionAvailability.state === 'needs_params'
+                  ? t({
+                      en: 'This command needs parameters, so it cannot run automatically',
+                      fr: 'Cette commande demande des paramètres, elle ne peut pas s’exécuter automatiquement',
+                    })
+                  : t({ en: 'Command not found', fr: 'Commande introuvable' })}
+          </p>
+        )}
       </div>
       <hr className="border-border" />
       <div>

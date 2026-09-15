@@ -10,8 +10,10 @@ import { DropdownMenu } from '../shared/DropdownMenu'
 import { ScrollArea } from '../shared/ScrollArea'
 import { CloseButton } from '../shared/CloseButton'
 import { ConfirmModal } from '../shared/ConfirmModal'
-import { SETTINGS_KEYS } from '../../lib/resources'
+import { SETTINGS_KEYS, commandsResource } from '../../lib/resources'
 import { useSetting } from '../../hooks/useSetting'
+import { useResource } from '../../hooks/useResource'
+import { resolveCommandAvailability } from '../../lib/command-availability'
 import { Modal } from '../shared/Modal'
 import { ModalFooter } from '../shared/ModalFooter'
 import {
@@ -52,6 +54,9 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
   // True when the confirm dialog was opened from "Delete now" on a closing session.
   const [deleteNowMode, setDeleteNowMode] = useState(false)
+  // True after the server refused to close (the routine stopped existing): the
+  // dialog then offers the plain delete instead of pretending nothing happened.
+  const [routineFailed, setRoutineFailed] = useState(false)
   const [sessionToRename, setSessionToRename] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [showDeleteAll, setShowDeleteAll] = useState(false)
@@ -73,6 +78,20 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
   const endOfSessionCommand = (useSetting(SETTINGS_KEYS.END_OF_SESSION_COMMAND).value ?? '').trim()
 
   const currentProject = useCurrentProject()
+
+  // The delete dialog must say what will happen, so it judges the configured
+  // command from the same merged list the server resolves against - keyed by the
+  // target session's workdir, which the composer has usually warmed already -
+  // instead of hedging about whether the routine exists.
+  const deleteScopeWorkdir = sessionToDelete
+    ? (sessions.find((s) => s.id === sessionToDelete)?.workdir ?? currentProject?.workdir)
+    : currentProject?.workdir
+  const { data: deleteScopeCommands } = useResource(commandsResource, deleteScopeWorkdir)
+  const endOfSession = resolveCommandAvailability(deleteScopeCommands, endOfSessionCommand)
+  // An unfinished lookup still gets the routine buttons: a configured command is
+  // far more likely than a broken one, and the server refuses rather than
+  // deleting if it turns out otherwise.
+  const routineOffered = endOfSession.state === 'available' || endOfSession.state === 'loading'
 
   const [searchQuery, setSearchQuery] = useState('')
   const [focusedIndex, setFocusedIndex] = useState(-1)
@@ -179,12 +198,14 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
   const handleDeleteSession = (sessionId: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
     setDeleteNowMode(false)
+    setRoutineFailed(false)
     setSessionToDelete(sessionId)
   }
 
   // Escape hatch on an already-closing session: still needs a confirmation.
   const handleDeleteNow = (sessionId: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
+    setRoutineFailed(false)
     setDeleteNowMode(true)
     setSessionToDelete(sessionId)
   }
@@ -193,14 +214,25 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
     if (!sessionToDelete) return
     const sessionId = sessionToDelete
     const deleteNow = deleteNowMode
+    // A routine the server would refuse (missing, or demanding parameters) must
+    // never be attempted: route straight to the plain delete.
+    const brokenRoutine = endOfSession.state === 'not_found' || endOfSession.state === 'needs_params'
     setSessionToDelete(null)
     setDeleteNowMode(false)
-    if (deleteNow) {
+    setRoutineFailed(false)
+    if (deleteNow || brokenRoutine || routineFailed) {
       await deleteSession(sessionId)
       if (currentSession?.id === sessionId) navigate(`/p/${projectId}`)
       return
     }
     const result = await useSessionStore.getState().endSession(sessionId)
+    if (result === 'error') {
+      // The routine disappeared between opening this dialog and clicking: keep
+      // the session, reopen the dialog and say so, instead of deleting quietly.
+      setSessionToDelete(sessionId)
+      setRoutineFailed(true)
+      return
+    }
     if (result === 'deleted') {
       if (currentSession?.id === sessionId) navigate(`/p/${projectId}`)
     } else if (currentSession?.id !== sessionId) {
@@ -442,39 +474,57 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
               onClose={() => {
                 setSessionToDelete(null)
                 setDeleteNowMode(false)
+                setRoutineFailed(false)
               }}
               onConfirm={() => void handleConfirmDeleteSession()}
               title={
-                deleteNowMode
-                  ? t({ en: 'Delete closing session now?', fr: 'Supprimer maintenant ?' })
-                  : t({ en: 'Delete session?', fr: 'Supprimer la session ?' })
+                routineFailed
+                  ? t({ en: 'The closing routine could not run', fr: 'La routine de fermeture n’a pas pu s’exécuter' })
+                  : deleteNowMode
+                    ? t({ en: 'Delete closing session now?', fr: 'Supprimer maintenant ?' })
+                    : t({ en: 'Delete session?', fr: 'Supprimer la session ?' })
               }
               message={
-                deleteNowMode
+                routineFailed
                   ? t({
-                      en: 'This stops the closing routine and permanently deletes the session.',
-                      fr: 'Cela arrête la routine de fermeture et supprime définitivement la session.',
+                      en: 'The end-of-session command could not run, so the session was left alone. Delete it now without the routine?',
+                      fr: 'La commande de fin de session n’a pas pu s’exécuter, la session est intacte. La supprimer maintenant, sans routine ?',
                     })
-                  : endOfSessionCommand
+                  : deleteNowMode
                     ? t({
-                        en: `If it is available, the /${endOfSessionCommand} command runs first and reports its findings in this session's chat, where you confirm the actual delete; otherwise the session is deleted right away.`,
-                        fr: `Si elle est disponible, la commande /${endOfSessionCommand} s'exécute d'abord et rend compte de ses conclusions dans le chat de cette session, où vous confirmez la suppression ; sinon la session est supprimée immédiatement.`,
+                        en: 'This stops the closing routine and permanently deletes the session.',
+                        fr: 'Cela arrête la routine de fermeture et supprime définitivement la session.',
                       })
-                    : t({
-                        en: 'This session will be permanently deleted.',
-                        fr: 'Cette session sera définitivement supprimée.',
-                      })
+                    : endOfSession.state === 'not_found'
+                      ? t({
+                          en: `End-of-session command "${endOfSession.commandId}" was not found, so it cannot run. The session will be deleted right away.`,
+                          fr: `La commande de fin de session « ${endOfSession.commandId} » est introuvable, elle ne peut pas s’exécuter. La session sera supprimée immédiatement.`,
+                        })
+                      : endOfSession.state === 'needs_params'
+                        ? t({
+                            en: `End-of-session command "${endOfSession.commandId}" needs parameters, so it cannot run automatically. The session will be deleted right away.`,
+                            fr: `La commande de fin de session « ${endOfSession.commandId} » demande des paramètres, elle ne peut pas s’exécuter automatiquement. La session sera supprimée immédiatement.`,
+                          })
+                        : routineOffered
+                          ? t({
+                              en: `End-of-session routine: the /${endOfSessionCommand} command runs first and reports its findings in this session's chat, where you confirm the actual delete.`,
+                              fr: `Routine de fin de session : la commande /${endOfSessionCommand} s’exécute d’abord et rend compte de ses conclusions dans le chat de cette session, où vous confirmez la suppression.`,
+                            })
+                          : t({
+                              en: 'This session will be permanently deleted.',
+                              fr: 'Cette session sera définitivement supprimée.',
+                            })
               }
               confirmLabel={
-                deleteNowMode
+                routineFailed || deleteNowMode
                   ? t({ en: 'Delete now', fr: 'Supprimer maintenant' })
-                  : endOfSessionCommand
+                  : routineOffered
                     ? t({ en: 'Run & close', fr: 'Exécuter et fermer' })
                     : t({ en: 'Delete session', fr: 'Supprimer la session' })
               }
               confirmVariant="danger"
               altAction={
-                !deleteNowMode && endOfSessionCommand
+                routineOffered && !deleteNowMode && !routineFailed
                   ? { label: t({ en: 'Skip & close', fr: 'Passer et fermer' }), onClick: handleSkipEndOfSession }
                   : undefined
               }

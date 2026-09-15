@@ -353,4 +353,28 @@ describe('closing state in an open pane', () => {
 
     expect(paneClosingAt(useSessionStore)).toBeUndefined()
   })
+
+  it('reports an error without touching the session when the routine cannot run', async () => {
+    const useSessionStore = await loadSessionStore()
+    seedPane(useSessionStore, SERVER_AT)
+
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'POST' && String(input) === '/api/sessions/s1/end-session'
+        ? Promise.resolve({
+            ok: false,
+            status: 409,
+            json: () => Promise.resolve({ error: 'End-of-session command "ghost" cannot run', reason: 'not_found' }),
+          } as never)
+        : Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ sessions: [summary({ closingAt: SERVER_AT })], hasMore: false }),
+          } as never),
+    )
+
+    expect(await useSessionStore.getState().endSession('s1')).toBe('error')
+    // Nothing was deleted and no closing badge was painted over the pane.
+    expect(useSessionStore.getState().sessions.find((s) => s.id === 's1')).toBeDefined()
+    expect(useSessionStore.getState().currentSession?.closingAt).toBeUndefined()
+  })
 })

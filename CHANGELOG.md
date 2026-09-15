@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.0.149 - 2026-09-15
+
+### Features
+
+- **Task attachments now readable by agents** — a new project_tasks get_attachment action returns image, text, and PDF attachments, with attachment metadata listed on task output.
+
+### Enhancements
+
+- **Retry pattern editor validates inline** — invalid regexes are flagged live as you type, and empty or invalid patterns are no longer saved.
+
+### Bug Fixes
+
+- **Empty retry patterns no longer loop every turn** — blank or invalid patterns are skipped server-side, so a stray empty pattern can't trigger infinite auto-retries.
+- **MCP tools honor their per-tool timeout** — calls no longer cap at the 60s default, and timed-out requests are aborted in flight.
+
 ## 2.0.148 - 2026-09-14
 
 ### Bug Fixes

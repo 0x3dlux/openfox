@@ -78,6 +78,36 @@ export async function resolveEndOfSessionCommand(
   }
 }
 
+/**
+ * Boot recovery for sessions still marked closing. The queued routine prompt is
+ * transient runtime state that dies with the process while closing_at persists,
+ * so without this the UI would claim "done" for a routine that never ran and
+ * never will. Re-arming re-queues the configured command; a routine that had
+ * already concluded before the restart simply runs its harmless, idempotent
+ * wrap-up again. Commands that cannot run any more leave the session alone.
+ */
+export async function recoverClosingSessions(
+  configDir: string,
+  sessions: { id: string; workdir: string }[],
+  manager: Pick<SessionManager, 'queueMessage' | 'setMode'>,
+): Promise<number> {
+  let requeued = 0
+  for (const session of sessions) {
+    const resolution = await resolveEndOfSessionCommand(configDir, session.workdir).catch(() => null)
+    if (!resolution?.available) continue
+    if (resolution.agentMode) {
+      try {
+        manager.setMode(session.id, resolution.agentMode)
+      } catch {
+        // Unknown agent id - keep the session's current agent.
+      }
+    }
+    manager.queueMessage(session.id, 'asap', resolution.prompt, undefined, 'command')
+    requeued++
+  }
+  return requeued
+}
+
 export function registerSessionEndRoutes(router: Router, deps: SessionEndRoutesDeps): void {
   const findSession = (req: Request, res: Response) => {
     const sessionId = req.params['id'] as string

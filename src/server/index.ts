@@ -3773,6 +3773,23 @@ export async function createServerHandle(config: Config): Promise<ServerHandle> 
     }
   }
 
+  // Sessions left marked closing keep their routine in the (transient) queue,
+  // which died with the previous process: re-arm it so the closing state stays
+  // true to what the user asked for.
+  const { getSessionsWithClosing } = await import('./db/sessions.js')
+  const { recoverClosingSessions } = await import('./routes/session-end.js')
+  const requeued = await recoverClosingSessions(configDir, getSessionsWithClosing(), sessionManager).catch(
+    (error: unknown) => {
+      logger.error('Boot closing-routine recovery failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return 0
+    },
+  )
+  if (requeued > 0) {
+    logger.info('Boot closing-routine re-armed', { sessions: requeued })
+  }
+
   const abortSession = (sessionId: string) => {
     const wsAborted = wssExports.abortSession(sessionId)
     const qpAborted = queueProcessor.abortSession(sessionId)

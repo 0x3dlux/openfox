@@ -20,8 +20,8 @@ import { createProject } from '../db/projects.js'
 import { initEventStore } from '../events/index.js'
 import { SessionManager } from '../session/manager.js'
 import { setSetting, SETTINGS_KEYS } from '../db/settings.js'
-import { getSession, listSessionsByProject } from '../db/sessions.js'
-import { registerSessionEndRoutes, resolveEndOfSessionCommand } from './session-end.js'
+import { getSession, listSessionsByProject, updateSessionClosing, getSessionsWithClosing } from '../db/sessions.js'
+import { registerSessionEndRoutes, resolveEndOfSessionCommand, recoverClosingSessions } from './session-end.js'
 
 const mockProviderManager = {
   getCurrentModelContext: () => 200000,
@@ -109,6 +109,14 @@ describe('POST /api/sessions/:id/end-session', () => {
     // unlinked, so rmdir returns EBUSY; fs.rm does not retry unless asked.
     await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     await rm(workdir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  })
+
+  it('lists closing sessions for boot recovery', () => {
+    expect(getSessionsWithClosing()).toEqual([])
+    updateSessionClosing(sessionId, new Date().toISOString())
+    const rows = getSessionsWithClosing()
+    expect(rows.map((r) => r.id)).toEqual([sessionId])
+    expect(rows[0]?.workdir).toBeTypeOf('string')
   })
 
   it('queues the resolved command and marks the session closing', async () => {
@@ -345,5 +353,65 @@ describe('resolveEndOfSessionCommand', () => {
       expect(resolved.prompt).toContain('End-of-session routine')
       expect(resolved.agentMode).toBe('builder')
     }
+  })
+})
+
+describe('recoverClosingSessions', () => {
+  let configDir: string
+
+  beforeEach(async () => {
+    closeDatabase()
+    const config = loadConfig()
+    config.database.path = ':memory:'
+    initDatabase(config)
+    initEventStore(getDatabase())
+    configDir = await mkdtemp(join(tmpdir(), 'openfox-eos-boot-'))
+  })
+
+  afterEach(async () => {
+    closeDatabase()
+    await rm(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  })
+
+  it('re-arms the queued routine for each closing session', async () => {
+    await writeCommand(
+      configDir,
+      'end-of-session',
+      '---\nid: end-of-session\nname: End of session\nagentMode: builder\n---\nWrap up.',
+    )
+    setSetting(SETTINGS_KEYS.END_OF_SESSION_COMMAND, 'end-of-session')
+    const queueMessage = vi.fn()
+    const setMode = vi.fn()
+
+    const requeued = await recoverClosingSessions(
+      configDir,
+      [
+        { id: 's1', workdir: '/tmp/a' },
+        { id: 's2', workdir: '/tmp/b' },
+      ],
+      { queueMessage, setMode },
+    )
+
+    expect(requeued).toBe(2)
+    expect(queueMessage).toHaveBeenCalledWith('s1', 'asap', 'Wrap up.', undefined, 'command')
+    expect(queueMessage).toHaveBeenCalledWith('s2', 'asap', 'Wrap up.', undefined, 'command')
+    expect(setMode).toHaveBeenCalledWith('s1', 'builder')
+  })
+
+  it('leaves closing sessions alone when the routine cannot run', async () => {
+    setSetting(SETTINGS_KEYS.END_OF_SESSION_COMMAND, 'ghost')
+    const queueMessage = vi.fn()
+
+    const requeued = await recoverClosingSessions(configDir, [{ id: 's1', workdir: '/tmp/a' }], {
+      queueMessage,
+      setMode: vi.fn(),
+    })
+
+    expect(requeued).toBe(0)
+    expect(queueMessage).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when no session is closing', async () => {
+    expect(await recoverClosingSessions(configDir, [], { queueMessage: vi.fn(), setMode: vi.fn() })).toBe(0)
   })
 })

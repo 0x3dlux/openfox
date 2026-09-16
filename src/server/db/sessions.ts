@@ -227,6 +227,15 @@ export function updateSessionClosing(id: string, closingAt: string | null): void
   )
 }
 
+/** Sessions still marked closing - the routine lives in the (transient) queue, so boot must re-arm it. */
+export function getSessionsWithClosing(): { id: string; workdir: string }[] {
+  const db = getDatabase()
+  return db.prepare(`SELECT id, workdir FROM sessions WHERE closing_at IS NOT NULL`).all() as {
+    id: string
+    workdir: string
+  }[]
+}
+
 export function updateSessionMetadata(id: string, metadata: Partial<Session['metadata']>): void {
   const db = getDatabase()
   const now = new Date().toISOString()

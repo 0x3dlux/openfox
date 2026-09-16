@@ -91,8 +91,11 @@ describe('MessageList closing footer', () => {
 
   it('offers the final delete once the closing routine is done', () => {
     renderMessageList()
+    expect(screen.getByText('End-of-session command done')).toBeDefined()
+    expect(screen.queryByText('This session is closing.')).toBeNull()
     expect(screen.getByTestId('closing-delete-button')).toBeDefined()
     expect(screen.getByTestId('closing-cancel-button')).toBeDefined()
+    expect(screen.getByTestId('closing-cancel-button').className).toContain('green')
   })
 
   it('hides the footer while the closing routine is still running', () => {

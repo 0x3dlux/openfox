@@ -445,7 +445,7 @@ export const MessageList = memo(function MessageList({
             {closingAt && !isRunning && (
               <div className="flex justify-center items-center gap-2 flex-wrap feed-item">
                 <span className="text-xs text-text-secondary">
-                  {t({ en: 'This session is closing.', fr: 'Cette session est en cours de fermeture.' })}
+                  {t({ en: 'End-of-session command done', fr: 'Commande de fin de session terminée' })}
                 </span>
                 <button
                   onClick={() => sessionId && void deleteSession(sessionId)}
@@ -457,7 +457,7 @@ export const MessageList = memo(function MessageList({
                 <button
                   onClick={() => sessionId && void cancelEndSession(sessionId)}
                   data-testid="closing-cancel-button"
-                  className="px-3 py-1.5 text-sm text-text-muted hover:text-text-primary transition-colors"
+                  className="px-4 py-1.5 text-sm font-medium rounded bg-green-500/15 text-green-500 border border-green-500/25 hover:bg-green-500/25 transition-colors"
                 >
                   {t({ en: 'Keep session', fr: 'Garder la session' })}
                 </button>

@@ -520,13 +520,16 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
                 routineFailed || deleteNowMode
                   ? t({ en: 'Delete now', fr: 'Supprimer maintenant' })
                   : routineOffered
-                    ? t({ en: 'Run & close', fr: 'Exécuter et fermer' })
+                    ? t({ en: 'Run & close later', fr: 'Exécuter et fermer plus tard' })
                     : t({ en: 'Delete session', fr: 'Supprimer la session' })
               }
               confirmVariant="danger"
               altAction={
                 routineOffered && !deleteNowMode && !routineFailed
-                  ? { label: t({ en: 'Skip & close', fr: 'Passer et fermer' }), onClick: handleSkipEndOfSession }
+                  ? {
+                      label: t({ en: 'Skip & close now', fr: 'Passer et fermer maintenant' }),
+                      onClick: handleSkipEndOfSession,
+                    }
                   : undefined
               }
             />
@@ -696,8 +699,14 @@ function renderSessionList(
                   : (session.title ?? session.id.slice(0, 6))}
               </span>
               {session.closingAt && (
-                <span className="shrink-0 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30">
-                  {t({ en: 'closing', fr: 'fermeture' })}
+                <span
+                  className={`shrink-0 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border ${
+                    isRunning
+                      ? 'bg-amber-500/15 text-amber-500 border-amber-500/30'
+                      : 'bg-green-500/15 text-green-500 border-green-500/30'
+                  }`}
+                >
+                  {isRunning ? t({ en: 'closing', fr: 'fermeture' }) : t({ en: 'done', fr: 'terminée' })}
                 </span>
               )}
             </div>

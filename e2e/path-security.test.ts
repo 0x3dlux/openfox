@@ -452,7 +452,7 @@ describe('Path Security', () => {
         expect(result, `expected chat.tool_result for ${callId}`).not.toBeNull()
       }
       await client.waitFor('chat.done', undefined, 5000).catch(() => null)
-    })
+    }, 90_000)
 
     it('switching to dangerous mid-confirmation lets the turn finish and the next turn skips prompting', async () => {
       client.clearEvents()

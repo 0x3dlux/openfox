@@ -9,6 +9,11 @@
  * blocklist (it reaches 10080) and then every request to that server fails
  * - flakily, depending on where the ephemeral cursor happens to sit.
  *
+ * Retries are invisible to the listen *callback*; an on('listening') listener
+ * would fire on the first, possibly blocked, bind before the guard closes it.
+ * Servers bound via listen(0) must therefore read their address from the
+ * listen callback (or later), not from a 'listening' event listener.
+ *
  * Loaded via setupFiles in both vitest configs, this patches net.Server
  * (and thus http.Server) so listen(0) retries until the assigned port is
  * off the blocklist. Port-specific binds are left untouched.

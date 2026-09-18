@@ -520,14 +520,14 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
                 routineFailed || deleteNowMode
                   ? t({ en: 'Delete now', fr: 'Supprimer maintenant' })
                   : routineOffered
-                    ? t({ en: 'Run & close later', fr: 'Exécuter et fermer plus tard' })
+                    ? t({ en: 'Run\nClose later', fr: 'Exécuter\nFermer plus tard' })
                     : t({ en: 'Delete session', fr: 'Supprimer la session' })
               }
               confirmVariant="danger"
               altAction={
                 routineOffered && !deleteNowMode && !routineFailed
                   ? {
-                      label: t({ en: 'Skip & close now', fr: 'Passer et fermer maintenant' }),
+                      label: t({ en: 'Skip\nClose now', fr: 'Passer\nFermer maintenant' }),
                       onClick: handleSkipEndOfSession,
                     }
                   : undefined

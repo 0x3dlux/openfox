@@ -127,18 +127,18 @@ describe('Sidebar closing flows', () => {
     await userEvent.click(screen.getByText('Delete session', { selector: 'button' }))
     expect(mockEndSession).not.toHaveBeenCalled()
 
-    await userEvent.click(screen.getByText('Run & close later'))
+    await userEvent.click(screen.getByText('Run Close later'))
 
     expect(mockEndSession).toHaveBeenCalledWith('s1')
     expect(mockDeleteSession).not.toHaveBeenCalled()
   })
 
-  it('deletes without the routine when "Skip & close" is chosen', async () => {
+  it('deletes without the routine when "Skip Close now" is chosen', async () => {
     sessions = [session()]
     render(<Sidebar projectId="project-1" />)
 
     await userEvent.click(screen.getByText('Delete session', { selector: 'button' }))
-    await userEvent.click(screen.getByText('Skip & close now'))
+    await userEvent.click(screen.getByText('Skip Close now'))
 
     expect(mockDeleteSession).toHaveBeenCalledWith('s1')
     expect(mockEndSession).not.toHaveBeenCalled()
@@ -159,8 +159,8 @@ describe('Sidebar closing flows', () => {
     expect(screen.getByText(/the \/end-of-session command runs first/)).toBeDefined()
     expect(screen.queryByText(/If it is available/)).toBeNull()
     expect(screen.queryByText(/Si elle est disponible/)).toBeNull()
-    expect(screen.getByText('Run & close later')).toBeDefined()
-    expect(screen.getByText('Skip & close now')).toBeDefined()
+    expect(screen.getByText('Run Close later')).toBeDefined()
+    expect(screen.getByText('Skip Close now')).toBeDefined()
   })
 
   it('offers a plain delete when the routine is switched off', async () => {
@@ -171,8 +171,8 @@ describe('Sidebar closing flows', () => {
     await userEvent.click(screen.getByText('Delete session', { selector: 'button' }))
 
     expect(screen.getByText('This session will be permanently deleted.')).toBeDefined()
-    expect(screen.queryByText('Run & close later')).toBeNull()
-    expect(screen.queryByText('Skip & close now')).toBeNull()
+    expect(screen.queryByText('Run Close later')).toBeNull()
+    expect(screen.queryByText('Skip Close now')).toBeNull()
   })
 
   it('says so when the configured command is missing and offers no routine', async () => {
@@ -184,8 +184,8 @@ describe('Sidebar closing flows', () => {
     await userEvent.click(screen.getByText('Delete session', { selector: 'button' }))
 
     expect(screen.getByText(/End-of-session command "ghost" was not found/)).toBeDefined()
-    expect(screen.queryByText('Run & close later')).toBeNull()
-    expect(screen.queryByText('Skip & close now')).toBeNull()
+    expect(screen.queryByText('Run Close later')).toBeNull()
+    expect(screen.queryByText('Skip Close now')).toBeNull()
   })
 
   it('says so when the configured command needs parameters', async () => {
@@ -201,7 +201,7 @@ describe('Sidebar closing flows', () => {
     await userEvent.click(screen.getByText('Delete session', { selector: 'button' }))
 
     expect(screen.getByText(/needs parameters, so it cannot run automatically/)).toBeDefined()
-    expect(screen.queryByText('Run & close later')).toBeNull()
+    expect(screen.queryByText('Run Close later')).toBeNull()
   })
 
   it('deletes without the routine when the server refuses to close', async () => {
@@ -216,7 +216,7 @@ describe('Sidebar closing flows', () => {
     render(<Sidebar projectId="project-1" />)
 
     await userEvent.click(screen.getByText('Delete session', { selector: 'button' }))
-    await userEvent.click(screen.getByText('Run & close later'))
+    await userEvent.click(screen.getByText('Run Close later'))
 
     expect(mockEndSession).toHaveBeenCalledWith('s1')
     expect(mockDeleteSession).not.toHaveBeenCalled()

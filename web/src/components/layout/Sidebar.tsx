@@ -523,7 +523,7 @@ export function Sidebar({ projectId, isOpen = true, overlay = false, onClose }: 
                     ? t({ en: 'Run\nClose later', fr: 'Exécuter\nFermer plus tard' })
                     : t({ en: 'Delete session', fr: 'Supprimer la session' })
               }
-              confirmVariant="danger"
+              confirmVariant={routineOffered && !deleteNowMode && !routineFailed ? 'success' : 'danger'}
               altAction={
                 routineOffered && !deleteNowMode && !routineFailed
                   ? {

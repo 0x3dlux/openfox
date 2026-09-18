@@ -115,6 +115,7 @@ describe('Sidebar closing flows', () => {
 
     // The confirm dialog's own action button (the menu item is still in the tree).
     const confirmButtons = screen.getAllByRole('button', { name: 'Delete now' })
+    expect(confirmButtons[confirmButtons.length - 1]!.className).not.toContain('accent-success')
     await userEvent.click(confirmButtons[confirmButtons.length - 1]!)
 
     expect(mockDeleteSession).toHaveBeenCalledWith('s1')
@@ -126,6 +127,8 @@ describe('Sidebar closing flows', () => {
 
     await userEvent.click(screen.getByText('Delete session', { selector: 'button' }))
     expect(mockEndSession).not.toHaveBeenCalled()
+
+    expect(screen.getByText('Run Close later').closest('button')!.className).toContain('accent-success')
 
     await userEvent.click(screen.getByText('Run Close later'))
 

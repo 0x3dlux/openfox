@@ -10,7 +10,7 @@ interface ConfirmModalProps {
   title: string
   message: ReactNode
   confirmLabel?: string
-  confirmVariant?: 'danger' | 'primary'
+  confirmVariant?: 'danger' | 'primary' | 'success'
   disabled?: boolean
   /** Optional extra action rendered beside Cancel (e.g. "Skip / Close now" on a two-phase delete). */
   altAction?: { label: string; onClick: () => void }

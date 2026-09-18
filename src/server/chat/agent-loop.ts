@@ -49,6 +49,7 @@ import { createRetryLimiter, type RetryLimiter } from './retry-limiter.js'
 import { drainQueue } from './drain-queue.js'
 import { COMPACTION_PROMPT, CONTINUE_PROMPT, CONTINUE_AFTER_STREAM_ERROR_PROMPT } from './prompts.js'
 import { logger } from '../utils/logger.js'
+import { emitPluginHook } from '../plugins/hook-emitter.js'
 import type { LLMRetryPolicy } from '../runner/types.js'
 import { DEFAULT_LLM_RETRY_POLICY } from '../runner/types.js'
 import { serverT } from '../i18n.js'
@@ -414,6 +415,16 @@ export async function runTopLevelAgentLoop(
 
       if (!attemptResult.error) {
         result = attemptResult
+        emitPluginHook('llm.completed', {
+          sessionId,
+          data: {
+            model: attemptClient.getModel(),
+            finishReason: attemptResult.finishReason,
+            promptTokens: attemptResult.usage.promptTokens,
+            completionTokens: attemptResult.usage.completionTokens,
+            toolCalls: attemptResult.toolCalls.length,
+          },
+        })
         break
       }
 

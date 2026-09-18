@@ -31,6 +31,9 @@ import { SessionDropdown } from './SessionDropdown'
 import { TasksModal } from '../tasks/TasksModal'
 import { useTasksStore } from '../../stores/tasks'
 import { TasksIcon, ArrowRightIcon } from '../shared/icons'
+import { PluginSlot } from '../plugins/PluginSlot'
+import { PluginBadges } from '../plugins/PluginBadges'
+import { NotificationBell } from '../notifications/NotificationBell'
 import { useIsSplit } from '../../lib/splitPersistence'
 import { DropdownMenu, type DropdownMenuItem } from '../shared/DropdownMenu'
 
@@ -61,6 +64,11 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
   const session = useSessionStore((state) => state.currentSession)
   const sessions = useSessionStore((state) => state.sessions)
   const project = useCurrentProject()
+  const sessionContext = {
+    ...(session?.id ? { sessionId: session.id } : {}),
+    ...(session?.workdir ? { workdir: session.workdir } : {}),
+    ...(project?.id ? { projectId: project.id } : {}),
+  }
   const { projects } = useProjects()
   const { data: countsData } = useResource(summariesResource, project?.id ?? '')
   const runningTaskCount = countsData?.counts.running ?? 0
@@ -280,6 +288,21 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
               <TerminalIcon />
             </button>
           )}
+
+          <PluginSlot
+            slot="header.actions"
+            context={{
+              ...(project?.id ? { projectId: project.id } : {}),
+              ...(project?.workdir ? { workdir: project.workdir } : {}),
+            }}
+          />
+          {isSessionPage ? (
+            <>
+              <PluginSlot slot="session.header.actions" context={sessionContext} />
+              <PluginBadges slot="session.header.badges" context={sessionContext} />
+            </>
+          ) : null}
+          <NotificationBell />
 
           {isProjectPage && project && (
             <button

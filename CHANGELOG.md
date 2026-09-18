@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.0.150 - 2026-09-18
+
+### Features
+
+- **Plugin system** — install plugins from a curated registry, GitHub, npm, or a local folder.
+- **Plugins extend OpenFox** — providers, tools, commands, skills, and custom workflow transitions.
+- **Declarative plugin UI** — actions, badges, and panels in the header, composer, and sessions.
+- **Plugin notifications** — a new header bell with dropdown center and toasts.
+- **Plugin management tab** — enable, disable, reinstall, and uninstall plugins.
+
+### Enhancements
+
+- **Notifications moved to a header dropdown** — no more modal; clicking a notification marks it read.
+- **Plugin actions consolidated into one header menu** — with a direct shortcut to plugin management.
+- **Mobile menu gains nested submenus** — notifications and plugins now reachable from the hamburger menu.
+- **Workflow setup step guards existing workspaces** — already-used workspaces can no longer be selected.
+
+### Bug Fixes
+
+- **Pre-upgrade passwords work again** — passwords stored before the encryption upgrade now verify correctly.
+- **Tool-call timers survive reloads** — pending tool calls keep their elapsed-time display after reloading.
+- **Notification bell styling fixed** — icon color matches the header and the unread badge no longer clips.
+
 ## 2.0.149 - 2026-09-15
 
 ### Features

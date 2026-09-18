@@ -7,7 +7,11 @@ import { DropdownMenu, type DropdownMenuItem } from '../shared/DropdownMenu'
 import { TrashIcon } from '../shared/icons'
 import { formatDateTime } from '../../lib/format-date'
 
-export function NotificationCenter({ trigger }: { trigger: ReactNode }) {
+export function useNotificationMenuItems(): {
+  items: DropdownMenuItem[]
+  footerItems: DropdownMenuItem[]
+  unreadCount: number
+} {
   const t = useT()
   const localize = useLocalizedString()
   const { notifications, unreadCount, markAllRead, markRead, remove, clear } = useNotifications()
@@ -83,5 +87,10 @@ export function NotificationCenter({ trigger }: { trigger: ReactNode }) {
         ]
       : []
 
+  return { items, footerItems, unreadCount }
+}
+
+export function NotificationCenter({ trigger }: { trigger: ReactNode }) {
+  const { items, footerItems } = useNotificationMenuItems()
   return <DropdownMenu align="right" minWidth="340px" items={items} footerItems={footerItems} trigger={trigger} />
 }

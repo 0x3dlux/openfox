@@ -30,9 +30,10 @@ import { ProjectDropdown } from './ProjectDropdown'
 import { SessionDropdown } from './SessionDropdown'
 import { TasksModal } from '../tasks/TasksModal'
 import { useTasksStore } from '../../stores/tasks'
-import { TasksIcon, ArrowRightIcon } from '../shared/icons'
-import { PluginMenu } from '../plugins/PluginMenu'
+import { TasksIcon, ArrowRightIcon, BellIcon, PuzzleIcon } from '../shared/icons'
+import { PluginMenu, usePluginMenuItems } from '../plugins/PluginMenu'
 import { NotificationBell } from '../notifications/NotificationBell'
+import { useNotificationMenuItems } from '../notifications/NotificationCenter'
 import { useIsSplit } from '../../lib/splitPersistence'
 import { DropdownMenu, type DropdownMenuItem } from '../shared/DropdownMenu'
 import type { Tab } from '../settings/GlobalSettingsModal'
@@ -107,7 +108,32 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
     return () => stopAutoRefresh()
   }, [startAutoRefresh, stopAutoRefresh])
 
+  const notificationMenu = useNotificationMenuItems()
+  const pluginMenu = usePluginMenuItems(sessionContext, () => {
+    setSettingsTab('plugins')
+    setShowSettings(true)
+  })
+
   const mobileMenuItems: DropdownMenuItem[] = []
+  mobileMenuItems.push({
+    label: (
+      <span className="flex items-center gap-2">
+        {t({ en: 'Notifications', fr: 'Notifications' })}
+        {notificationMenu.unreadCount > 0 && (
+          <span className="min-w-3.5 h-3.5 px-0.5 rounded-full bg-accent-success text-white text-[9px] font-semibold flex items-center justify-center">
+            {notificationMenu.unreadCount > 99 ? '99+' : notificationMenu.unreadCount}
+          </span>
+        )}
+      </span>
+    ),
+    icon: <BellIcon className="w-4 h-4" />,
+    submenu: { items: notificationMenu.items, footerItems: notificationMenu.footerItems },
+  })
+  mobileMenuItems.push({
+    label: t({ en: 'Plugins', fr: 'Plugins' }),
+    icon: <PuzzleIcon className="w-4 h-4" />,
+    submenu: { items: pluginMenu.items, footerItems: pluginMenu.footerItems },
+  })
   if (isProjectPage) {
     mobileMenuItems.push({
       label: (
@@ -328,6 +354,7 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
             items={mobileMenuItems}
             align="right"
             minWidth="200px"
+            submenuBackLabel={t({ en: 'Back', fr: 'Retour' })}
             trigger={
               <button
                 className="p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"

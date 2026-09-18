@@ -1,5 +1,5 @@
 import { ScrollArea } from '../shared/ScrollArea'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Modal } from '../shared/SelfContainedModal'
 import { useT } from '../../hooks/useT'
 import { NotificationSettings } from './NotificationSettings'
@@ -16,14 +16,21 @@ import { wsClient } from '../../lib/ws'
 interface GlobalSettingsModalProps {
   isOpen: boolean
   onClose: () => void
+  /** Tab to show when the modal opens. Defaults to 'instructions'. */
+  initialTab?: Tab
 }
 
-type Tab = 'instructions' | 'skills' | 'plugins' | 'notifications' | 'display' | 'keybindings' | 'advanced' | 'tools'
+export type Tab =
+  'instructions' | 'skills' | 'plugins' | 'notifications' | 'display' | 'keybindings' | 'advanced' | 'tools'
 
-export function GlobalSettingsModal({ isOpen, onClose }: GlobalSettingsModalProps) {
+export function GlobalSettingsModal({ isOpen, onClose, initialTab }: GlobalSettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>('instructions')
   const updateAvailable = useUpdateStore((state) => state.status === 'available')
   const t = useT()
+
+  useEffect(() => {
+    if (isOpen) setActiveTab(initialTab ?? 'instructions')
+  }, [isOpen, initialTab])
 
   const tabs: { id: Tab; label: string; showDot?: boolean }[] = [
     { id: 'instructions', label: t({ en: 'Instructions', fr: 'Instructions' }) },

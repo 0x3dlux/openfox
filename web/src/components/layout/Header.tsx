@@ -31,11 +31,11 @@ import { SessionDropdown } from './SessionDropdown'
 import { TasksModal } from '../tasks/TasksModal'
 import { useTasksStore } from '../../stores/tasks'
 import { TasksIcon, ArrowRightIcon } from '../shared/icons'
-import { PluginSlot } from '../plugins/PluginSlot'
-import { PluginBadges } from '../plugins/PluginBadges'
+import { PluginMenu } from '../plugins/PluginMenu'
 import { NotificationBell } from '../notifications/NotificationBell'
 import { useIsSplit } from '../../lib/splitPersistence'
 import { DropdownMenu, type DropdownMenuItem } from '../shared/DropdownMenu'
+import type { Tab } from '../settings/GlobalSettingsModal'
 
 interface HeaderProps {
   onMenuClick?: () => void
@@ -45,6 +45,7 @@ interface HeaderProps {
 export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
   const t = useT()
   const [showSettings, setShowSettings] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<Tab>('instructions')
   const [sessionDropdownOpen, setSessionDropdownOpen] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(!!document.fullscreenElement)
   const [location, setLocation] = useLocation()
@@ -143,7 +144,10 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
       </span>
     ),
     icon: <SettingsIcon />,
-    onClick: () => setShowSettings(true),
+    onClick: () => {
+      setSettingsTab('instructions')
+      setShowSettings(true)
+    },
   })
   mobileMenuItems.push({
     label: isFullscreen
@@ -220,23 +224,6 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
 
       <div className="flex items-center gap-2 flex-shrink-0">
         <div className="hidden md:flex items-center gap-2">
-          {!isSplit && (
-            <button
-              onClick={() => {
-                const sid = session?.id
-                if (isSessionPage && sid) {
-                  void useSessionStore.getState().openPane(sid, { focus: true })
-                }
-                setLocation('/split-view')
-              }}
-              className="p-2.5 rounded hover:bg-bg-tertiary transition-colors text-text-muted hover:text-text-primary"
-              title={t({ en: 'Open split view', fr: 'Ouvrir la vue divisée' })}
-              aria-label={t({ en: 'Open split view', fr: 'Ouvrir la vue divisée' })}
-            >
-              <ColumnsIcon className="w-4 h-4" />
-            </button>
-          )}
-
           {isSplit && (
             <>
               <span
@@ -289,19 +276,13 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
             </button>
           )}
 
-          <PluginSlot
-            slot="header.actions"
-            context={{
-              ...(project?.id ? { projectId: project.id } : {}),
-              ...(project?.workdir ? { workdir: project.workdir } : {}),
+          <PluginMenu
+            context={sessionContext}
+            onManage={() => {
+              setSettingsTab('plugins')
+              setShowSettings(true)
             }}
           />
-          {isSessionPage ? (
-            <>
-              <PluginSlot slot="session.header.actions" context={sessionContext} />
-              <PluginBadges slot="session.header.badges" context={sessionContext} />
-            </>
-          ) : null}
           <NotificationBell />
 
           {isProjectPage && project && (
@@ -315,7 +296,10 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
           )}
 
           <button
-            onClick={() => setShowSettings(true)}
+            onClick={() => {
+              setSettingsTab('instructions')
+              setShowSettings(true)
+            }}
             className="relative p-2.5 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
             title={
               updateAvailable
@@ -376,7 +360,7 @@ export function Header({ onMenuClick, onCriteriaToggle }: HeaderProps) {
         )}
       </div>
 
-      <GlobalSettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
+      <GlobalSettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} initialTab={settingsTab} />
       <TerminalDrawer isOpen={terminalIsOpen} onClose={() => setTerminalOpen(false)} />
       {project && (
         <TasksModal isOpen={tasksModalOpen} onClose={() => setTasksModalOpen(false)} projectId={project.id} />

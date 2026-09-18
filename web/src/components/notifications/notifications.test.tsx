@@ -6,6 +6,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { NotificationToasts } from './NotificationToasts'
 import { NotificationCenter } from './NotificationCenter'
+import { NotificationBell } from './NotificationBell'
 import { usePluginToastStore } from '../../stores/pluginToasts'
 import { notificationsResource } from '../../lib/resources'
 import { clearCache, write } from '../../lib/resourceCache'
@@ -96,6 +97,34 @@ describe('NotificationToasts', () => {
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Open report' }))
     await waitFor(() => expect(invokePluginRpc).toHaveBeenCalledWith('demo', 'report', {}, {}))
+  })
+})
+
+describe('NotificationBell', () => {
+  beforeEach(() => {
+    clearCache()
+    useLocaleStore.setState({ locale: 'en' })
+    setFetchPayload({ notifications: [], unreadCount: 0 })
+    write(notificationsResource.keyOf(), { notifications: [], unreadCount: 0 })
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  it('matches the header icon button style', () => {
+    render(<NotificationBell />)
+    const button = screen.getByRole('button', { name: 'Notifications' })
+    expect(button.className).toContain('text-text-muted')
+    expect(button.className).toContain('hover:bg-bg-tertiary')
+    expect(button.querySelector('svg')?.getAttribute('class')).toContain('w-4 h-4')
+  })
+
+  it('shows the unread count badge', () => {
+    write(notificationsResource.keyOf(), { notifications: [NOTIFICATION], unreadCount: 3 })
+    render(<NotificationBell />)
+    expect(screen.getByText('3')).toBeDefined()
   })
 })
 

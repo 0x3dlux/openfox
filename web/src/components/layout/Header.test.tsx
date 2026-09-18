@@ -518,28 +518,6 @@ describe('Header', () => {
     expect(container.querySelector('[aria-label="Toggle split view control panel"]')).toBeTruthy()
   })
 
-  it('opens split view and adds the current session as a pane', async () => {
-    const { useSessionStore } = await import('../../stores/session')
-    ;(useSessionStore as unknown as MockStore).setState({
-      currentSession: { id: 's1', metadata: { title: 'T' } },
-    })
-
-    const { useLocation } = await import('wouter')
-    const setLocation = vi.fn()
-    vi.mocked(useLocation).mockReturnValue(['/p/p1/s/s1', setLocation])
-
-    const { Header } = await import('./Header')
-    const container = render(<Header />)
-    const btn = container.querySelector('[aria-label="Open split view"]')
-    expect(btn).toBeTruthy()
-    act(() => {
-      btn!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(setLocation).toHaveBeenCalledWith('/split-view')
-    const { openPane } = useSessionStore.getState()
-    expect(openPane).toHaveBeenCalledWith('s1', { focus: true })
-  })
-
   it('shows the split indicator and exits back home from the split route', async () => {
     const { useSessionStore } = await import('../../stores/session')
     ;(useSessionStore as unknown as MockStore).setState({ openSessionIds: ['s1', 's2'] })

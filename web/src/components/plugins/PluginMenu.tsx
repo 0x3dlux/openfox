@@ -10,7 +10,10 @@ interface PluginMenuProps {
   onManage: () => void
 }
 
-export function PluginMenu({ context, onManage }: PluginMenuProps) {
+export function usePluginMenuItems(
+  context: PluginActionContext,
+  onManage: () => void,
+): { items: DropdownMenuItem[]; footerItems: DropdownMenuItem[] } {
   const t = useT()
   const localize = useLocalizedString()
   const { plugins, contributions } = usePlugins()
@@ -61,18 +64,27 @@ export function PluginMenu({ context, onManage }: PluginMenuProps) {
     })
   }
 
+  const footerItems: DropdownMenuItem[] = [
+    {
+      label: t({ en: 'Manage plugins', fr: 'Gérer les plugins' }),
+      icon: <GearIcon className="w-4 h-4" />,
+      onClick: onManage,
+    },
+  ]
+
+  return { items, footerItems }
+}
+
+export function PluginMenu({ context, onManage }: PluginMenuProps) {
+  const t = useT()
+  const { items, footerItems } = usePluginMenuItems(context, onManage)
+
   return (
     <DropdownMenu
       align="right"
       minWidth="240px"
       items={items}
-      footerItems={[
-        {
-          label: t({ en: 'Manage plugins', fr: 'Gérer les plugins' }),
-          icon: <GearIcon className="w-4 h-4" />,
-          onClick: onManage,
-        },
-      ]}
+      footerItems={footerItems}
       trigger={
         <button
           type="button"

@@ -600,6 +600,47 @@ describe('Header mobile menu', () => {
     expect(menu!.textContent).toContain('Fullscreen')
   })
 
+  it('lists notifications and plugins in the mobile menu', async () => {
+    const { useLocation } = await import('wouter')
+    vi.mocked(useLocation).mockReturnValue(['/', vi.fn()])
+
+    const { Header } = await import('./Header')
+    const container = render(<Header />)
+    openMobileMenu(container)
+    const menu = document.querySelector('[data-testid="session-dropdown-menu"]')
+    expect(menu!.textContent).toContain('Notifications')
+    expect(menu!.textContent).toContain('Plugins')
+  })
+
+  it('drills into the notifications submenu and back', async () => {
+    const { useLocation } = await import('wouter')
+    vi.mocked(useLocation).mockReturnValue(['/', vi.fn()])
+
+    const { Header } = await import('./Header')
+    const container = render(<Header />)
+    openMobileMenu(container)
+    clickMenuItem('Notifications')
+    const menu = document.querySelector('[data-testid="session-dropdown-menu"]')
+    expect(menu!.textContent).toContain('No notifications yet')
+    expect(menu!.textContent).not.toContain('Fullscreen')
+
+    clickMenuItem('Back')
+    expect(menu!.textContent).toContain('Fullscreen')
+    expect(menu!.textContent).not.toContain('No notifications yet')
+  })
+
+  it('drills into the plugins submenu', async () => {
+    const { useLocation } = await import('wouter')
+    vi.mocked(useLocation).mockReturnValue(['/', vi.fn()])
+
+    const { Header } = await import('./Header')
+    const container = render(<Header />)
+    openMobileMenu(container)
+    clickMenuItem('Plugins')
+    const menu = document.querySelector('[data-testid="session-dropdown-menu"]')
+    expect(menu!.textContent).toContain('No plugins installed')
+  })
+
   it('shows only global actions outside a project page', async () => {
     const { useProjectStore } = await import('../../stores/project')
     ;(useProjectStore as unknown as MockStore).setState({ currentProject: null, projects: [] })

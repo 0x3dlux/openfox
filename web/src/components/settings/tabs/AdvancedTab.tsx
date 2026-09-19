@@ -101,12 +101,12 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
     }
   }, [defaultAgentSetting])
 
+  const endOfSessionCommandValue =
+    endOfSessionCommand ?? (endOfSessionCommandSetting !== undefined ? endOfSessionCommandSetting : 'end-of-session')
+
   // Whether the configured command could actually run, judged from the very
   // list the delete dialog reads, so the two never disagree.
-  const endOfSessionAvailability = resolveCommandAvailability(
-    commandsData,
-    endOfSessionCommand ?? endOfSessionCommandSetting ?? '',
-  )
+  const endOfSessionAvailability = resolveCommandAvailability(commandsData, endOfSessionCommandValue)
 
   useEffect(() => {
     if (endOfSessionCommandSetting !== undefined && endOfSessionCommand === null) {
@@ -294,18 +294,19 @@ export function AdvancedTab({ onClose }: { onClose: () => void }) {
             fr: 'Commande exécutée dans une session quand vous cliquez sur « Supprimer la session » : elle résume la session et rapporte ses conclusions, puis le chat propose la suppression finale. Laissez vide pour supprimer immédiatement.',
           })}
         </p>
-        <Input
-          list="end-of-session-commands"
-          value={endOfSessionCommand ?? ''}
-          onChange={(e) => handleEndOfSessionCommandChange(e.target.value.trim().replace(/^\//, ''))}
-          placeholder={t({ en: 'end-of-session', fr: 'end-of-session' })}
+        <select
+          data-testid="end-of-session-command"
+          value={endOfSessionCommand ?? endOfSessionCommandSetting ?? ''}
+          onChange={(e) => handleEndOfSessionCommandChange(e.target.value)}
           className="w-full px-3 py-2 text-sm bg-bg-primary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
-        />
-        <datalist id="end-of-session-commands">
+        >
+          <option value="">{t({ en: 'None - delete immediately', fr: 'Aucune - suppression immédiate' })}</option>
           {commandIds.map((id) => (
-            <option key={id} value={id} />
+            <option key={id} value={id}>
+              {id}
+            </option>
           ))}
-        </datalist>
+        </select>
         {endOfSessionAvailability.state !== 'loading' && (
           <p
             className={`text-xs mt-1 ${

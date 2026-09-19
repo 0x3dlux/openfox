@@ -160,10 +160,23 @@ describe('AdvancedTab', () => {
         projectItems: [],
       }
       const { container } = render(<AdvancedTab onClose={vi.fn()} />)
-      const input = container.querySelector('input[list="end-of-session-commands"]')!
-      await userEvent.setup().clear(input)
-      await userEvent.setup().type(input, 'wrap')
+      const select = container.querySelector('select[data-testid="end-of-session-command"]')!
+      await userEvent.setup().selectOptions(select, 'wrap')
       expect(container.textContent).toContain('needs parameters, so it cannot run automatically')
+    })
+
+    it('offers the commands in a select, empty value disables the routine', async () => {
+      mockEndOfSessionSetting.current = 'end-of-session'
+      mockCommands.current = {
+        defaults: [{ id: 'end-of-session', name: 'End of Session' }],
+        userItems: [{ id: 'wrap', name: 'Wrap' }],
+        projectItems: [],
+      }
+      const { container } = render(<AdvancedTab onClose={vi.fn()} />)
+      const select = container.querySelector('select[data-testid="end-of-session-command"]')!
+      expect(Array.from(select.querySelectorAll('option')).map((o) => o.value)).toEqual(['', 'end-of-session', 'wrap'])
+      await userEvent.setup().selectOptions(select, '')
+      expect(container.textContent).toContain('Disabled - sessions are deleted immediately')
     })
   })
 })

@@ -13,7 +13,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       primary: 'bg-accent-primary/25 text-text-primary hover:bg-accent-primary/40',
       secondary: 'bg-bg-tertiary text-text-primary hover:bg-border',
       danger: 'bg-accent-error text-white hover:bg-accent-error/80',
-      success: 'bg-accent-success text-white hover:bg-accent-success/80',
+      success: 'bg-accent-success text-bg-primary hover:bg-accent-success/80',
     }
 
     const sizeClasses = {

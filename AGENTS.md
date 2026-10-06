@@ -59,6 +59,8 @@ Default ports: **10469** (dev), **10369** (prod). The password is `password`.
 
 If it is not running, use the dev_server tool to start it
 
+To update and restart the **production** server, run `./run.sh` from the repo root (git fast-forward pull + rebuild only on change, restarts the detached `openfox` screen session).
+
 ### Single Test File
 
 ```bash

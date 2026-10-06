@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-07
+
+- Added `run.sh`: updates the repo from git (fast-forward pull with autostash, rebuild only when the pull brought changes) and (re)starts the production server in a detached `openfox` screen with logged output. Commit `097d6fa7`.
+
 ## 2.0.161 - 2026-10-05
 
 ### Features

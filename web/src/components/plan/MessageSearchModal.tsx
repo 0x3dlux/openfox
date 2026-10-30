@@ -237,7 +237,7 @@ export function MessageSearchModal({ isOpen, onClose, displayItems, onNavigate }
       isOpen={isOpen}
       onClose={onClose}
       title={t({ en: 'Search timeline', fr: 'Rechercher dans la chronologie' })}
-      size="md"
+      size="full"
       scrollable={false}
     >
       <SearchResultsList
